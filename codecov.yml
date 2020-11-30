@@ -1,0 +1,8 @@
+ignore:
+    - "**/__init__.py"
+    - "cvapipe_analysis/bin/.*"
+    - "cvapipe_analysis/vendor/.*"
+
+coverage:
+  status:
+    patch: off
