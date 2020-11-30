@@ -55,7 +55,13 @@ requirements = [
     "numpy",
     "pandas",
     "Pillow",
+    "matplotlib",
+    "seaborn",
     "tqdm",
+    "scipy",
+    "scikit-image",
+    "aicsimageio",
+    "aicsimageprocessing",
 ]
 
 extra_requirements = {
@@ -65,11 +71,11 @@ extra_requirements = {
     "all": [
         *requirements,
         *dev_requirements,
-    ]
+    ],
 }
 
 setup(
-    author="Ritvik Vasan",
+    author="Allen Institute for Cell Science",
     author_email="ritvik.vasan@alleninstitute.org",
     classifiers=[
         "Development Status :: 2 - Pre-Alpha",
@@ -80,11 +86,7 @@ setup(
         "Programming Language :: Python :: 3.8",
     ],
     description="Analysis of data produced by cvapipe for the variance paper",
-    entry_points={
-        "console_scripts": [
-            "cvapipe_analysis=cvapipe_analysis.bin.cli:cli"
-        ]
-    },
+    entry_points={"console_scripts": ["cvapipe_analysis=cvapipe_analysis.bin.cli:cli"]},
     install_requires=requirements,
     license="Allen Institute Software License",
     long_description=readme,
