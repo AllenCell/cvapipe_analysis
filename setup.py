@@ -47,6 +47,7 @@ step_workflow_requirements = [
     "fire",
     "prefect",
     "python-dateutil",
+    "aics_dask_utils",
 ]
 
 requirements = [

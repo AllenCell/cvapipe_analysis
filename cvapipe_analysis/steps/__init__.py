@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
 
-from .raw import Raw
+from .multi_res_struct_compare import MultiResStructCompare
 
-__all__ = ["Raw"]
+__all__ = ["MultiResStructCompare"]
