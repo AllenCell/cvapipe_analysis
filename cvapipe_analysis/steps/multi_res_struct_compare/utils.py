@@ -260,7 +260,11 @@ def pct_normalization_and_8bit(raw, pct_range=[50, 99]):
 
 
 def compute_distance_metric(
-    row, input_5d_stack, permuted, px_size=0.29, crop_size=(64, 160, 96),
+    row,
+    input_5d_stack,
+    permuted,
+    px_size=0.29,
+    crop_size=(64, 160, 96),
 ):
     """
     Main function to loop over in distributed
@@ -420,10 +424,14 @@ def make_plot(data, plot_dir):
             palette="Set2",
         )
         ax.legend(
-            loc="upper left", bbox_to_anchor=(0.05, 0.95), ncol=1, frameon=False,
+            loc="upper left",
+            bbox_to_anchor=(0.05, 0.95),
+            ncol=1,
+            frameon=False,
         )
         sns.despine(
-            offset=0, trim=True,
+            offset=0,
+            trim=True,
         )
         # save the plot
         fig.savefig(
@@ -453,11 +461,15 @@ def make_plot(data, plot_dir):
             )
 
             ax.legend(
-                loc="best", bbox_to_anchor=(1, 0.95), ncol=2, frameon=False,
+                loc="best",
+                bbox_to_anchor=(1, 0.95),
+                ncol=2,
+                frameon=False,
             )
             ax.set_title(f"Bin {this_bin}")
             sns.despine(
-                offset=0, trim=True,
+                offset=0,
+                trim=True,
             )
 
             plt.tight_layout()
@@ -467,4 +479,3 @@ def make_plot(data, plot_dir):
                 dpi=300,
                 transparent=True,
             )
-
