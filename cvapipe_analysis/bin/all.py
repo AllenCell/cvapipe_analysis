@@ -31,7 +31,10 @@ class All:
         self.step_list = [steps.Raw()]
 
     def run(
-        self, clean: bool = False, debug: bool = False, **kwargs,
+        self,
+        clean: bool = False,
+        debug: bool = False,
+        **kwargs,
     ):
         """
         Run a flow with your steps.
