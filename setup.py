@@ -62,7 +62,11 @@ requirements = [
     "scipy",
     "scikit-image",
     "aicsimageio",
-    "aicsimageprocessing",
+    "umap-learn",
+    "imgkit",
+    "xvfbwrapper",
+    "aicsshparam",
+    "vtk==8.1.2",  # required by aicsshparam
 ]
 
 extra_requirements = {
