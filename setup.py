@@ -67,6 +67,8 @@ requirements = [
     "xvfbwrapper",
     "aicsshparam",
     "vtk==8.1.2",  # required by aicsshparam
+    "quilt3",
+    "ffmpeg",
 ]
 
 extra_requirements = {
