@@ -17,8 +17,8 @@ log = logging.getLogger(__name__)
 
 
 def download_quilt_data(
-    package="rorydm/mitotic_annotations",
-    registry="s3://allencell-internal-quilt",
+    package="aics/hipsc_single_cell_image_dataset",
+    registry="s3://allencell",
     data_save_loc="quilt_data",
     ignore_warnings=True,
 ):
