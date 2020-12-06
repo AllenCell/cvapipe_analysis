@@ -94,6 +94,7 @@ class Shapemode(Step):
                 df_outliers = df_outliers.set_index("CellId", drop=True)
             except:
                 pass
+
         df.loc[df_outliers.index, "Outlier"] = df_outliers["Outlier"]
 
         # Save a data table with detected outliers

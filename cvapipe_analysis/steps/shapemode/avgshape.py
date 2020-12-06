@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 from matplotlib import animation
 from aicsshparam import shtools
 from distributed import LocalCluster, Client
+from aics_dask_utils import DistributedHandler
 from vtk.util.numpy_support import vtk_to_numpy
 
 
@@ -256,7 +257,14 @@ def transform_coords_to_mem_space(xo, yo, zo, angle, cm, flip):
 
 
 def animate_shape_modes_and_save_meshes(
-    df, df_agg, bin_indexes, feature, save, fix_nuclear_position=True, plot_limits=None
+    df,
+    df_agg,
+    bin_indexes,
+    feature,
+    save,
+    fix_nuclear_position=True,
+    plot_limits=None,
+    distributed_executor_address=None,
 ):
 
     if fix_nuclear_position:
@@ -284,15 +292,23 @@ def animate_shape_modes_and_save_meshes(
 
             df_tmp = df.loc[df.index.isin(indexes)]
 
-            with LocalCluster(n_workers=15) as cluster, Client(cluster) as client:
+            futures = []
+            results = []
+            with DistributedHandler(distributed_executor_address) as handler:
+                # Generate bounded arrays
+                future = handler.client.map(
+                    process_this_index,
+                    [index_row for index_row in df_tmp.iterrows()],
+                )
+                futures.append(future)
+                result = handler.gather(future)
+                results.append(result)
 
-                futures = []
-                for index_row in df_tmp.iterrows():
-                    future = client.submit(process_this_index, index_row)
-                    futures.append(future)
-                xyz = client.gather(futures)
+            all_results = []
+            for this_xyz in results:
+                all_results.append(this_xyz)
 
-            xyz = np.array(xyz).mean(axis=0)
+            xyz = np.array(all_results[0]).mean(axis=0)
 
             df_agg.loc[b, "dna_dxc"] = xyz[0]
             df_agg.loc[b, "dna_dyc"] = xyz[1]
