@@ -1,13 +1,8 @@
 # cvapipe_analysis
 
-[![Build Status](https://github.com/AllenCellModeling/cvapipe_analysis/workflows/Build%20Master/badge.svg)](https://github.com/AllenCellModeling/cvapipe_analysis/actions)
-[![Code Coverage](https://codecov.io/gh/AllenCellModeling/cvapipe_analysis/branch/master/graph/badge.svg)](https://codecov.io/gh/AllenCellModeling/cvapipe_analysis)
-
 Analysis of data produced by cvapipe for the variance paper
 
 ---
-
-*Edit this README and make it relevant to your project*
 
 ## Installation
 
@@ -41,7 +36,7 @@ cvapipe_analysis shapemode run
 To compute multi resolution structure correlations for stereotypy, prepare a csv containing paths to pairs of morphed cell images of the same structure corresponding to specific bins and shapemodes (to be added). Then run
 
 ```
-cvapipe_analysis multiresstructcompare run --input_csv_ooc "/path/to/csv"
+cvapipe_analysis multiresstructcompare run --input_csv_loc "/path/to/csv"
 ```
 
 To compute concordance, prepare a 5d image stack that represents an average morphed cell (to be added). Then run
