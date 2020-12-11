@@ -184,8 +184,6 @@ class ComputeFeatures(Step):
             # Read dataset
             dataset = pd.read_csv(dataset)
 
-            dataset = dataset.head(5)
-
         # Create features directory
         features_dir = self.step_local_staging_dir / "cell_features"
         features_dir.mkdir(exist_ok=True)
