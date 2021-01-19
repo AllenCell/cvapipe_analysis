@@ -22,7 +22,7 @@ def download_quilt_data(
     data_save_loc="quilt_data",
     ignore_warnings=True,
 ):
-    """download a quilt dataset and supress nfs file attribe warnings by default"""
+    """Download a quilt dataset and supress nfs file attribe warnings by default"""
     dataset_manifest = quilt3.Package.browse(package, registry)
 
     meta_df = dataset_manifest["metadata.csv"]()
@@ -98,7 +98,7 @@ class LoadData(Step):
             data_save_loc=self.step_local_staging_dir,
             ignore_warnings=True,
         )
-
+        
         self.manifest = dataset
 
         # Save manifest to CSV
