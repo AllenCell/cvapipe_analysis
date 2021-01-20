@@ -5,39 +5,13 @@ import json
 import logging
 from pathlib import Path
 from typing import NamedTuple, Optional, Union, List, Dict
-from aicsfeature.extractor import cell, cell_nuc, dna
-from scipy.ndimage import gaussian_filter as ndf
 
-import aicsimageio
-import dask.dataframe as dd
 import pandas as pd
-from aics_dask_utils import DistributedHandler
-from aicsimageio import AICSImage
 from datastep import Step, log_run_params
 
 ###############################################################################
 
 log = logging.getLogger(__name__)
-
-###############################################################################
-
-
-class SingleCellFeaturesResult(NamedTuple):
-    cell_id: Union[int, str]
-    path: Path
-
-
-class SingleCellFeaturesError(NamedTuple):
-    cell_id: int
-    error: str
-
-
-class DatasetFields:
-    CellId = "CellId"
-    CellIndex = "CellIndex"
-    FOVId = "FOVId"
-    CellFeaturesPath = "CellFeaturesPath"
-
 
 ###############################################################################
 
