@@ -1,5 +1,6 @@
 import numpy as np
-from aicsshparam import shtools
+from aicsimageio import AICSImage
+from aicsshparam import shtools, shparam
 from skimage import measure as skmeasure
 from skimage import morphology as skmorpho
 
@@ -46,7 +47,7 @@ def get_surface_area(input_img):
 
     return int(surface_area)
 
-def get_features(input_image):
+def get_features(input_image, input_reference_image, compute_shcoeffs=True):
     
     """
     Extracts single cell features used in the variance paper.
@@ -54,8 +55,13 @@ def get_features(input_image):
     Parameters
     --------------------
     input_image: ndarray
-        3D input image representing the single cell segmentation that
+        3D image representing the single cell segmentation that
         represents either dna, cell or structure.
+    input_reference_image: ndarray
+        3D image representing the reference that should be used
+        align the input image. This is only used for the spherical
+        harmonics expansion. In case None is provided, the input
+        image is not aligned.
 
     Returns
     -------
@@ -90,46 +96,43 @@ def get_features(input_image):
         features[f'position_depth{suffix}'] = 1 + np.ptp(z)
         features[f'roundness_surface_area{suffix}'] = get_surface_area(img)
     
+    if not compute_shcoeffs:
+        return features
+    
     # Spherical harmonics expansion
+    angle = np.nan
+    if input_reference_image is not None:
+
+        # Get alignment angle based on the reference image. Variance
+        # paper uses make_unique = False
+        input_ref_image_aligned, angle = shtools.align_image_2d(
+            image = input_reference_image,
+            make_unique = False
+        )
+                
+        # Rotate input image according the reference alignment angle
+        input_image_lcc_aligned = shtools.apply_image_alignment_2d(
+            image = input_image_lcc,
+            angle = angle
+        ).squeeze()
+                
+    else:
+        
+        input_image_lcc_aligned = input_image_lcc
+        
+    (coeffs, _), (_, _, _, transform) = shparam.get_shcoeffs(
+        image = input_image_lcc_aligned,
+        lmax = 16,
+        sigma = 2,
+        alignment_2d = False
+    )
     
-    '''
-    Implement spherical harmonics expansion using aics-shparam here.
-    
-    Code snippet used for the paper:
-    --------------------------------
-    
-    if seg2 is not None:
-
-        img_aligned, (angle, flip_x, flip_y) = shtools.align_image_2d(
-            image = seg2,
-            alignment_channel = None,
-            preserve_chirality = chirality)
-
-        seg = shtools.apply_image_alignment_2d(
-            image = seg,
-            angle = angle,
-            flip_x = flip_x,
-            flip_y = flip_y).squeeze()
-
-        if _aicsfeature_debug_:
-            print("Alignment done!")
-            pdb.set_trace()
-
-    (features, grid_rec), (image_, mesh, grid_down, transform) = shparam.get_shcoeffs(
-        image = seg,
-        lmax = lmax,
-        sigma = sigma,
-        alignment_2d = False)
-
     if transform is not None:
         transform = {
             'shcoeffs_transform_xc': transform[0],
             'shcoeffs_transform_yc': transform[1],
             'shcoeffs_transform_zc': transform[2],
-            ## This need to be adjusted to handle the case when seg2 = None
             'shcoeffs_transform_angle': angle,
-            'shcoeffs_transform_xflip': flip_x,
-            'shcoeffs_transform_yflip': flip_y
         }
     else:
         transform = {
@@ -137,17 +140,45 @@ def get_features(input_image):
             'shcoeffs_transform_yc': np.nan,
             'shcoeffs_transform_zc': np.nan,
             'shcoeffs_transform_angle': np.nan,
-            'shcoeffs_transform_xflip': np.nan,
-            'shcoeffs_transform_yflip': np.nan 
         }
 
-    if _aicsfeature_debug_:
-        print("Running on: {0}".format(_running_on_flag_))
-        pdb.set_trace()
-
+    features.update(coeffs)
     features.update(transform)
-    
-    return features, (image_, mesh, grid_down, grid_rec)    
-    '''
+
+    # Add suffix to identify coeffs have been calculated on the
+    # largest connected component
+    features = dict(
+        (f'{key}_lcc',value) for (key,value) in features.items()
+    )
     
     return features
+
+def get_segmentations(folder, path_to_seg, channels):
+
+    """
+    Find the segmentations that should be used for features
+    calculation.
+
+    Parameters
+    --------------------
+    path_to_seg: str
+        Path to the 4D binary image.
+    channels: list of str
+        Name of channels of the 4D binary image.
+
+    Returns
+    -------
+    result: seg_nuc, seg_mem, seg_str
+        3D binary images of nucleus, cell and structure.
+    """
+
+    ch_dna = channels.index('dna_segmentation')
+    ch_mem = channels.index('membrane_segmentation')
+    ch_str = channels.index('struct_segmentation_roof')
+    
+    segs = AICSImage(folder/path_to_seg).data.squeeze()
+
+    return segs[ch_dna], segs[ch_mem], segs[ch_str]
+    
+
+    
