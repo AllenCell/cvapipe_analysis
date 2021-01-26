@@ -9,6 +9,7 @@ from typing import NamedTuple, Optional, Union, List, Dict
 import pandas as pd
 from tqdm import tqdm
 from datastep import Step, log_run_params
+from .parameterization_tools import parameterize
 
 ###############################################################################
 
@@ -52,6 +53,13 @@ class Parameterization(Step):
                 
         # Merge the two dataframes
         df = df.join(df_features, how='inner')
+        
+        # Run parameterization
+        for index in df.index:
+            parameterize(
+                data_folder = self.project_local_staging_dir/'loaddata',
+                row = df.loc[index].to_dict()
+            )
         
         self.manifest = df
         manifest_save_path = self.step_local_staging_dir / "manifest.csv"
