@@ -44,13 +44,13 @@ def download_quilt_data(
                 warnings.simplefilter("ignore", UserWarning)
                 # download single cell raw and segmentation images
                 # (cell membrane dye, dna dye, structure)
-                pkg[row["crop_raw"]].fetch(path_to_raw_folder)
-                pkg[row["crop_seg"]].fetch(path_to_seg_folder)
+                pkg[row["crop_raw"]].fetch(path_to_raw_folder/row["crop_raw"])
+                pkg[row["crop_seg"]].fetch(path_to_seg_folder/row["crop_raw"])
         else:
             # download single cell raw and segmentation images
             # (cell membrane dye, dna dye, structure)
-            pkg[row["crop_raw"]].fetch(path_to_raw_folder)
-            pkg[row["crop_seg"]].fetch(path_to_seg_folder)
+            pkg[row["crop_raw"]].fetch(path_to_raw_folder/row["crop_raw"])
+            pkg[row["crop_seg"]].fetch(path_to_seg_folder/row["crop_raw"])
 
     return meta_df
 
