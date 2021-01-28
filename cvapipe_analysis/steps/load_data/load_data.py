@@ -32,25 +32,19 @@ def download_quilt_data(
         print('>> Downloading test dataset...')
         meta_df = meta_df.sample(n=300, random_state=666)
 
-    # Creating directories
-    path_to_raw_folder = (data_save_loc / Path("crop_raw"))
-    path_to_raw_folder.mkdir(parents=True, exist_ok=True)
-    path_to_seg_folder = (data_save_loc / Path("crop_seg"))
-    path_to_seg_folder.mkdir(parents=True, exist_ok=True)
-        
     for i, row in meta_df.iterrows():
         if ignore_warnings:
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore", UserWarning)
                 # download single cell raw and segmentation images
                 # (cell membrane dye, dna dye, structure)
-                pkg[row["crop_raw"]].fetch(path_to_raw_folder/row["crop_raw"])
-                pkg[row["crop_seg"]].fetch(path_to_seg_folder/row["crop_seg"])
+                pkg[row["crop_raw"]].fetch(data_save_loc/row["crop_raw"])
+                pkg[row["crop_seg"]].fetch(data_save_loc/row["crop_seg"])
         else:
             # download single cell raw and segmentation images
             # (cell membrane dye, dna dye, structure)
-            pkg[row["crop_raw"]].fetch(path_to_raw_folder/row["crop_raw"])
-            pkg[row["crop_seg"]].fetch(path_to_seg_folder/row["crop_seg"])
+            pkg[row["crop_raw"]].fetch(data_save_loc/row["crop_raw"])
+            pkg[row["crop_seg"]].fetch(data_save_loc/row["crop_seg"])
 
     return meta_df
 
