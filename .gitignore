@@ -1,5 +1,5 @@
 # default local data staging directory
-/local_staging
+/local_staging*
 
 # notebooks bcz eww (force add them if you must?)
 *.ipynb
