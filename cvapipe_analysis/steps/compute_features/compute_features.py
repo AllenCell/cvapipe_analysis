@@ -43,7 +43,8 @@ class ComputeFeatures(Step):
         df = df[columns_to_keep]
         
         # Sample the dataset if running debug mode
-        df = df.sample(n=8, random_state=666)
+        if debug:
+            df = df.sample(n=8, random_state=666)
 
         df_features = pd.DataFrame([])
         for index in tqdm(df.index):
