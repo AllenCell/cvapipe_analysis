@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import NamedTuple, Optional, Union, List, Dict
 
 import pandas as pd
+from tqdm import tqdm
 from datastep import Step, log_run_params
 from aics_dask_utils import DistributedHandler
 from .compute_features_tools import get_segmentations, get_features
@@ -192,10 +193,17 @@ class ComputeFeatures(Step):
                     {DatasetFields.CellId: result.cell_id, "Error": result.error}
                 )
 
-        # Convert features paths rows to dataframe
-        cell_features_dataset = pd.DataFrame(cell_features_dataset)
-            
-        self.manifest = cell_features_dataset
+        # Gather all features into a single manifest
+        df_features = pd.DataFrame([])
+        for index in tqdm(df.index, desc='Merging features'):
+            with open(self.step_local_staging_dir/f"cell_features/{index}.json", "r") as fjson:
+                features = json.load(fjson)
+                features = pd.Series(features, name=index)
+                df_features = df_features.append(features)
+        df_features.index = df_features.index.rename('CellId')
+
+        # Save manifest
+        self.manifest = df_features
         manifest_save_path = self.step_local_staging_dir / "manifest.csv"
         self.manifest.to_csv(manifest_save_path)
             
