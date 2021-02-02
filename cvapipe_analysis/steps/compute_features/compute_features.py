@@ -141,7 +141,6 @@ class ComputeFeatures(Step):
             self.project_local_staging_dir / 'loaddata/manifest.csv',
             index_col='CellId'
         )
-        df = pd.read_csv('./test.csv')
 
         # Keep only the columns that will be used from now on
         columns_to_keep = ['crop_raw', 'crop_seg', 'name_dict']
