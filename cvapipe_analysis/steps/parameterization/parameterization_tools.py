@@ -4,7 +4,7 @@ from aicscytoparam import cytoparam
 
 from ..compute_features.compute_features_tools import get_segmentations
 
-def parameterize(data_folder, row, save_as=None):
+def parameterize(data_folder, row, save_as):
     
     """
     Calculates the surface area of a binary shape by counting the
@@ -66,25 +66,13 @@ def parameterize(data_folder, row, save_as=None):
             ('structure_segmentation', seg_str)
         ]
     )
-
-    import pdb; pdb.set_trace()
     
     # Save representation as TIFF file
-    if save_as is not None:
-        with writers.ome_tiff_writer.OmeTiffWriter(save_as, overwrite_file=True) as writer:
-            writer.save(
-                representations,
-                image_name = save_as.stem,
-                channel_names = representations.channel_names
-            )
+    with writers.ome_tiff_writer.OmeTiffWriter(save_as, overwrite_file=True) as writer:
+        writer.save(
+            representations.get_image_data('CZYX', S=2, T=0),
+            dimension_order = 'CZYX',
+            image_name = save_as.stem,
+            channel_names = representations.channel_names
+        )
     
-import numpy as np
-from aicsimageio import AICSImage, writers
-data = np.random.rand(3**3).reshape(3,3,3)
-img = AICSImage(data)
-with writers.ome_tiff_writer.OmeTiffWriter('test.tif') as writer: writer.save(img)
-
-    
-    import pdb; pdb.set_trace()
-    
-    return None

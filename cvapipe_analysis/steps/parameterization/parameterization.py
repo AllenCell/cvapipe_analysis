@@ -59,7 +59,7 @@ class Parameterization(Step):
         path_to_rep.mkdir(parents=True, exist_ok=True)
         
         # Run parameterization
-        for index in df.index:
+        for index in tqdm(df.index):
             parameterize(
                 data_folder = self.project_local_staging_dir/'loaddata',
                 row = df.loc[index].to_dict(),
