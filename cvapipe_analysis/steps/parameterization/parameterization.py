@@ -54,11 +54,16 @@ class Parameterization(Step):
         # Merge the two dataframes
         df = df.join(df_features, how='inner')
         
+        # Folder for storing the parameterized intensity representations
+        path_to_rep = self.step_local_staging_dir/'representations'
+        path_to_rep.mkdir(parents=True, exist_ok=True)
+        
         # Run parameterization
         for index in df.index:
             parameterize(
                 data_folder = self.project_local_staging_dir/'loaddata',
-                row = df.loc[index].to_dict()
+                row = df.loc[index].to_dict(),
+                save_as = path_to_rep / f'{index}.tif'
             )
         
         self.manifest = df
