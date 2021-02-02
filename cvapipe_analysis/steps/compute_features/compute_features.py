@@ -107,11 +107,6 @@ class ComputeFeatures(Step):
             features_str = dict(
                 (f'str_{key}', value) for (key, value) in features_str.items()
             )    
-            
-            # Check for numpy uint64 or int64 types in features_str
-            for key, value in features_str.items():
-                if type(value) == np.uint64 or type(value) == np.int64:
-                    features_str[key] = value.item()
 
             # Concatenate all features for this cell
             features = features_dna.copy()
@@ -146,6 +141,7 @@ class ComputeFeatures(Step):
             self.project_local_staging_dir / 'loaddata/manifest.csv',
             index_col='CellId'
         )
+        df = pd.read_csv('./test.csv')
 
         # Keep only the columns that will be used from now on
         columns_to_keep = ['crop_raw', 'crop_seg', 'name_dict']
@@ -196,7 +192,7 @@ class ComputeFeatures(Step):
         # Gather all features into a single manifest
         df_features = pd.DataFrame([])
         for index in tqdm(df.index, desc='Merging features'):
-            with open(self.step_local_staging_dir/f"cell_features/{index}.json", "r") as fjson:
+            with open(self.step_local_staging_dir / f"cell_features/{index}.json", "r") as fjson:
                 features = json.load(fjson)
                 features = pd.Series(features, name=index)
                 df_features = df_features.append(features)
