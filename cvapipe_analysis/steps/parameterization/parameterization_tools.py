@@ -70,7 +70,7 @@ def parameterize(data_folder, row, save_as):
     # Save representation as TIFF file
     with writers.ome_tiff_writer.OmeTiffWriter(save_as, overwrite_file=True) as writer:
         writer.save(
-            representations.get_image_data('CZYX', S=2, T=0),
+            representations.get_image_data('CZYX', S=0, T=0),
             dimension_order = 'CZYX',
             image_name = save_as.stem,
             channel_names = representations.channel_names
