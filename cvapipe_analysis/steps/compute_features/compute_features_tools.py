@@ -154,6 +154,20 @@ def get_features(input_image, input_reference_image, compute_shcoeffs=True):
     features.update(coeffs)
     features.update(transform)
 
+    for key, value in features.items():
+        if isinstance(value, np.integer):
+            features[key] = int(value)
+        elif isinstance(value, np.floating):
+            features[key] = float(value)
+        elif isinstance(value, np.ndarray):
+            features[key] = value.tolist()
+        else:
+            features[key] = int(value)
+
+    for key, value in features.items():
+        if type(value) == np.uint64 or type(value) == np.int64:
+            features[key] = int(value.item())
+
     # Add suffix to identify coeffs have been calculated on the
     # largest connected component
     features = dict(
