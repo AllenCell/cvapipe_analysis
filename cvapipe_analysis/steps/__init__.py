@@ -5,6 +5,7 @@ from .shapemode import Shapemode
 from .pca_path_cells import PcaPathCells
 from .load_data import LoadData
 from .compute_features import ComputeFeatures
+from .parameterization import Parameterization
 
 __all__ = [
     "MultiResStructCompare",
@@ -12,4 +13,5 @@ __all__ = [
     "PcaPathCells",
     "LoadData",
     "ComputeFeatures",
+    "Parameterization",
 ]
