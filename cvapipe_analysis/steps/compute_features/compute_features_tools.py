@@ -168,30 +168,30 @@ def get_features(input_image, input_reference_image, compute_shcoeffs=True):
     
     if transform is not None:
         transform = {
-            'shcoeffs_transform_xc': transform[0],
-            'shcoeffs_transform_yc': transform[1],
-            'shcoeffs_transform_zc': transform[2],
-            'shcoeffs_transform_angle': angle,
+            'shcoeffs_transform_xc_lcc': transform[0],
+            'shcoeffs_transform_yc_lcc': transform[1],
+            'shcoeffs_transform_zc_lcc': transform[2],
+            'shcoeffs_transform_angle_lcc': angle,
         }
     else:
         transform = {
-            'shcoeffs_transform_xc': np.nan,
-            'shcoeffs_transform_yc': np.nan,
-            'shcoeffs_transform_zc': np.nan,
-            'shcoeffs_transform_angle': np.nan,
+            'shcoeffs_transform_xc_lcc': np.nan,
+            'shcoeffs_transform_yc_lcc': np.nan,
+            'shcoeffs_transform_zc_lcc': np.nan,
+            'shcoeffs_transform_angle_lcc': np.nan,
         }
 
+    # Add suffix to identify coeffs have been calculated on the
+    # largest connected component
+    coeffs = dict(
+        (f'{key}_lcc',value) for (key,value) in coeffs.items()
+    )
+        
     features.update(coeffs)
     features.update(transform)
 
     for key, value in features.items():
         features = cast_features(features)
-
-    # Add suffix to identify coeffs have been calculated on the
-    # largest connected component
-    features = dict(
-        (f'{key}_lcc',value) for (key,value) in features.items()
-    )
     
     return features
 
