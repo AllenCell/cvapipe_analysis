@@ -158,7 +158,10 @@ class Parameterization(Step):
                 errors.append(
                     {DatasetFields.CellId: result.cell_id, "Error": result.error}
                 )
+        # Convert to DataFrame
+        cell_parameterization_dataset = pd.DataFrame(cell_parameterization_dataset)
         
+        # Save manifest
         self.manifest = cell_parameterization_dataset
         manifest_save_path = self.step_local_staging_dir / "manifest.csv"
         self.manifest.to_csv(manifest_save_path)
