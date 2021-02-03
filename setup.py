@@ -65,8 +65,7 @@ requirements = [
     #"umap-learn",
     "imgkit",
     "xvfbwrapper",
-    "aicsshparam==0.0.13",
-    # "vtk>=9.0.0",  # required by aicsshparam
+    "aicsshparam==0.0.14",
     "vtk==9.0.1",
     "quilt3",
     "ffmpeg",
