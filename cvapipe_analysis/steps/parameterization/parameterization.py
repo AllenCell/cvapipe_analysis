@@ -117,16 +117,6 @@ class Parameterization(Step):
         # Data folder
         load_data_dir = self.project_local_staging_dir/'loaddata'
         
-        '''
-        # Run parameterization sequentially
-        for index in tqdm(df.index):
-            parameterize(
-                data_folder = load_data_dir,
-                row = df.loc[index].to_dict(),
-                save_as = save_dir / f'{index}.tif'
-            )
-        '''
-        
         # Process each row
         with DistributedHandler(distributed_executor_address) as handler:
             # Start processing
