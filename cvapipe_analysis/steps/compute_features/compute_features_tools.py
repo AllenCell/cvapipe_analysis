@@ -4,6 +4,35 @@ from aicsshparam import shtools, shparam
 from skimage import measure as skmeasure
 from skimage import morphology as skmorpho
 
+def cast_features(features):
+    
+    """
+    Cast feature values from numpy type to python so that the
+    Json dict can be serialized.
+
+    Parameters
+    --------------------
+    features: dict
+        Dictionary of features.
+
+    Returns
+    -------
+    features: dict
+        Dictionary of features converted into python type.
+    """
+    
+    for key, value in features.items():
+        if isinstance(value, np.integer):
+            features[key] = int(value)
+        elif isinstance(value, np.floating):
+            features[key] = float(value)
+        elif isinstance(value, np.ndarray):
+            features[key] = value.tolist()
+        else:
+            features[key] = int(value)
+
+    return features
+
 def get_surface_area(input_img):
 
     """
@@ -106,16 +135,7 @@ def get_features(input_image, input_reference_image, compute_shcoeffs=True):
             features[f'roundness_surface_area{suffix}'] = np.nan
         
     if not compute_shcoeffs:
-        for key, value in features.items():
-            if isinstance(value, np.integer):
-                features[key] = int(value)
-            elif isinstance(value, np.floating):
-                features[key] = float(value)
-            elif isinstance(value, np.ndarray):
-                features[key] = value.tolist()
-            else:
-                features[key] = int(value)
-
+        features = cast_features(features)
         return features
     
     # Spherical harmonics expansion
@@ -165,14 +185,7 @@ def get_features(input_image, input_reference_image, compute_shcoeffs=True):
     features.update(transform)
 
     for key, value in features.items():
-        if isinstance(value, np.integer):
-            features[key] = int(value)
-        elif isinstance(value, np.floating):
-            features[key] = float(value)
-        elif isinstance(value, np.ndarray):
-            features[key] = value.tolist()
-        else:
-            features[key] = int(value)
+        features = cast_features(features)
 
     # Add suffix to identify coeffs have been calculated on the
     # largest connected component
