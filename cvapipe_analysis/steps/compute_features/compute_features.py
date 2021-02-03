@@ -149,7 +149,7 @@ class ComputeFeatures(Step):
         # Sample the dataset if running debug mode
         if debug:
             df = df.sample(n=8, random_state=666)
-
+            
         # Create features directory
         features_dir = self.step_local_staging_dir / "cell_features"
         features_dir.mkdir(exist_ok=True)

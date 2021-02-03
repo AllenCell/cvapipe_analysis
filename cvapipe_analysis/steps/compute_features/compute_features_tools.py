@@ -24,13 +24,13 @@ def cast_features(features):
     for key, value in features.items():
         if isinstance(value, np.integer):
             features[key] = int(value)
-        elif isinstance(value, np.floating):
+        elif isinstance(value, np.float):
             features[key] = float(value)
         elif isinstance(value, np.ndarray):
             features[key] = value.tolist()
         else:
             features[key] = int(value)
-
+            
     return features
 
 def get_surface_area(input_img):
