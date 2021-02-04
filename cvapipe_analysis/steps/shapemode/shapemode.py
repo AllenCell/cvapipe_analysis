@@ -24,8 +24,8 @@ log = logging.getLogger(__name__)
 
 ###############################################################################
 
-
 class Shapemode(Step):
+    
     def __init__(
         self,
         direct_upstream_tasks: List["Step"] = [],
@@ -33,96 +33,109 @@ class Shapemode(Step):
     ):
         super().__init__(direct_upstream_tasks=direct_upstream_tasks, config=config)
 
-    @log_run_params
-    def run(self, debug=False, **kwargs):
+    @staticmethod
+    def _generate_single_cell_features(
+        row_index: int,
+        row: pd.Series,
+        save_dir: Path,
+        load_data_dir: Path,
+        overwrite: bool,
+    ) -> Union[SingleCellFeaturesResult, SingleCellFeaturesError]:
 
-        np.random.seed(666)
+        
+        # Load feature dataframe
+        path_to_metadata_manifest = self.project_local_staging_dir / 'loaddata/manifest.csv'
+        df_meta = pd.read_csv(path_to_metadata_manifest, index_col='CellId')
+        # Drop unwanted columns
+        df_meta = df_meta[
+            [c for c in df_meta.columns if any(s not in c for s in ['mem_','dna_','str_'])]
+        ]
+        log.info(f"Shape of metadata: {df_meta.shape}")
 
-        """
-        ---------------------------
-        DOWNLOAD DATASET FROM QUILT
-        ---------------------------
-        """
-
-        # Download raw CSV with feature from Quilt in case it is not found locally
-        # The feature calculation will be incorporated as an extra step in this
-        # workflow
-        path_to_manifest = f"{self.step_local_staging_dir}/allcells_shapespace1.csv"
-        if not os.path.exists(path_to_manifest):
-
-            _ = quilt3.Package.browse(
-                name="matheus/cell_shape_variation_shapespace1",
-                registry="s3://allencell-internal-quilt",
-            ).fetch(self.step_local_staging_dir)
-
-        """
-        --------------
-        PRE-PROCESSING
-        --------------
-        """
-
-        # Read the dataframe
-        df = pd.read_csv(path_to_manifest, index_col=0, nrows=(1024 if debug else None))
-        print(f"Shape of raw data: {df.shape}")
-
-        # Save tava table with number of mitotic vs. intephase cells
-        df["is_mitotic"] = df.cell_stage != "M0"
-        dataset_summary_table(
-            df=df,
-            levels=["is_mitotic"],
-            factor="structure_name",
-            rank_factor_by="meta_fov_image_date",
-            save=self.step_local_staging_dir / "allcells",
-        )
-        # Exclude mitotics
-        df = df.loc[df.is_mitotic == False]
-        df = df.drop(columns=["is_mitotic"])
-
-        print(f"Shape of data without mitotis: {df.shape}")
+        # Load feature dataframe
+        path_to_features_manifest = self.project_local_staging_dir / 'computefeatures/manifest.csv'
+        df_features = pd.read_csv(path_to_features_manifest, index_col='CellId')
+        log.info(f"Shape of features data: {df_features.shape}")
+        
+        # Make necessary folders
+        tables_dir = self.step_local_staging_dir / "tables"
+        tables_dir.mkdir(exist_ok=True)
 
         # Perform outlier detection based on Gaussian kernel estimation
-        dir_output_outliers = self.step_local_staging_dir / "outliers"
-        dir_output_outliers.mkdir(parents=True, exist_ok=True)
-        if True:
-            df_outliers = outliers_removal(df=df, output_dir=dir_output_outliers)
-            df_outliers.to_csv(self.step_local_staging_dir / "manifest_outliers.csv")
-        else:
-            df_outliers = pd.read_csv(
-                self.step_local_staging_dir / "manifest_outliers.csv", index_col=0
-            )
-            try:
-                df_outliers = df_outliers.set_index("CellId", drop=True)
-            except:
-                pass
+        outliers_dir = self.step_local_staging_dir / "outliers"
+        outliers_dir.mkdir(exist_ok=True)
 
+        # Mitotic removal
+        
+        if 'cell_stage' in df_meta.columns:
+        
+            # Generate table with number of mitotic vs. intephase cells
+            dataset_summary_table(
+                df = df_meta,
+                levels = ["cell_stage"],
+                factor = "structure_name",
+                save = tables_dir / "cell_stage"
+            )
+
+            # Filter out mitotic cells
+            if remove_mitotics:
+                # cell_stage = M0 indicates interphase cells
+                df_meta = df_meta.loc[df_meta.cell_stage=='M0']
+                df_features = df_features[df_features.index.isin(df_meta.index)]
+                log.info(f"Shape of metadata without mitotics: {df_meta.shape}")
+
+        # Outlier detection
+
+        # Path to outliers manifest
+        manifest_outliers_path = outliers_dir / "manifest_outliers.csv"
+
+        # Merged dataframe to compute outliers on
+        df = pd.concat([df_meta,df_features], axis=1)
+
+        # Compute outliers
+        if not overwrite and manifest_outliers_path.is_file():
+            log.info(f"Using pre-detected outliers.")
+            df_outliers = pd.read_csv(manifest_outliers_path, index_col='CellId')
+        else:
+            log.info(f"Computing outliers...")
+            df_outliers = outliers_removal(
+                df = df,
+                output_dir = outliers_dir,
+                log = log,
+                detect_based_on_structure_features = not no_structural_outliers
+            )
+            df_outliers.to_csv(manifest_outliers_path)
+
+        # Generate outliers table
         df.loc[df_outliers.index, "Outlier"] = df_outliers["Outlier"]
 
         # Save a data table with detected outliers
         dataset_summary_table(
-            df=df,
-            levels=["Outlier"],
-            factor="structure_name",
-            rank_factor_by="meta_fov_image_date",
-            save=self.step_local_staging_dir / "outliers",
+            df = df,
+            levels = ["Outlier"],
+            factor = "structure_name",
+            save = tables_dir / "outliers"
         )
         df = df.loc[df.Outlier == "No"]
         df = df.drop(columns=["Outlier"])
 
-        print(f"Shape of data without outliers: {df.shape}")
+        log.info(f"Shape of data without outliers: {df.shape}")
+        
+        # Save a data table stratifyed by metadata if information
+        # is available
+        metadata_columns = [
+                'WorkflowId',
+                'meta_imaging_mode',
+                'meta_fov_position'
+        ]
 
-        # Save a data table stratifyed by metadata
-        dataset_summary_table(
-            df=df,
-            levels=["WorkflowId", "meta_imaging_mode", "meta_fov_position"],
-            factor="structure_name",
-            rank_factor_by="meta_fov_image_date",
-            save=self.step_local_staging_dir / "manifest",
-        )
-
-        # TEST ALTERNATIVE SHAPE SPACES
-        # df = df.loc[df.edge_flag==1]
-        # print(df.shape)
-        # import pdb; pdb.set_trace()
+        if pd.Series(metadata_columns).isin(df.columns).all():
+            dataset_summary_table(
+                df = df,
+                levels = metadata_columns,
+                factor = "structure_name",
+                save = tables_dir / "main",
+            )
 
         """
         ------------------------

@@ -1,10 +1,116 @@
 import re
+import warnings
 import matplotlib
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from scipy import stats as scistats
 
+def dataset_summary_table(df, levels, factor, rank_factor_by=None, save=None):
+
+    """
+    Generates a summary table from a dataframe.
+
+    Parameters
+    --------------------
+    ??
+        
+    Returns
+    -------
+    ??
+    
+    """
+    
+    # Fill missing data with NA
+    for level in levels:
+        df[level].fillna("NA", inplace=True)
+
+    # Count number of cells
+    df_summary = df.groupby(levels+[factor]).size()
+    df_summary = df_summary.unstack(level=-1)
+
+    if rank_factor_by is not None:
+        # Rank columns if a ranking variable is provided
+        order = (
+            df.groupby([factor])[[rank_factor_by]]
+            .min()
+            .sort_values(by=rank_factor_by)
+            .index
+        )
+    else:
+        # Uses alphabetical order
+        order = df[factor].unique()
+        order = sorted(order)
+        
+    # Rank dataframe
+    df_summary = df_summary[order]
+
+
+    # Create a column for total number of cells
+    df_summary = pd.concat(
+        [
+            df_summary,
+            pd.DataFrame(
+                [
+                    pd.Series(
+                        dict(
+                            zip(
+                                df_summary.columns,
+                                [df_summary[c].sum() for c in df_summary.columns],
+                            )
+                        ),
+                        name=("", "", "Total"),
+                    )
+                ]
+            ),
+        ],
+        axis=0,
+    )
+
+    # Create a row for order number
+    df_order = pd.DataFrame([
+            pd.Series(
+                dict(zip(df_summary.columns, np.arange(1, 2 + len(order)))),
+                name=("", "", "Order"),
+            )
+        ])
+    df_summary = pd.concat([df_summary, df_order], axis=0)
+
+    # Set pandas display properties
+    with pd.option_context("display.max_rows", None, "display.max_columns", None):
+        styler = (
+        df_summary.style.set_table_styles(
+        [
+            {
+                "selector": "th",
+                "props": [
+                    ("font-family", "Helvetica"),
+                    ("font-size", "10pt"),
+                    ("border", "1px solid gray"),
+                ],
+            }
+        ]
+        )
+        .set_properties(**{"text-align": "left", "border": "1px solid gray"})
+        #.bar(color="#D7BDE2")
+        .format(lambda x: f"{x if x>0 else ''}")
+    )
+
+    # Save view of the table as jpeg as well as csv
+    if save:
+        try:
+            import imgkit
+            from xvfbwrapper import Xvfb
+            vdisplay = Xvfb()
+            vdisplay.start()
+            imgkit.from_string(styler.render(), f"{save}.jpg")
+            vdisplay.stop()
+        except:
+            warnings.warn('Not abel to convert pandas dataframe to an image. Please check your imgkit and xvfbwrapper installations.')
+            pass
+        df_summary.to_csv(f"{save}_summary.csv")
+    
+    return df_summary
 
 #  plot function
 def splot(
@@ -582,101 +688,6 @@ def paired_correlation(df, features, save, units=None, off=0):
 
     plt.savefig(f"{save}.png", dpi=300)
     plt.close("all")
-
-
-def dataset_summary_table(
-    df, levels, factor, rank_factor_by, normalize=False, save=None, show=False
-):
-
-    for lvl in levels:
-        df[lvl].fillna("NA", inplace=True)
-
-    df_summary = df.groupby(levels + [factor]).size()
-    df_summary = df_summary.unstack(level=-1)
-
-    for c in df_summary.columns:
-        df_summary.loc[df_summary[c].isna(), c] = 0.0
-        if normalize:
-            df_summary[c] /= 0.01 * df_summary[c].sum()
-        df_summary[c] = df_summary[c].astype(np.uint16)
-
-    order = (
-        df.groupby([factor])[[rank_factor_by]]
-        .min()
-        .sort_values(by=rank_factor_by)
-        .index
-    )
-
-    df_summary = df_summary[order]
-
-    df_order = pd.DataFrame(
-        [
-            pd.Series(
-                dict(zip(df_summary.columns, np.arange(1, 2 + len(order)))),
-                name=("", "", "Order"),
-            )
-        ]
-    )
-
-    df_summary = pd.concat(
-        [
-            df_summary,
-            pd.DataFrame(
-                [
-                    pd.Series(
-                        dict(
-                            zip(
-                                df_summary.columns,
-                                [df_summary[c].sum() for c in df_summary.columns],
-                            )
-                        ),
-                        name=("", "", f"Total {'(%)' if normalize else ''}"),
-                    )
-                ]
-            ),
-        ],
-        axis=0,
-    )
-
-    df_summary = pd.concat([df_summary, df_order], axis=0)
-
-    # with pd.option_context("display.max_rows", None, "display.max_columns", None):
-    #     styler = (
-    #         df_summary.style.set_table_styles(
-    #             [
-    #                 {
-    #                     "selector": "th",
-    #                     "props": [
-    #                         ("font-family", "Helvetica"),
-    #                         ("font-size", "10pt"),
-    #                         ("border", "1px solid gray"),
-    #                     ],
-    #                 }
-    #             ]
-    #         )
-    #         .set_properties(**{"text-align": "left", "border": "1px solid gray"})
-    #         .bar(color="#D7BDE2")
-    #         .format(lambda x: f"{x if x>0 else ''}")
-    #     )
-
-    #     if show:
-    #         pass
-    #         # display(styler)
-
-    #     if save:
-    #         pass
-    #         # import imgkit
-    #         # from xvfbwrapper import Xvfb
-
-    #         # vdisplay = Xvfb()
-    #         # vdisplay.start()
-    #         # imgkit.from_string(styler.render(), f"{save}.jpg")
-    #         # vdisplay.stop()
-
-    #         # df_summary.to_csv(f"{save}_summary.csv")
-
-    return df_summary
-
 
 def vertical_distributions(
     df_input,
