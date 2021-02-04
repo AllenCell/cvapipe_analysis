@@ -235,7 +235,7 @@ def get_contours_of_consecutive_reconstructions(df, prefix, proj, lmax):
     return contours, meshes, limits
 
 
-def transform_coords_to_mem_space(xo, yo, zo, angle, cm, flip):
+def transform_coords_to_mem_space(xo, yo, zo, angle, cm):
 
     angle = np.pi * angle / 180.0
 
@@ -249,8 +249,8 @@ def transform_coords_to_mem_space(xo, yo, zo, angle, cm, flip):
 
     pt_rot = np.matmul(rot_mx, np.array([xo - cm[0], yo - cm[1], zo - cm[2]]))
 
-    xt = pt_rot[0] * flip[0]
-    yt = pt_rot[1] * flip[1]
+    xt = pt_rot[0]
+    yt = pt_rot[1]
     zt = pt_rot[2]
 
     return xt, yt, zt
@@ -279,7 +279,6 @@ def animate_shape_modes_and_save_meshes(
                 zo=row["dna_position_z_centroid_lcc"],
                 angle=row["mem_shcoeffs_transform_angle_lcc"],
                 cm=[row[f"mem_position_{k}_centroid_lcc"] for k in ["x", "y", "z"]],
-                flip=[row[f"mem_shcoeffs_transform_{k}flip_lcc"] for k in ["x", "y"]],
             )
 
             return (dxc, dyc, dzc)
