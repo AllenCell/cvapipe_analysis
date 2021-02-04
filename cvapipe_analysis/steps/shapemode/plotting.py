@@ -3,23 +3,50 @@ import warnings
 import matplotlib
 import numpy as np
 import pandas as pd
+from pathlib import Path
 import matplotlib.pyplot as plt
 from scipy import stats as scistats
+from typing import Dict, List, Optional, Union
 
-def dataset_summary_table(df, levels, factor, rank_factor_by=None, save=None):
+def dataset_summary_table(
+    df: pd.DataFrame,
+    levels: List,
+    factor: str,
+    rank_factor_by: Optional[str]=None,
+    save: Optional[Path] = None
+):
 
     """
     Generates a summary table from a dataframe.
-
+    
     Parameters
     --------------------
-    ??
-        
+    df: pandas df
+        Input dataframe to be summarized.
+    levels: list
+        List of column names. These names will be used to index
+        rows in the summary dataframe.
+    factor: str
+        Column name to stratify the data by. Each value of this
+        factor will be represented by one column in the summary
+        dataframe.
+    rank_factor_by: str
+        Column name to be used to sort the columns of the summary
+        dataframe by. If none is provided, then columns are
+        sorted in alphabetical order.
+    save: Path
+        Path to save the results.
+
     Returns
     -------
-    ??
-    
+        df_summary: pandas df
+            Summary dataframe
     """
+        
+    # Check if all variable are available
+    for col in levels+[factor]+[rank_factor_by]:
+        if (col is not None) and (col not in df.columns):
+            raise ValueError(f"Column {col} not found in the input dataframe.")
     
     # Fill missing data with NA
     for level in levels:
@@ -44,7 +71,6 @@ def dataset_summary_table(df, levels, factor, rank_factor_by=None, save=None):
         
     # Rank dataframe
     df_summary = df_summary[order]
-
 
     # Create a column for total number of cells
     df_summary = pd.concat(
@@ -112,6 +138,197 @@ def dataset_summary_table(df, levels, factor, rank_factor_by=None, save=None):
     
     return df_summary
 
+def paired_correlation(
+    df: pd.DataFrame,
+    features: List,
+    save: Path,
+    units: Optional[List] = None,
+    off: Optional[float] = 0
+):
+
+    """
+    Create pairwise correlation between columns of a dataframe.
+    
+    Parameters
+    --------------------
+    df: pandas df
+        Input dataframe that contains the features.
+    features: list
+        List of column names. Every feature in this list will
+        be plotted agains each other.
+    save: Path
+        Path to save the result
+    units: List
+        List of same length of features with a multiplication
+        factor for each feature.
+    save: Path
+        Path to save the results.
+    off: float
+        The plot axes will span off% to 100-off% of the data.
+    """
+    
+    # Check if all variable are available
+    for col in features:
+        if col not in df.columns:
+            raise ValueError(f"Column {col} not found in the input dataframe.")
+    
+    npts = df.shape[0]
+
+    cmap = plt.cm.get_cmap("tab10")
+
+    # Drop rows for with one or more feature are NA
+    df = df.dropna(subset=features)
+
+    if units is None:
+        units = np.ones(len(features))
+
+    # Check if all variable are available
+    if len(units) != len(features):
+        raise ValueError(f"Features and units should have same length.")
+
+    # Clip the limits of the plot
+    prange = []
+    for f, un in zip(features, units):
+        prange.append(np.percentile(un * df[f].values, [off, 100 - off]))
+
+    # Create a grid of nfxnf
+    nf = len(features)
+    fig, axs = plt.subplots(
+        nf,
+        nf,
+        figsize=(2 * nf, 2 * nf),
+        sharex="col",
+        gridspec_kw={"hspace": 0.1, "wspace": 0.1},
+    )
+    # Make the plots
+    for f1id, (f1, un1) in enumerate(zip(features, units)):
+
+        yrange = []
+        for f2id, (f2, un2) in enumerate(zip(features, units)):
+
+            ax = axs[f1id, f2id]
+
+            y = un1 * df[f1].values
+            x = un2 * df[f2].values
+
+            valids = np.where(
+                (
+                    (y > prange[f1id][0])
+                    & (y < prange[f1id][1])
+                    & (x > prange[f2id][0])
+                    & (x < prange[f2id][1])
+                )
+            )
+            
+            # Add plots on lower triangle
+            if f2id < f1id:
+                xmin = x[valids].min()
+                xmax = x[valids].max()
+                ymin = y[valids].min()
+                ymax = y[valids].max()
+                yrange.append([ymin, ymax])
+                ax.plot(
+                    x[valids], y[valids], ".", markersize=1, color="black", alpha=0.1
+                )
+                ax.plot([xmin, xmax], [xmin, xmax], "--")
+                if f2id:
+                    plt.setp(ax.get_yticklabels(), visible=False)
+                    ax.tick_params(axis="y", which="both", length=0.0)
+                if f1id < nf - 1:
+                    ax.tick_params(axis="x", which="both", length=0.0)
+
+            # Add annotations on upper triangle
+            elif f2id > f1id:
+                plt.setp(ax.get_xticklabels(), visible=False)
+                plt.setp(ax.get_yticklabels(), visible=False)
+                ax.tick_params(axis="x", which="both", length=0.0)
+                ax.tick_params(axis="y", which="both", length=0.0)
+                pearson, p_pvalue = scistats.pearsonr(x, y)
+                spearman, s_pvalue = scistats.spearmanr(x, y)
+                ax.text(
+                    0.05,
+                    0.8,
+                    f"Pearson: {pearson:.2f}",
+                    size=10,
+                    ha="left",
+                    transform=ax.transAxes,
+                )
+                ax.text(
+                    0.05,
+                    0.6,
+                    f"P-value: {p_pvalue:.1E}",
+                    size=10,
+                    ha="left",
+                    transform=ax.transAxes,
+                )
+                ax.text(
+                    0.05,
+                    0.4,
+                    f"Spearman: {spearman:.2f}",
+                    size=10,
+                    ha="left",
+                    transform=ax.transAxes,
+                )
+                ax.text(
+                    0.05,
+                    0.2,
+                    f"P-value: {s_pvalue:.1E}",
+                    size=10,
+                    ha="left",
+                    transform=ax.transAxes,
+                )
+                
+            # Single variable distribution at diagonal
+            else:
+                ax.set_frame_on(False)
+                plt.setp(ax.get_yticklabels(), visible=False)
+                ax.tick_params(axis="y", which="both", length=0.0)
+                ax.hist(
+                    x[valids],
+                    bins=16,
+                    density=True,
+                    histtype="stepfilled",
+                    color="white",
+                    edgecolor="black",
+                    label="Complete",
+                )
+                ax.hist(
+                    x[valids],
+                    bins=16,
+                    density=True,
+                    histtype="stepfilled",
+                    color=cmap(0),
+                    alpha=0.2,
+                    label="Incomplete",
+                )
+
+            if f1id == nf - 1:
+                ax.set_xlabel(f2, fontsize=7)
+            if not f2id and f1id:
+                ax.set_ylabel(f1, fontsize=7)
+
+        if yrange:
+            ymin = np.min([ymin for (ymin, ymax) in yrange])
+            ymax = np.max([ymax for (ymin, ymax) in yrange])
+            for f2id, f2 in enumerate(features):
+                ax = axs[f1id, f2id]
+                if f2id < f1id:
+                    ax.set_ylim(ymin, ymax)
+
+    # Global annotation
+    fig.add_subplot(111, frameon=False)
+    plt.tick_params(labelcolor="none", top=False, bottom=False, left=False, right=False)
+    plt.title(f"Total number of points: {npts}", fontsize=24)
+
+    # Save
+    plt.savefig(f"{save}.png", dpi=300)
+    plt.close("all")
+
+
+# -------------------------------
+# NOT YET DOCUMENTED
+# -------------------------------
+    
 #  plot function
 def splot(
     selected_metrics,
@@ -546,148 +763,6 @@ def oplot(
         plt.close("all")
     else:
         plt.show()
-
-
-def paired_correlation(df, features, save, units=None, off=0):
-
-    npts = df.shape[0]
-
-    cmap = plt.cm.get_cmap("tab10")
-
-    df = df.dropna(subset=features)
-
-    if units is None:
-        units = np.ones(len(features))
-
-    prange = []
-    for f, un in zip(features, units):
-        prange.append(np.percentile(un * df[f].values, [off, 100 - off]))
-
-    nf = len(features)
-    fig, axs = plt.subplots(
-        nf,
-        nf,
-        figsize=(2 * nf, 2 * nf),
-        sharex="col",
-        gridspec_kw={"hspace": 0.1, "wspace": 0.1},
-    )
-    for f1id, (f1, un1) in enumerate(zip(features, units)):
-
-        yrange = []
-        for f2id, (f2, un2) in enumerate(zip(features, units)):
-
-            ax = axs[f1id, f2id]
-
-            y = un1 * df[f1].values
-            x = un2 * df[f2].values
-
-            valids = np.where(
-                (
-                    (y > prange[f1id][0])
-                    & (y < prange[f1id][1])
-                    & (x > prange[f2id][0])
-                    & (x < prange[f2id][1])
-                )
-            )
-
-            if f2id < f1id:
-                xmin = x[valids].min()
-                xmax = x[valids].max()
-                ymin = y[valids].min()
-                ymax = y[valids].max()
-                yrange.append([ymin, ymax])
-                ax.plot(
-                    x[valids], y[valids], ".", markersize=1, color="black", alpha=0.1
-                )
-                ax.plot([xmin, xmax], [xmin, xmax], "--")
-                if f2id:
-                    plt.setp(ax.get_yticklabels(), visible=False)
-                    ax.tick_params(axis="y", which="both", length=0.0)
-                if f1id < nf - 1:
-                    ax.tick_params(axis="x", which="both", length=0.0)
-
-            elif f2id > f1id:
-                plt.setp(ax.get_xticklabels(), visible=False)
-                plt.setp(ax.get_yticklabels(), visible=False)
-                ax.tick_params(axis="x", which="both", length=0.0)
-                ax.tick_params(axis="y", which="both", length=0.0)
-                pearson, p_pvalue = scistats.pearsonr(x, y)
-                spearman, s_pvalue = scistats.spearmanr(x, y)
-                ax.text(
-                    0.05,
-                    0.8,
-                    f"Pearson: {pearson:.2f}",
-                    size=10,
-                    ha="left",
-                    transform=ax.transAxes,
-                )
-                ax.text(
-                    0.05,
-                    0.6,
-                    f"P-value: {p_pvalue:.1E}",
-                    size=10,
-                    ha="left",
-                    transform=ax.transAxes,
-                )
-                ax.text(
-                    0.05,
-                    0.4,
-                    f"Spearman: {spearman:.2f}",
-                    size=10,
-                    ha="left",
-                    transform=ax.transAxes,
-                )
-                ax.text(
-                    0.05,
-                    0.2,
-                    f"P-value: {s_pvalue:.1E}",
-                    size=10,
-                    ha="left",
-                    transform=ax.transAxes,
-                )
-
-            else:
-                ax.set_frame_on(False)
-                plt.setp(ax.get_yticklabels(), visible=False)
-                ax.tick_params(axis="y", which="both", length=0.0)
-                ax.hist(
-                    x[valids],
-                    bins=16,
-                    density=True,
-                    histtype="stepfilled",
-                    color="white",
-                    edgecolor="black",
-                    label="Complete",
-                )
-                ax.hist(
-                    x[valids],
-                    bins=16,
-                    density=True,
-                    histtype="stepfilled",
-                    color=cmap(0),
-                    alpha=0.2,
-                    label="Incomplete",
-                )
-
-            if f1id == nf - 1:
-                ax.set_xlabel(f2, fontsize=7)
-            if not f2id and f1id:
-                ax.set_ylabel(f1, fontsize=7)
-
-        if yrange:
-            ymin = np.min([ymin for (ymin, ymax) in yrange])
-            ymax = np.max([ymax for (ymin, ymax) in yrange])
-            for f2id, f2 in enumerate(features):
-                ax = axs[f1id, f2id]
-                if f2id < f1id:
-                    ax.set_ylim(ymin, ymax)
-
-    fig.add_subplot(111, frameon=False)
-    plt.tick_params(labelcolor="none", top=False, bottom=False, left=False, right=False)
-    plt.title(f"Total number of points: {npts}", fontsize=24)
-
-    plt.savefig(f"{save}.png", dpi=300)
-    plt.close("all")
 
 def vertical_distributions(
     df_input,
