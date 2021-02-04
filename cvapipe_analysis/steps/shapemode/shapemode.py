@@ -6,11 +6,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Union
 from datastep import Step, log_run_params
 
-import os
-import quilt3
-import numpy as np
 import pandas as pd
-
 from .outliers import outliers_removal
 from .dim_reduction import pca_analysis
 from .avgshape import digitize_shape_mode
@@ -28,41 +24,41 @@ class Shapemode(Step):
     
     def __init__(
         self,
-        direct_upstream_tasks: List["Step"] = [],
+        direct_upstream_tasks: List['Step'] = [],
         config: Optional[Union[str, Path, Dict[str, str]]] = None,
     ):
         super().__init__(direct_upstream_tasks=direct_upstream_tasks, config=config)
 
-    @staticmethod
-    def _generate_single_cell_features(
-        row_index: int,
-        row: pd.Series,
-        save_dir: Path,
-        load_data_dir: Path,
-        overwrite: bool,
-    ) -> Union[SingleCellFeaturesResult, SingleCellFeaturesError]:
-
+    @log_run_params
+    def run(
+        self,
+        debug: bool = False,
+        overwrite: bool = False,
+        remove_mitotics: bool = True,
+        no_structural_outliers: bool = False,
+        **kwargs
+    ):
         
         # Load feature dataframe
         path_to_metadata_manifest = self.project_local_staging_dir / 'loaddata/manifest.csv'
         df_meta = pd.read_csv(path_to_metadata_manifest, index_col='CellId')
         # Drop unwanted columns
-        df_meta = df_meta[
-            [c for c in df_meta.columns if any(s not in c for s in ['mem_','dna_','str_'])]
+        df_meta = df_meta[            
+            [c for c in df_meta.columns if not any(s in c for s in ['mem_','dna_','str_'])]
         ]
         log.info(f"Shape of metadata: {df_meta.shape}")
-
+        
         # Load feature dataframe
         path_to_features_manifest = self.project_local_staging_dir / 'computefeatures/manifest.csv'
         df_features = pd.read_csv(path_to_features_manifest, index_col='CellId')
         log.info(f"Shape of features data: {df_features.shape}")
         
         # Make necessary folders
-        tables_dir = self.step_local_staging_dir / "tables"
+        tables_dir = self.step_local_staging_dir / 'tables'
         tables_dir.mkdir(exist_ok=True)
 
         # Perform outlier detection based on Gaussian kernel estimation
-        outliers_dir = self.step_local_staging_dir / "outliers"
+        outliers_dir = self.step_local_staging_dir / 'outliers'
         outliers_dir.mkdir(exist_ok=True)
 
         # Mitotic removal
@@ -72,9 +68,9 @@ class Shapemode(Step):
             # Generate table with number of mitotic vs. intephase cells
             dataset_summary_table(
                 df = df_meta,
-                levels = ["cell_stage"],
-                factor = "structure_name",
-                save = tables_dir / "cell_stage"
+                levels = ['cell_stage'],
+                factor = 'structure_name',
+                save = tables_dir / 'cell_stage'
             )
 
             # Filter out mitotic cells
@@ -87,17 +83,17 @@ class Shapemode(Step):
         # Outlier detection
 
         # Path to outliers manifest
-        manifest_outliers_path = outliers_dir / "manifest_outliers.csv"
+        manifest_outliers_path = outliers_dir / 'manifest_outliers.csv'
 
         # Merged dataframe to compute outliers on
         df = pd.concat([df_meta,df_features], axis=1)
-
+        
         # Compute outliers
         if not overwrite and manifest_outliers_path.is_file():
-            log.info(f"Using pre-detected outliers.")
+            log.info("Using pre-detected outliers.")
             df_outliers = pd.read_csv(manifest_outliers_path, index_col='CellId')
         else:
-            log.info(f"Computing outliers...")
+            log.info("Computing outliers...")
             df_outliers = outliers_removal(
                 df = df,
                 output_dir = outliers_dir,
@@ -107,17 +103,17 @@ class Shapemode(Step):
             df_outliers.to_csv(manifest_outliers_path)
 
         # Generate outliers table
-        df.loc[df_outliers.index, "Outlier"] = df_outliers["Outlier"]
+        df.loc[df_outliers.index, 'Outlier'] = df_outliers['Outlier']
 
         # Save a data table with detected outliers
         dataset_summary_table(
             df = df,
-            levels = ["Outlier"],
-            factor = "structure_name",
-            save = tables_dir / "outliers"
+            levels = ['Outlier'],
+            factor = 'structure_name',
+            save = tables_dir / 'outliers'
         )
-        df = df.loc[df.Outlier == "No"]
-        df = df.drop(columns=["Outlier"])
+        df = df.loc[df.Outlier == 'No']
+        df = df.drop(columns=['Outlier'])
 
         log.info(f"Shape of data without outliers: {df.shape}")
         
@@ -133,30 +129,26 @@ class Shapemode(Step):
             dataset_summary_table(
                 df = df,
                 levels = metadata_columns,
-                factor = "structure_name",
-                save = tables_dir / "main",
+                factor = 'structure_name',
+                save = tables_dir / 'main',
             )
 
-        """
-        ------------------------
-        DIMENSIONALITY REDUCTION
-        ------------------------
-        """
+        # Dimensionality reduction and shape space calculation
 
         # Perform principal component analysis
-        dir_output_pca = self.step_local_staging_dir / "pca"
-        dir_output_pca.mkdir(parents=True, exist_ok=True)
-        dir_output_avgshape = self.step_local_staging_dir / "avgshape"
-        dir_output_avgshape.mkdir(parents=True, exist_ok=True)
+        dir_pca = self.step_local_staging_dir / 'pca'
+        dir_pca.mkdir(parents=True, exist_ok=True)
+        dir_avgshape = self.step_local_staging_dir / 'avgshape'
+        dir_avgshape.mkdir(parents=True, exist_ok=True)
         features_to_use = {
-            "DNA": ["dna_shcoeffs_L"],
-            "MEM": ["mem_shcoeffs_L"],
-            "DNA_MEM": ["dna_shcoeffs_L", "mem_shcoeffs_L"],
+            'DNA': ['dna_shcoeffs_L'],
+            'MEM': ['mem_shcoeffs_L'],
+            'DNA_MEM': ['dna_shcoeffs_L', 'mem_shcoeffs_L'],
         }
-
+        
         for prefix, feature_prefixes in features_to_use.items():
 
-            print(f"[{prefix}] - PCA on {', '.join(feature_prefixes)}")
+            log.info(f"[{prefix}] - PCA on {', '.join(feature_prefixes)}")
 
             features = [
                 fn for fn in df.columns if any(word in fn for word in feature_prefixes)
@@ -164,79 +156,77 @@ class Shapemode(Step):
 
             # PCA
             df, pc_names, pca = pca_analysis(
-                df=df,
-                feature_names=features,
-                prefix=prefix,
-                npcs_to_calc=8,
-                npcs_to_show=8,
-                save=f"{dir_output_pca}/pca_{prefix}",
+                df = df,
+                feature_names = features,
+                prefix = prefix,
+                npcs_to_calc = 8,
+                npcs_to_show = 8,
+                save = dir_pca / f'pca_{prefix}',
             )
 
             # Make plot of PC cross correlations
             paired_correlation(
-                df=df, features=pc_names, save=f"{dir_output_pca}/correlations_{prefix}"
+                df = df,
+                features = pc_names,
+                save = dir_pca / f'correlations_{prefix}'
             )
 
-            """
-            -----------------------
-            SHAPE MODES CALCULATION
-            -----------------------
-            """
+            # Shape modes
 
             # Calculates the average shapes along each PC
             for mode, pc_name in enumerate(pc_names):
 
-                print(
+                log.info(
                     f"\tCalculating average cell and nuclear shape for mode: {pc_name}"
                 )
 
                 # Create map points, bins e get all cells in each bin
                 df_filtered, bin_indexes, (bin_centers, pc_std) = digitize_shape_mode(
-                    df=df,
-                    feature=pc_name,
-                    nbins=9,
-                    save=f"{dir_output_avgshape}/{pc_name}",
+                    df = df,
+                    feature = pc_name,
+                    nbins = 9,
+                    save = dir_avgshape / pc_name,
                 )
 
                 # Convert map points back to SH coefficients
                 df_mappoints_shcoeffs = get_shcoeffs_from_pc_coords(
-                    coords=bin_centers * pc_std,
-                    pc=mode,
-                    pca=pca,
-                    coeff_names=features,
+                    coords = bin_centers * pc_std,
+                    pc = mode,
+                    pca = pca,
+                    coeff_names = features,
                 )
 
-                if "DNA" not in pc_name:
-                    # Create fake DNA coeffs
+                if 'DNA' not in pc_name:
+                    # Create fake DNA coeffs for viz purposes
                     df_tmp = df_mappoints_shcoeffs.copy()
-                    df_tmp.columns = [f.replace("mem", "dna") for f in df_tmp.columns]
+                    df_tmp.columns = [f.replace('mem', 'dna') for f in df_tmp.columns]
                     df_mappoints_shcoeffs = pd.concat(
                         [df_mappoints_shcoeffs, df_tmp], axis=1
                     )
 
-                if "MEM" not in pc_name:
-                    # Create fake MEM coeffs
+                if 'MEM' not in pc_name:
+                    # Create fake MEM coeffs for viz purposes
                     df_tmp = df_mappoints_shcoeffs.copy()
-                    df_tmp.columns = [f.replace("dna", "mem") for f in df_tmp.columns]
+                    df_tmp.columns = [f.replace('dna', 'mem') for f in df_tmp.columns]
                     df_mappoints_shcoeffs = pd.concat(
                         [df_mappoints_shcoeffs, df_tmp], axis=1
                     )
 
-                # Reconstruct cell and nuclear shape. Correct nucleus location and
-                # save the meshes as VTK files
+                # Reconstruct cell and nuclear shape. Also corrects nuclear
+                # position and save the meshes as VTK files
                 animate_shape_modes_and_save_meshes(
-                    df=df_filtered,
-                    df_agg=df_mappoints_shcoeffs,
-                    bin_indexes=bin_indexes,
-                    feature=pc_name,
-                    save=dir_output_avgshape,
-                    fix_nuclear_position=False if prefix != "DNA_MEM" else True,
-                    plot_limits=[-150, 150, -80, 80],
+                    df = df_filtered,
+                    df_agg = df_mappoints_shcoeffs,
+                    bin_indexes = bin_indexes,
+                    feature = pc_name,
+                    save = dir_avgshape,
+                    fix_nuclear_position = False if prefix != 'DNA_MEM' else True,
+                    plot_limits = [-150, 150, -80, 80],
                 )
 
         # Save manifest
         self.manifest = df
-        self.manifest.to_csv(self.step_local_staging_dir / "manifest.csv")
-        print("Manifest saved.")
+        manifest_path = self.step_local_staging_dir / 'manifest.csv'
+        self.manifest.to_csv(manifest_path)
 
-        return self.step_local_staging_dir / "manifest.csv"
+        return manifest_path

@@ -11,7 +11,7 @@ def pca_analysis(df, feature_names, prefix, npcs_to_calc=8, npcs_to_show=5, save
     df_pca = df[feature_names]
     matrix_of_features = df_pca.values.copy()
     matrix_of_features_ids = df_pca.index
-
+    
     pca = PCA(n_components=npcs_to_calc)
     pca = pca.fit(matrix_of_features)
     matrix_of_features_transform = pca.transform(matrix_of_features)
@@ -23,7 +23,7 @@ def pca_analysis(df, feature_names, prefix, npcs_to_calc=8, npcs_to_show=5, save
 
     # Add PCs to the input dataframe
     df = df.merge(df_trans[pc_names], how="outer", left_index=True, right_index=True)
-
+    
     # Analysis of explained variance
     loading = pca.components_.T * np.sqrt(pca.explained_variance_)
     df_dimred = {}
@@ -94,14 +94,14 @@ def pca_analysis(df, feature_names, prefix, npcs_to_calc=8, npcs_to_show=5, save
                 ].head(),
                 file=flog,
             )
-
-    # Adjust the sign of PCs so that positive values represent tall and large cells
+            
+    # Adjust the sign of PCs so that larger cells are represent by positive values
     for pcid, pc_name in enumerate(pc_names):
         pearson = np.corrcoef(df.mem_shape_volume_lcc.values, df[pc_name].values)
         if pearson[0, 1] < 0:
             df[pc_name] *= -1
             pca.components_[pcid] *= -1
-
+            
     return df, pc_names, pca
 
 
