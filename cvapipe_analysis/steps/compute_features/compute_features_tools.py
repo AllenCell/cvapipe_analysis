@@ -121,10 +121,12 @@ def get_features(input_image, input_reference_image, compute_shcoeffs=True):
         # Basic features
         for img, suffix in zip([input_image,input_image_lcc],['','_lcc']):
 
-            z, _, _ = np.where(img)
+            z, y, x = np.where(img)
 
             features[f'shape_volume{suffix}'] = img.sum()
             features[f'position_depth{suffix}'] = 1 + np.ptp(z)
+            for uname, u in zip(['x','y','z'],[x,y,z]):
+                features[f'position_{uname}_centroid{suffix}'] = u.mean()
             features[f'roundness_surface_area{suffix}'] = get_surface_area(img)
 
     else:
@@ -132,6 +134,8 @@ def get_features(input_image, input_reference_image, compute_shcoeffs=True):
         for img, suffix in zip([input_image,input_image_lcc],['','_lcc']):
             features[f'shape_volume{suffix}'] = np.nan
             features[f'position_depth{suffix}'] = np.nan
+            for uname in ['x','y','z']:
+                features[f'position_{uname}_centroid{suffix}'] = np.nan
             features[f'roundness_surface_area{suffix}'] = np.nan
         
     if not compute_shcoeffs:
