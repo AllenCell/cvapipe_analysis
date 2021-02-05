@@ -124,7 +124,6 @@ class Shapemode(Step):
                 'meta_imaging_mode',
                 'meta_fov_position'
         ]
-
         if pd.Series(metadata_columns).isin(df.columns).all():
             dataset_summary_table(
                 df = df,
@@ -160,8 +159,7 @@ class Shapemode(Step):
                 feature_names = features,
                 prefix = prefix,
                 npcs_to_calc = 8,
-                npcs_to_show = 8,
-                save = dir_pca / f'pca_{prefix}',
+                save = dir_pca / f'pca_{prefix}'
             )
 
             # Make plot of PC cross correlations
@@ -185,6 +183,7 @@ class Shapemode(Step):
                     df = df,
                     feature = pc_name,
                     nbins = 9,
+                    filter_based_on = pc_names,
                     save = dir_avgshape / pc_name,
                 )
 

@@ -4,26 +4,59 @@ import operator
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
+from pathlib import Path
 from functools import reduce
 import matplotlib.pyplot as plt
 from matplotlib import animation
 from aicsshparam import shtools
 from distributed import LocalCluster, Client
+from typing import Dict, List, Optional, Union
 from aics_dask_utils import DistributedHandler
 from vtk.util.numpy_support import vtk_to_numpy
 
+def filter_extremes_based_on_percentile(
+    df: pd.DataFrame,
+    features: List,
+    pct: float
+):
 
-def filter_extremes_based_on_percentile(df, features, pct):
+    """
+    Exclude extreme data points that fall in the percentile range
+    [0,pct] or [100-pct,100] of at least one of the features
+    provided.
 
+    Parameters
+    --------------------
+    df: pandas df
+        Input dataframe that contains the features.
+    features: List
+        List of column names to be used to filter the data
+        points.
+    pct: float
+        Specifies the percentile range; data points that
+        fall in the percentile range [0,pct] or [100-pct,100]
+        of at least one of the features are removed.
+
+    Returns
+    -------
+    df: pandas dataframe
+        Filtered dataframe.
+    """
+    
+    # Temporary column to store whether a data point is an
+    # extreme point or not.
     df["extreme"] = False
 
     for f in features:
 
+        # Calculated the extreme interval fot the current feature
         finf, fsup = np.percentile(df[f].values, [pct, 100 - pct])
 
+        # Points in either high or low extreme as flagged
         df.loc[(df[f] < finf), "extreme"] = True
         df.loc[(df[f] > fsup), "extreme"] = True
 
+    # Drop extreme points and temporary column
     df = df.loc[df.extreme == False]
     df = df.drop(columns=["extreme"])
 
@@ -31,36 +64,94 @@ def filter_extremes_based_on_percentile(df, features, pct):
 
 
 def digitize_shape_mode(
-    df, feature, nbins, filter_extremes_pct=1, save=None, return_freqs_per_structs=False
+    df: pd.DataFrame,
+    feature: List,
+    nbins: int,
+    filter_based_on: List,
+    filter_extremes_pct: float = 1,
+    save: Optional[Path] = None,
+    return_freqs_per_structs: Optional[bool] = False
 ):
 
+    """
+    Discretize a given feature into nbins number of equally
+    spaced bins. The feature is first z-scored and the interval
+    from -2std to 2std is divided into nbins bins.
+
+    Parameters
+    --------------------
+    df: pandas df
+        Input dataframe that contains the feature to be
+        discretized.
+    features: str
+        Column name of the feature to be discretized.
+    nbins: int
+        Number of bins to divide the feature into.
+    filter_extremes_pct: float
+        See parameter pct in function filter_extremes_based_on_percentile
+    filter_based_on: list
+        List of all column names that should be used for
+        filtering extreme data points.
+    save: Path
+        Path to a file where we save the number of data points
+        that fall in each bin
+    return_freqs_per_structs: bool
+        ??
+    Returns
+    -------
+        df: pandas dataframe
+            Input dataframe with data points filtered according
+            to filter_extremes_pct plus a column named "bin"
+            that denotes the bin in which a given data point
+            fall in.
+        bin_indexes: list of tuples
+            [(a,b)] where a is the bin number and b is a list
+            with the index of all data points that fall into
+            that bin.
+        bin_centers: list
+            List with values of feature at the center of each
+            bin
+        pc_std: float
+            Standard deviation used to z-score the feature.
+
+    """
+    
+    # Check if feature is available
     if feature not in df.columns:
         raise ValueError(f"Column {feature} not found.")
 
-    prefix = "".join([c for c in feature if not c.isdigit()])
-
     # Exclude extremeties
     df = filter_extremes_based_on_percentile(
-        df=df, features=[f for f in df.columns if prefix in f], pct=filter_extremes_pct
+        df = df,
+        features = filter_based_on,
+        pct = filter_extremes_pct
     )
 
+    # Get feature values
     values = df[feature].values.astype(np.float32)
 
     # Should be centered already, but enforce it here
     values -= values.mean()
     # Z-score
+    
     pc_std = values.std()
     values /= pc_std
 
+    # Calculate bin half width based on std interval and nbins
+    LINF = -2.0 # inferior limit = -2 std
+    LSUP = 2.0 # superior limit = 2 std
+    binw = (LSUP-LINF)/(2*(nbins-1))
+    
     # Force samples below/above -/+ 2std to fall into first/last bin
-    bin_centers = np.linspace(-2, 2, nbins)
-    bin_edges = np.unique([(b - 0.25, b + 0.25) for b in bin_centers])
+    bin_centers = np.linspace(LINF, LSUP, nbins)
+    bin_edges = np.unique([(b-binw, b+binw) for b in bin_centers])
     bin_edges[0] = -np.inf
     bin_edges[-1] = np.inf
+    
     # Aplly digitization
     df["bin"] = np.digitize(values, bin_edges)
 
-    # Report number of cells in each bin
+    # Report number of data points in each bin
     df_freq = pd.DataFrame(df["bin"].value_counts(sort=False))
     df_freq.index = df_freq.index.rename(f"{feature}_bin")
     df_freq = df_freq.rename(columns={"bin": "samples"})
@@ -68,12 +159,14 @@ def digitize_shape_mode(
         with open(f"{save}.txt", "w") as flog:
             print(df_freq, file=flog)
 
-    # Store the index of all cells in each bin
+    # Store the index of all data points in each bin
     bin_indexes = []
     df_agg = df.groupby(["bin"]).mean()
     for b, df_bin in df.groupby(["bin"]):
         bin_indexes.append((b, df_bin.index))
 
+    # Optionally return a dataframe with the number of data
+    # points in each bin stratifyied by structure_name.
     if return_freqs_per_structs:
         df_freq = (
             df[["structure_name", "bin"]].groupby(["structure_name", "bin"]).size()
@@ -85,11 +178,33 @@ def digitize_shape_mode(
 
     return df, bin_indexes, (bin_centers, pc_std)
 
+def find_plane_mesh_intersection(
+    proj: List,
+    mesh: vtk.vtkPolyData
+):
 
-def find_plane_mesh_intersection(proj, mesh):
+    """
+    Determine the points of mesh that intersect with the
+    plane defined by the proj:
 
+    Parameters
+    --------------------
+    proj: List
+        One of [0,1], [0,2] or [1,2] for xy-plane, xz-plane
+        and yz-plane, respectively.
+    mesh: vtk.vtkPolyData
+        Input triangle mesh.
+    Returns
+    -------
+        points: nd.array
+            Nx3 array of xyz coordinates of mesh points
+            that intersect the plane.
+    """
+    
+    # Find axis orthogonal to the projection of interest
     ax = [a for a in [0, 1, 2] if a not in proj][0]
 
+    # Get all mesh points
     points = vtk_to_numpy(mesh.GetPoints().GetData())
 
     if not np.abs(points[:, ax]).sum():
@@ -101,9 +216,9 @@ def find_plane_mesh_intersection(proj, mesh):
     # Without this the code hangs when the mesh has any edge aligned with the
     # projection plane
     mid += 0.75
-
     offset = 0.1 * np.ptp(points, axis=0).max()
 
+    # Create a vtkPlaneSource
     plane = vtk.vtkPlaneSource()
     plane.SetXResolution(4)
     plane.SetYResolution(4)
@@ -122,23 +237,27 @@ def find_plane_mesh_intersection(proj, mesh):
     plane.Update()
     plane = plane.GetOutput()
 
+    # Trangulate the plane
     triangulate = vtk.vtkTriangleFilter()
     triangulate.SetInputData(plane)
     triangulate.Update()
     plane = triangulate.GetOutput()
 
+    # Calculate intersection
     intersection = vtk.vtkIntersectionPolyDataFilter()
     intersection.SetInputData(0, mesh)
     intersection.SetInputData(1, plane)
     intersection.Update()
     intersection = intersection.GetOutput()
 
-    points = []
-    for i in range(intersection.GetNumberOfPoints()):
-        r = intersection.GetPoints().GetPoint(i)
-        points.append(r)
-    points = np.array(points)
+    # Get coordinates of intersecting points
+    points = vtk_to_numpy(intersection.GetPoints().GetData())
 
+    # Sorting points clockwise
+    # This has been discussed here:
+    # https://stackoverflow.com/questions/51074984/sorting-according-to-clockwise-point-coordinates/51075469
+    # but seems not to be very efficient. Better version is proposed here:
+    # https://stackoverflow.com/questions/57566806/how-to-arrange-the-huge-list-of-2d-coordinates-in-a-clokwise-direction-in-python
     coords = points[:, proj]
     center = tuple(
         map(
@@ -156,6 +275,7 @@ def find_plane_mesh_intersection(proj, mesh):
         % 360,
     )
 
+    # Store sorted coordinates
     points[:, proj] = coords
 
     return points
