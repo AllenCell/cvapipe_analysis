@@ -6,6 +6,22 @@ import matplotlib.pyplot as plt
 from sklearn.decomposition import PCA
 from typing import Dict, List, Optional, Union
 
+class pPCA:
+    '''
+    Simple class for store PCA objects with persistent feature names.
+    '''
+    def __init__(
+        self,
+        pca: PCA,
+        features: List
+    ):
+        self.pca = pca
+        self.features = features
+    def get_pca(self):
+        return self.pca
+    def get_feature_names(self):
+        return self.features
+
 def pca_analysis(
     df: pd.DataFrame,
     feature_names: List,
@@ -40,7 +56,7 @@ def pca_analysis(
             in by this function
         pc_names: list
             PCs column names 
-        pca: sklearn.decomposition.PCA
+        pca: pPCA
             PCA objected fitted to the input data. This can be used
             to perform inverse transfrom or transform new data.
     """
@@ -155,5 +171,8 @@ def pca_analysis(
         if pearson[0, 1] < 0:
             df[pc_name] *= -1
             pca.components_[pcid] *= -1
+
+    # Creates persistent PCA object
+    pca = pPCA(pca=pca, features=feature_names)
 
     return df, pc_names, pca
