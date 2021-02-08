@@ -291,8 +291,7 @@ def get_shcoeff_matrix_from_dataframe(
     """
     Reshape spherical harmonics expansion (SHE) coefficients
     into a coefficients matrix of shape 2 x lmax x lmax, where
-    lmax is the degree of the expansion stored in input
-    pandas series.
+    lmax is the degree of the expansion.
 
     Parameters
     --------------------
