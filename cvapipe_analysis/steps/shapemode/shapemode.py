@@ -140,9 +140,10 @@ class Shapemode(Step):
         dir_avgshape = self.step_local_staging_dir / 'avgshape'
         dir_avgshape.mkdir(parents=True, exist_ok=True)
         features_to_use = {
+            'DNA_MEM': ['dna_shcoeffs_L', 'mem_shcoeffs_L'],
             'DNA': ['dna_shcoeffs_L'],
             'MEM': ['mem_shcoeffs_L'],
-            'DNA_MEM': ['dna_shcoeffs_L', 'mem_shcoeffs_L'],
+            'DNA_MEM': ['dna_shcoeffs_L', 'mem_shcoeffs_L']
         }
         
         for prefix, feature_prefixes in features_to_use.items():
@@ -191,12 +192,12 @@ class Shapemode(Step):
                 df_mappoints_shcoeffs = get_shcoeffs_from_pc_coords(
                     coords = bin_centers * pc_std,
                     pc = mode,
-                    pca = pca,
-                    coeff_names = features,
+                    pca = pca
                 )
 
                 if 'DNA' not in pc_name:
-                    # Create fake DNA coeffs for viz purposes
+                    # Create fake DNA coeffs for viz purposes if shape
+                    # space was generated with cell alone
                     df_tmp = df_mappoints_shcoeffs.copy()
                     df_tmp.columns = [f.replace('mem', 'dna') for f in df_tmp.columns]
                     df_mappoints_shcoeffs = pd.concat(
@@ -204,22 +205,22 @@ class Shapemode(Step):
                     )
 
                 if 'MEM' not in pc_name:
-                    # Create fake MEM coeffs for viz purposes
+                    # Create fake cell coeffs for viz purposes if shape
+                    # space was generated with nucleus alone
                     df_tmp = df_mappoints_shcoeffs.copy()
                     df_tmp.columns = [f.replace('dna', 'mem') for f in df_tmp.columns]
                     df_mappoints_shcoeffs = pd.concat(
                         [df_mappoints_shcoeffs, df_tmp], axis=1
                     )
 
-                # Reconstruct cell and nuclear shape. Also corrects nuclear
-                # position and save the meshes as VTK files
+                # Reconstruct cell and nuclear shape. Also adjust nuclear
+                # position relative to the cell when the shape space is
+                # created by a joint combination of cell and nuclear shape.
                 animate_shape_modes_and_save_meshes(
-                    df = df_filtered,
                     df_agg = df_mappoints_shcoeffs,
-                    bin_indexes = bin_indexes,
-                    feature = pc_name,
+                    mode = pc_name,
                     save = dir_avgshape,
-                    fix_nuclear_position = False if prefix != 'DNA_MEM' else True,
+                    fix_nuclear_position = None if prefix != 'DNA_MEM' else (df_filtered,bin_indexes),
                     plot_limits = [-150, 150, -80, 80],
                 )
 

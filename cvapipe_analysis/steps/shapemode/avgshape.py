@@ -1,15 +1,14 @@
 import vtk
 import math
 import operator
+import warnings
 import numpy as np
 import pandas as pd
-from tqdm import tqdm
 from pathlib import Path
 from functools import reduce
 import matplotlib.pyplot as plt
-from matplotlib import animation
 from aicsshparam import shtools
-from distributed import LocalCluster, Client
+from matplotlib import animation
 from typing import Dict, List, Optional, Union
 from aics_dask_utils import DistributedHandler
 from vtk.util.numpy_support import vtk_to_numpy, numpy_to_vtk
@@ -543,49 +542,60 @@ def transform_coords_to_mem_space(
     return xt, yt, zt
 
 def animate_shape_modes_and_save_meshes(
-    df: pd.DataFrame,
     df_agg: pd.DataFrame,
-    bin_indexes: List,
-    feature: str,
+    mode: str,
     save: Path,
-    plot_limits: Optional[bool] = None,
-    fix_nuclear_position: Optional[bool] = True,
+    plot_limits: Optional[List] = None,
+    fix_nuclear_position: Optional[bool] = None,
     distributed_executor_address: Optional[str] = None,
 ):
 
     """
-    Uses the inverse PCA transform to convert one or more PC
-    coordiantes back into SHE coefficients.
+    Generate animated GIFs to illustrate cell and nuclear
+    shape variation as a single shape space dimension is
+    transversed. The function also saves the cell and
+    nuclear shape in VTK polydata format.
     
     Parameters
-    --------------------
-    df: pd.DataFrame
-        
+    --------------------        
     df_agg: pd.DataFrame
-        
+        Dataframe that contains the cell and nuclear SHE
+        coefficients that will be reconstructed. Each line
+        of this dataframe will generate 3 animated GIFs:
+        one for each projection (xy, xz, and yz).        
     bin_indexes: List
-        
-    feature: str
-        
+        [(a,b)] a's are integers for identifying the bin
+        number and b's are lists of all data points id's
+        that fall into that bin.
+    mode: str
+        Either DNA, MEM or DNA_MEM to specify whether the
+        shape space has been created based on nucleus, cell
+        or jointly combined cell and nuclear shape.
     save: Path
-        
+        Path to save results.
     plot_limits: Optional[bool] = None
-        
-    fix_nuclear_position: Optional[bool] = True
-        
+        List of floats to be used as x-axis limits and
+        y-axis limits in the animated GIFs. Default values
+        used for the single-cell images dataset are
+        [-150, 150, -80, 80],
+    fix_nuclear_position: Tuple or None
+        Use None here to not change the nuclear location
+        relative to the cell. Otherwise, this should be a
+        tuple like (df,bin_indexes), where df is a single
+        cell dataframe that contains the columns necessary
+        to correct the nuclear location realtive to the cell.
+        bin_indexes is alist of tuple (a,b), where a is an
+        integer for that specifies the bin number and b is
+        a list of all data point ids from the single cell
+        dataframe that fall into that bin.
     distributed_executor_address: Optionalstr = None
-        
-    Returns
-    -------
-        df_coeffs: pd.DataFrame
-        DataFrame that stores the SHE coefficients.
-        
-    TBD:
-        Class for PCA object that stores the features names.
+        Dask executor address.        
     """
     
-    if fix_nuclear_position:
+    if fix_nuclear_position is not None:
 
+        df, bin_indexes = fix_nuclear_position
+        
         def process_this_index(index_row):
             '''
             Change the coordinate system of nuclear centroid
@@ -629,11 +639,9 @@ def animate_shape_modes_and_save_meshes(
     else:
         # Save nuclear displacement as zeros if no adjustment
         # is requested.
-        for (b, indexes) in bin_indexes:
-
-            df_agg.loc[b, "dna_dxc"] = 0
-            df_agg.loc[b, "dna_dyc"] = 0
-            df_agg.loc[b, "dna_dzc"] = 0
+        df_agg["dna_dxc"] = 0
+        df_agg["dna_dyc"] = 0
+        df_agg["dna_dzc"] = 0
 
     hlimits = []
     vlimits = []
@@ -665,7 +673,7 @@ def animate_shape_modes_and_save_meshes(
             # Change the nuclear position relative to the cell
             # in the reconstructed meshes when running the
             # first projection
-            for (b, indexes), mem_mesh, dna_mesh in zip(bin_indexes, mem_meshes, dna_meshes):
+            for b, mem_mesh, dna_mesh in zip(df_agg.index, mem_meshes, dna_meshes):
                 # Get nuclear mesh coordinates
                 dna_coords = vtk_to_numpy(dna_mesh.GetPoints().GetData())
                 # Shift coordinates according averaged
@@ -675,11 +683,11 @@ def animate_shape_modes_and_save_meshes(
                 dna_coords[:,2] += df_agg.loc[b, "dna_dzc"]
                 dna_mesh.GetPoints().SetData(numpy_to_vtk(dna_coords))
                 # Save meshes as vtk polydatas
-                shtools.save_polydata(mem_mesh, f"{save}/MEM_{feature}_{b:02d}.vtk")
-                shtools.save_polydata(dna_mesh, f"{save}/DNA_{feature}_{b:02d}.vtk")
-                
+                shtools.save_polydata(mem_mesh, f"{save}/MEM_{mode}_{b:02d}.vtk")
+                shtools.save_polydata(dna_mesh, f"{save}/DNA_{mode}_{b:02d}.vtk")
+
         all_mem_contours.append(mem_contours)
-        all_dna_contours.append(dna_contours) # << Nuclear position here is not always fixed.
+        all_dna_contours.append(dna_contours)
 
         # Store bounds
         xmin = np.min([lim[0] for lim in mem_limits])
@@ -718,9 +726,9 @@ def animate_shape_modes_and_save_meshes(
         ax.set_aspect("equal")
 
         # initial plot for cell
-        (mline,) = ax.plot([], [], lw=2, color="#F200FF" if "MEM" in feature else "#3AADA7")
+        (mline,) = ax.plot([], [], lw=2, color="#F200FF" if "MEM" in mode else "#3AADA7")
         # initial plot for nucleus
-        (dline,) = ax.plot([], [], lw=2, color="#3AADA7" if "DNA" in feature else "#F200FF")
+        (dline,) = ax.plot([], [], lw=2, color="#3AADA7" if "DNA" in mode else "#F200FF")
 
         def animate(i):
             '''
@@ -736,151 +744,28 @@ def animate_shape_modes_and_save_meshes(
 
             hlabel = ["x", "y", "z"][[0, 1, 2].index(projection[0])]
             vlabel = ["x", "y", "z"][[0, 1, 2].index(projection[1])]
-            dx = dx + df_agg.loc[i + 1, f"dna_d{hlabel}c"]
-            dy = dy + df_agg.loc[i + 1, f"dna_d{vlabel}c"]
+            # Shift 2D nuclear coordinates according averaged
+            # nuclear centroid relative to the cell
+            dx += df_agg.loc[i + 1, f"dna_d{hlabel}c"]
+            dy += df_agg.loc[i + 1, f"dna_d{vlabel}c"]
 
             mline.set_data(mx, my)
             dline.set_data(dx, dy)
 
             return (mline, dline)
-
+            
+        # Generate animated GIF using scikit-image
         anim = animation.FuncAnimation(
             fig, animate, frames=len(mem_contours), interval=100, blit=True
         )
 
-        anim.save(
-            f"{save}/{feature}_{''.join(str(x) for x in projection)}.gif",
-            writer = "imagemagick",
-            fps = len(mem_contours)
-        )
-
-        plt.close("all")
-        
-        import pdb; pdb.set_trace()
-
-
-def reconstruct_shape_mode(
-    pca,
-    features,
-    mode,
-    mode_name,
-    map_points,
-    reconstruct_on,
-    save,
-    lmax=32,
-    plot_limits=None,
-):
-
-    # Use inverse PCA to transform PC coordinates back to SH coefficients
-    npts = len(map_points)
-    pc_coords = np.zeros((npts, pca.n_components), dtype=np.float32)
-    pc_coords[:, mode] = map_points
-    df_coeffs = pd.DataFrame(pca.inverse_transform(pc_coords))
-    df_coeffs.columns = features
-    df_coeffs.index = np.arange(1, 1 + npts)
-
-    return df_coeffs
-
-    # Generate figure with outlines
-    fig, axs = plt.subplots(
-        1, 3 * len(reconstruct_on), figsize=(8 * len(reconstruct_on), 4)
-    )
-
-    alphao = 0.3
-    alphaf = 0.7
-    cmap = plt.cm.get_cmap("jet")
-
-    for row, index in tqdm(
-        enumerate(df_coeffs.index),
-        total=df_coeffs.shape[0],
-        desc=f"{mode}, Bin",
-        leave=False,
-    ):
-
-        for axo, (prefix, _) in tqdm(
-            enumerate(reconstruct_on),
-            total=len(reconstruct_on),
-            desc="Attribute",
-            leave=False,
-        ):
-
-            mesh = get_mesh_from_dataframe(
-                index=index, df=df_coeffs, prefix=prefix, lmax=lmax
+        try:
+            anim.save(
+                f"{save}/{mode}_{''.join(str(x) for x in projection)}.gif",
+                writer = "imagemagick",
+                fps = len(mem_contours)
             )
-
-            for axi, proj in tqdm(
-                enumerate([[0, 1], [0, 2], [1, 2]]),
-                total=3,
-                desc="Projection",
-                leave=False,
-            ):
-
-                proj_points = find_plane_mesh_intersection(proj=proj, mesh=mesh)
-
-                if index == df_coeffs.index[0]:
-                    param_c = "blue"
-                    param_s = "-"
-                    param_w = 2
-                    param_a = 1
-                elif index == df_coeffs.index[-1]:
-                    param_c = "magenta"
-                    param_s = "-"
-                    param_w = 2
-                    param_a = 1
-                else:
-                    param_c = "gray"
-                    param_s = "-"
-                    param_w = 1
-                    param_a = alphao + (alphaf - alphao) * row / (npts - 1)
-
-                axs[len(reconstruct_on) * axi + axo].plot(
-                    proj_points[:, proj[0]],
-                    proj_points[:, proj[1]],
-                    # c=param_c,
-                    c=cmap(row / (npts - 1)),
-                    linestyle=param_s,
-                    linewidth=param_w,
-                    alpha=param_a,
-                )
-
-                if plot_limits is None:
-
-                    if "xmin" not in locals():
-                        xmin = proj_points[:, proj[0]].min()
-                        ymin = proj_points[:, proj[1]].min()
-                        xmax = proj_points[:, proj[0]].max()
-                        ymax = proj_points[:, proj[1]].max()
-                    else:
-                        xmin = np.min([proj_points[:, proj[0]].min(), xmin])
-                        ymin = np.min([proj_points[:, proj[1]].min(), ymin])
-                        xmax = np.max([proj_points[:, proj[0]].max(), xmax])
-                        ymax = np.max([proj_points[:, proj[1]].max(), ymax])
-
-                else:
-
-                    xmin, xmax, ymin, ymax = plot_limits
-
-                shtools.save_polydata(mesh, f"{save}_{prefix}_{index:02d}.vtk")
-
-    for axi, labs in enumerate([("X", "Y"), ("X", "Z"), ("Y", "Z")]):
-        for axo, rec in zip([0, 1], reconstruct_on):
-            axs[len(reconstruct_on) * axi + axo].set_title(rec[1], fontsize=14)
-            axs[len(reconstruct_on) * axi + axo].set_xlim(xmin, xmax)
-            axs[len(reconstruct_on) * axi + axo].set_ylim(ymin, ymax)
-            axs[len(reconstruct_on) * axi + axo].set_aspect("equal")
-        plt.figtext(
-            0.18 + 0.33 * axi,
-            0.85,
-            f"{labs[0]}{labs[1]} Projection",
-            va="center",
-            ha="center",
-            size=14,
-        )
-
-    fig.suptitle(f"Shape mode: {1+mode} ({mode_name})", fontsize=18)
-    fig.subplots_adjust(top=0.78)
-    plt.tight_layout()
-    plt.savefig(f"{save}.jpg")
-    plt.close("all")
-
-    return df_coeffs
+        except:
+            warnings.warn("Export to animated GIF has failed. Please check your imagemagick installation.")
+            
+        plt.close("all")
