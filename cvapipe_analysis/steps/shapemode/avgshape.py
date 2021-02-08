@@ -12,7 +12,7 @@ from aicsshparam import shtools
 from distributed import LocalCluster, Client
 from typing import Dict, List, Optional, Union
 from aics_dask_utils import DistributedHandler
-from vtk.util.numpy_support import vtk_to_numpy
+from vtk.util.numpy_support import vtk_to_numpy, numpy_to_vtk
 
 from .dim_reduction import pPCA
 
@@ -661,52 +661,52 @@ def animate_shape_modes_and_save_meshes(
             lmax = 32
         )
 
-        # Change the nuclear position relative to the cell
-        # in the reconstructed meshes when running the
-        # first projection
         if proj_id == 0:
+            # Change the nuclear position relative to the cell
+            # in the reconstructed meshes when running the
+            # first projection
             for (b, indexes), mem_mesh, dna_mesh in zip(bin_indexes, mem_meshes, dna_meshes):
-                for i in range(dna_mesh.GetNumberOfPoints()):
-                    # Meshes are centered at origin when
-                    # reconstructed.
-                    r = dna_mesh.GetPoints().GetPoint(i)
-                    u = np.array(r).copy()
-                    u[0] += df_agg.loc[b, "dna_dxc"]
-                    u[1] += df_agg.loc[b, "dna_dyc"]
-                    u[2] += df_agg.loc[b, "dna_dzc"]
-                    dna_mesh.GetPoints().SetPoint(i, u)
-
+                # Get nuclear mesh coordinates
+                dna_coords = vtk_to_numpy(dna_mesh.GetPoints().GetData())
+                # Shift coordinates according averaged
+                # nuclear centroid relative to the cell
+                dna_coords[:,0] += df_agg.loc[b, "dna_dxc"]
+                dna_coords[:,1] += df_agg.loc[b, "dna_dyc"]
+                dna_coords[:,2] += df_agg.loc[b, "dna_dzc"]
+                dna_mesh.GetPoints().SetData(numpy_to_vtk(dna_coords))
+                # Save meshes as vtk polydatas
                 shtools.save_polydata(mem_mesh, f"{save}/MEM_{feature}_{b:02d}.vtk")
                 shtools.save_polydata(dna_mesh, f"{save}/DNA_{feature}_{b:02d}.vtk")
-
+                
         all_mem_contours.append(mem_contours)
-        all_dna_contours.append(dna_contours)
+        all_dna_contours.append(dna_contours) # << Nuclear position here is not always fixed.
 
-        xmin = np.min([b[0] for b in mem_limits])
-        xmax = np.max([b[1] for b in mem_limits])
-        ymin = np.min([b[2] for b in mem_limits])
-        ymax = np.max([b[3] for b in mem_limits])
-        zmin = np.min([b[4] for b in mem_limits])
-        zmax = np.max([b[5] for b in mem_limits])
+        # Store bounds
+        xmin = np.min([lim[0] for lim in mem_limits])
+        xmax = np.max([lim[1] for lim in mem_limits])
+        ymin = np.min([lim[2] for lim in mem_limits])
+        ymax = np.max([lim[3] for lim in mem_limits])
+        zmin = np.min([lim[4] for lim in mem_limits])
+        zmax = np.max([lim[5] for lim in mem_limits])
 
+        # Vertical and horizontal limits for plots
         hlimits += [xmin, xmax, ymin, ymax]
         vlimits += [ymin, ymax, zmin, zmax]
 
-    hmin = np.min(hlimits)
-    hmax = np.max(hlimits)
-    vmin = np.min(vlimits)
-    vmax = np.max(vlimits)
-
+    # Set limits for plots
     if plot_limits is not None:
         hmin, hmax, vmin, vmax = plot_limits
-
+    else:
+        hmin = np.min(hlimits)
+        hmax = np.max(hlimits)
+        vmin = np.min(vlimits)
+        vmax = np.max(vlimits)
     offset = 0.05 * (hmax - hmin)
 
+    # Plot 2D contours and animate accross bins
     for projection, mem_contours, dna_contours in zip(
         [[0, 1], [0, 2], [1, 2]], all_mem_contours, all_dna_contours
     ):
-
-        # Animate contours
 
         hcomp = projection[0]
         vcomp = projection[1]
@@ -717,15 +717,15 @@ def animate_shape_modes_and_save_meshes(
         ax.set_ylim(vmin - offset, vmax + offset)
         ax.set_aspect("equal")
 
-        (mline,) = ax.plot(
-            [], [], lw=2, color="#F200FF" if "MEM" in feature else "#3AADA7"
-        )
-        (dline,) = ax.plot(
-            [], [], lw=2, color="#3AADA7" if "DNA" in feature else "#F200FF"
-        )
+        # initial plot for cell
+        (mline,) = ax.plot([], [], lw=2, color="#F200FF" if "MEM" in feature else "#3AADA7")
+        # initial plot for nucleus
+        (dline,) = ax.plot([], [], lw=2, color="#3AADA7" if "DNA" in feature else "#F200FF")
 
         def animate(i):
-
+            '''
+            Animates cell and nuclear contour accross bins
+            '''
             mct = mem_contours[i]
             mx = mct[:, hcomp]
             my = mct[:, vcomp]
@@ -742,10 +742,7 @@ def animate_shape_modes_and_save_meshes(
             mline.set_data(mx, my)
             dline.set_data(dx, dy)
 
-            return (
-                mline,
-                dline,
-            )
+            return (mline, dline)
 
         anim = animation.FuncAnimation(
             fig, animate, frames=len(mem_contours), interval=100, blit=True
@@ -753,11 +750,13 @@ def animate_shape_modes_and_save_meshes(
 
         anim.save(
             f"{save}/{feature}_{''.join(str(x) for x in projection)}.gif",
-            writer="imagemagick",
-            fps=len(mem_contours),
+            writer = "imagemagick",
+            fps = len(mem_contours)
         )
 
         plt.close("all")
+        
+        import pdb; pdb.set_trace()
 
 
 def reconstruct_shape_mode(
