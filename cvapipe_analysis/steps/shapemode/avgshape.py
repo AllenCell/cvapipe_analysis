@@ -14,6 +14,8 @@ from typing import Dict, List, Optional, Union
 from aics_dask_utils import DistributedHandler
 from vtk.util.numpy_support import vtk_to_numpy
 
+from .dim_reduction import pPCA
+
 def filter_extremes_based_on_percentile(
     df: pd.DataFrame,
     features: List,
@@ -196,7 +198,7 @@ def find_plane_mesh_intersection(
         Input triangle mesh.
     Returns
     -------
-        points: nd.array
+        points: np.array
             Nx3 array of xyz coordinates of mesh points
             that intersect the plane.
     """
@@ -281,71 +283,162 @@ def find_plane_mesh_intersection(
     return points
 
 
-def get_shcoeff_matrix_from_dataframe(index, df, prefix, lmax):
+def get_shcoeff_matrix_from_dataframe(
+    row: pd.Series,
+    prefix: str,
+    lmax: int
+):
 
+    """
+    Reshape spherical harmonics expansion (SHE) coefficients
+    into a coefficients matrix of shape 2 x lmax x lmax, where
+    lmax is the degree of the expansion stored in input
+    pandas series.
+
+    Parameters
+    --------------------
+    row: pd.Series
+        Series that contains the SHE coefficients.
+    prefix: str
+        String to identify the keys of the series that contain
+        the SHE coefficients.
+    lmax: int
+        Degree of the expansion
+    Returns
+    -------
+        coeffs: np.array
+            Array of shape 2 x lmax x lmax that contains the
+            SHE coefficients.
+    """
+    
+    # Empty matrix to store the SHE coefficients
     coeffs = np.zeros((2, lmax, lmax), dtype=np.float32)
 
     for l in range(lmax):
         for m in range(l + 1):
             try:
-                coeffs[0, l, m] = df.loc[
-                    index, [f for f in df.columns if f"{prefix}{l}M{m}C" in f]
-                ]
-                coeffs[1, l, m] = df.loc[
-                    index, [f for f in df.columns if f"{prefix}{l}M{m}S" in f]
-                ]
+                # Cosine SHE coefficients
+                coeffs[0, l, m] = row[[f for f in row.keys() if f"{prefix}{l}M{m}C" in f]]
+                # Sine SHE coefficients
+                coeffs[1, l, m] = row[[f for f in row.keys() if f"{prefix}{l}M{m}S" in f]]
+            # If a given (l,m) pair is not found, it is
+            # assumed to be zero
             except:
                 pass
 
+    # Error if no coefficients were found.
     if not np.abs(coeffs).sum():
         raise Exception(
-            f"Only zeros coefficients have been found. Problem with prefix: {prefix}"
+            f"No coefficients found. Please check prefix: {prefix}"
         )
 
     return coeffs
 
+def get_mesh_from_dataframe(
+    row: pd.Series,
+    prefix: str,
+    lmax: int
+):
 
-def get_mesh_from_dataframe(index, df, prefix, lmax):
+    """
+    Reconstruct the 3D triangle mesh corresponding to SHE
+    coefficients stored in a pandas Series format.
 
+    Parameters
+    --------------------
+    row: pd.Series
+        Series that contains the SHE coefficients.
+    prefix: str
+        String to identify the keys of the series that contain
+        the SHE coefficients.
+    lmax: int
+        Degree of the expansion
+    Returns
+    -------
+        mesh: vtk.vtkPolyData
+            Triangle mesh.
+    """
+    
+    # Reshape SHE coefficients
     coeffs = get_shcoeff_matrix_from_dataframe(
-        index=index, df=df, prefix=prefix, lmax=lmax
+        row = row,
+        prefix = prefix,
+        lmax = lmax
     )
 
+    # Use aicsshparam to convert SHE coefficients into
+    # triangle mesh
     mesh, _ = shtools.get_reconstruction_from_coeffs(coeffs)
 
     return mesh
 
 
-def get_shcoeffs_from_pc_coords(coords, pc, pca, coeff_names):
+def get_contours_of_consecutive_reconstructions(
+    df: pd.DataFrame,
+    prefix: str,
+    proj: List,
+    lmax: int
+):
 
-    # Use inverse PCA to transform PC coordinates back to SH coefficients
-    npts = len(coords)
-    pc_coords = np.zeros((npts, pca.n_components), dtype=np.float32)
-    pc_coords[:, pc] = coords
-    df_coeffs = pd.DataFrame(pca.inverse_transform(pc_coords))
-    df_coeffs.columns = coeff_names
-    df_coeffs.index = np.arange(1, 1 + npts)
+    """
+    Reconstruct the 3D triangle mesh corresponding to SHE
+    coefficients per index of the input dataframe and finds
+    the intersection between this mesh and a plane defined
+    by the input variable proj. The intersection serves as
+    a 2D contour of the mesh.
 
-    return df_coeffs
-
-
-def get_contours_of_consecutive_reconstructions(df, prefix, proj, lmax):
-
+    Parameters
+    --------------------
+    df: pd.DataFrame
+        dataframe that contains SHE coefficients that will be
+        used to reconstruct a triangle mesh per index.
+    prefix: str
+        String to identify the keys of the series that contain
+        the SHE coefficients.
+    proj: List
+        One of [0,1], [0,2] or [1,2] for xy-plane, xz-plane
+        and yz-plane, respectively.
+    lmax: int
+        Degree of the expansion
+    Returns
+    -------
+        contours: List
+            List of xyz points that intersect the reconstrcuted
+            meshes and the plane defined by proj. One per index.
+        meshes: List
+            List of reconstructed meshes. One per index.
+        limits: List
+            List of limits of reconstructed meshes. One per
+            index.
+    TBD
+    ---
+    
+        - Set bin as index of the dataframe outside this
+        function.
+    
+    """
+    
     if "bin" in df.columns:
         df = df.set_index("bin")
-
-    indexes = df.index
 
     meshes = []
     limits = []
     contours = []
 
-    for row, index in enumerate(indexes):
+    for index, row in df.iterrows():
 
-        mesh = get_mesh_from_dataframe(index=index, df=df, prefix=prefix, lmax=lmax)
+        # Get mesh of current index
+        mesh = get_mesh_from_dataframe(
+            row = row,
+            prefix = prefix,
+            lmax = lmax
+        )
 
+        # Find intersection between current mesh and plane
+        # defined by the input projection.
         proj_points = find_plane_mesh_intersection(proj=proj, mesh=mesh)
 
+        # Find x, y and z limits of mesh points coordinates
         limit = mesh.GetBounds()
 
         meshes.append(mesh)
@@ -354,9 +447,83 @@ def get_contours_of_consecutive_reconstructions(df, prefix, proj, lmax):
 
     return contours, meshes, limits
 
+def get_shcoeffs_from_pc_coords(
+    coords: np.array,
+    pc: int,
+    pca: pPCA
+):
+    
+    """
+    Uses the inverse PCA transform to convert one or more PC
+    coordiantes back into SHE coefficients.
+    
+    Parameters
+    --------------------
+    coords: np.array
+        One or more values along the principal component
+        denoted by pc.
+    pc: int
+        Integer that denotes the principal components the
+        coordinates refer to.
+    pca: sklearn.decomposition.PCA
+        PCA object to be used.
+    Returns
+    -------
+        df_coeffs: pd.DataFrame
+        DataFrame that stores the SHE coefficients.
+        
+    TBD:
+        Class for PCA object that stores the features names.
+    """
+    
+    # coords has shape (N,)
+    npts = len(coords)
+    # Creates a matrix of shape (N,M), where M is the
+    # reduced dimension
+    pc_coords = np.zeros((npts, pca.get_pca().n_components), dtype=np.float32)
+    # Copy input coordinates to the matrix
+    pc_coords[:, pc] = coords
+    # Uses inverse PCA and stores result into a dataframe
+    df_coeffs = pd.DataFrame(pca.get_pca().inverse_transform(pc_coords))
+    df_coeffs.columns = pca.get_feature_names()
+    df_coeffs.index = np.arange(1, 1 + npts)
 
-def transform_coords_to_mem_space(xo, yo, zo, angle, cm):
+    return df_coeffs
 
+def transform_coords_to_mem_space(
+    xo: float,
+    yo: float,
+    zo: float,
+    angle: float,
+    cm: List
+):
+
+    """
+    Converts a xyz-coordinate into coordinate system of
+    aligned cell, defined by the angle and cell centroid.
+    
+    Parameters
+    --------------------
+    xo: float
+        x-coordinate
+    yo: float
+        y-coordinate
+    zo: float
+        z-coordinate
+    angle: float
+        Cell alignment angle in degrees.
+    cm: tuple
+        xyz-coordinates of cell centroid.
+    Returns
+    -------
+        xt: float
+        Transformed x-coodinate
+        yt: float
+        Transformed y-coodinate
+        zt: float
+        Transformed z-coodinate
+    """
+    
     angle = np.pi * angle / 180.0
 
     rot_mx = np.array(
@@ -367,7 +534,7 @@ def transform_coords_to_mem_space(xo, yo, zo, angle, cm):
         ]
     )
 
-    pt_rot = np.matmul(rot_mx, np.array([xo - cm[0], yo - cm[1], zo - cm[2]]))
+    pt_rot = np.matmul(rot_mx, np.array([xo-cm[0], yo-cm[1], zo-cm[2]]))
 
     xt = pt_rot[0]
     yt = pt_rot[1]
@@ -375,30 +542,65 @@ def transform_coords_to_mem_space(xo, yo, zo, angle, cm):
 
     return xt, yt, zt
 
-
 def animate_shape_modes_and_save_meshes(
-    df,
-    df_agg,
-    bin_indexes,
-    feature,
-    save,
-    fix_nuclear_position=True,
-    plot_limits=None,
-    distributed_executor_address=None,
+    df: pd.DataFrame,
+    df_agg: pd.DataFrame,
+    bin_indexes: List,
+    feature: str,
+    save: Path,
+    plot_limits: Optional[bool] = None,
+    fix_nuclear_position: Optional[bool] = True,
+    distributed_executor_address: Optional[str] = None,
 ):
 
+    """
+    Uses the inverse PCA transform to convert one or more PC
+    coordiantes back into SHE coefficients.
+    
+    Parameters
+    --------------------
+    df: pd.DataFrame
+        
+    df_agg: pd.DataFrame
+        
+    bin_indexes: List
+        
+    feature: str
+        
+    save: Path
+        
+    plot_limits: Optional[bool] = None
+        
+    fix_nuclear_position: Optional[bool] = True
+        
+    distributed_executor_address: Optionalstr = None
+        
+    Returns
+    -------
+        df_coeffs: pd.DataFrame
+        DataFrame that stores the SHE coefficients.
+        
+    TBD:
+        Class for PCA object that stores the features names.
+    """
+    
     if fix_nuclear_position:
 
         def process_this_index(index_row):
-
+            '''
+            Change the coordinate system of nuclear centroid
+            from nuclear to the aligned cell.
+            '''
             index, row = index_row
 
             dxc, dyc, dzc = transform_coords_to_mem_space(
-                xo=row["dna_position_x_centroid_lcc"],
-                yo=row["dna_position_y_centroid_lcc"],
-                zo=row["dna_position_z_centroid_lcc"],
-                angle=row["mem_shcoeffs_transform_angle_lcc"],
-                cm=[row[f"mem_position_{k}_centroid_lcc"] for k in ["x", "y", "z"]],
+                xo = row["dna_position_x_centroid_lcc"],
+                yo = row["dna_position_y_centroid_lcc"],
+                zo = row["dna_position_z_centroid_lcc"],
+                # Cell alignment angle
+                angle = row["mem_shcoeffs_transform_angle_lcc"],
+                # Cell centroid
+                cm = [row[f"mem_position_{k}_centroid_lcc"] for k in ["x", "y", "z"]],
             )
 
             return (dxc, dyc, dzc)
@@ -407,6 +609,8 @@ def animate_shape_modes_and_save_meshes(
         # Remember that nuclear location must be averaged after transformation
         # to mem space
 
+        # Change the reference system of nuclear centroid of all
+        # cells that fall into the same bin.
         for (b, indexes) in bin_indexes:
 
             df_tmp = df.loc[df.index.isin(indexes)]
@@ -433,6 +637,8 @@ def animate_shape_modes_and_save_meshes(
             df_agg.loc[b, "dna_dyc"] = xyz[1]
             df_agg.loc[b, "dna_dzc"] = xyz[2]
 
+            import pdb; pdb.set_trace()
+            
     else:
 
         for (b, indexes) in bin_indexes:
