@@ -7,6 +7,7 @@ from typing import Dict, List, Optional, Union
 import warnings
 import quilt3
 
+import pandas as pd
 from datastep import Step, log_run_params
 
 ###############################################################################
@@ -17,22 +18,26 @@ log = logging.getLogger(__name__)
 
 
 def download_quilt_data(
-    package_name="aics/hipsc_single_cell_image_dataset",
-    registry="s3://allencell",
-    data_save_loc="quilt_data",
-    ignore_warnings=True,
-    test=False,
+    package_name = "aics/hipsc_single_cell_image_dataset",
+    registry = "s3://allencell",
+    data_save_loc = "quilt_data",
+    ignore_warnings = True,
+    test = False,
 ):
     """Download a quilt dataset and supress nfs file attribe warnings by default"""
     pkg = quilt3.Package.browse(package_name, registry)
     
-    meta_df = pkg["metadata.csv"]()
+    df_meta = pkg["metadata.csv"]()
     
     if test:
-        print('>> Downloading test dataset...')
-        meta_df = meta_df.sample(n=300, random_state=666)
+        df_test = pd.DataFrame([])
+        print('>> Downloading test dataset with 12 interphase cell images per structure.')
+        df_meta = df_meta.loc[df_meta.cell_stage=='M0']
+        for struct, df_struct in df_meta.groupby('structure_name'):
+            df_test = df_test.append(df_struct.sample(n=12, random_state=666, replace=False).copy())
+        df_meta = df_test.copy()
 
-    for i, row in meta_df.iterrows():
+    for i, row in df_meta.iterrows():
         if ignore_warnings:
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore", UserWarning)
@@ -46,13 +51,9 @@ def download_quilt_data(
             pkg[row["crop_raw"]].fetch(data_save_loc/row["crop_raw"])
             pkg[row["crop_seg"]].fetch(data_save_loc/row["crop_seg"])
 
-    return meta_df
-
+    return df_meta
 
 class LoadData(Step):
-    # We may want to vary:
-    # * The label we are attaching to each image
-    # * which 2d images we are using as input
 
     def __init__(
         self,
@@ -64,9 +65,9 @@ class LoadData(Step):
     @log_run_params
     def run(
         self,
-        package_name="aics/hipsc_single_cell_image_dataset",
-        registry="s3://allencell",
-        data_save_loc="quilt_data",
+        package_name = "aics/hipsc_single_cell_image_dataset",
+        registry = "s3://allencell",
+        data_save_loc = "quilt_data",
         test=False,
         **kwargs
     ):
@@ -85,7 +86,8 @@ class LoadData(Step):
             how it is processed, etc.
             Default: False (Do not debug)
         test: bool
-            Download only a small test dataset of 300 cells chosen at random.
+            Download only a small test dataset of 300 interphase cells chosen at
+            random (12 cells per structure).
 
         Parameters
         ----------
@@ -96,11 +98,11 @@ class LoadData(Step):
             A pickable object or value that is the result of any processing you do.
         """
         dataset = download_quilt_data(
-            package_name=package_name,
-            registry=registry,
-            data_save_loc=self.step_local_staging_dir,
-            ignore_warnings=True,
-            test=test
+            package_name = package_name,
+            registry = registry,
+            data_save_loc = self.step_local_staging_dir,
+            ignore_warnings = True,
+            test = test
         )
         
         self.manifest = dataset
