@@ -605,81 +605,70 @@ def animate_shape_modes_and_save_meshes(
 
             return (dxc, dyc, dzc)
 
-        # Get instances for placing nucleus in the right location
-        # Remember that nuclear location must be averaged after transformation
-        # to mem space
-
-        # Change the reference system of nuclear centroid of all
-        # cells that fall into the same bin.
+        # Change the reference system of the vector that
+        # defines the nuclear location relative to the cell
+        # of all cells that fall into the same bin.
         for (b, indexes) in bin_indexes:
-
-            df_tmp = df.loc[df.index.isin(indexes)]
-
-            futures = []
-            results = []
+            # Subset with cells from the same bin.
+            df_tmp = df.loc[df.index.isin(indexes)]            
+            # Change reference system for all cells in parallel.
+            nuclei_cm_fix = []
             with DistributedHandler(distributed_executor_address) as handler:
-                # Generate bounded arrays
-                future = handler.client.map(
+                future = handler.batched_map(
                     process_this_index,
                     [index_row for index_row in df_tmp.iterrows()],
                 )
-                futures.append(future)
-                result = handler.gather(future)
-                results.append(result)
-
-            all_results = []
-            for this_xyz in results:
-                all_results.append(this_xyz)
-
-            xyz = np.array(all_results[0]).mean(axis=0)
-
-            df_agg.loc[b, "dna_dxc"] = xyz[0]
-            df_agg.loc[b, "dna_dyc"] = xyz[1]
-            df_agg.loc[b, "dna_dzc"] = xyz[2]
-
-            import pdb; pdb.set_trace()
+                nuclei_cm_fix.append(future)
+            # Average changed nuclear centroid over all cells
+            mean_nuclei_cm_fix = np.array(nuclei_cm_fix[0]).mean(axis=0)
+            # Store
+            df_agg.loc[b, "dna_dxc"] = mean_nuclei_cm_fix[0]
+            df_agg.loc[b, "dna_dyc"] = mean_nuclei_cm_fix[1]
+            df_agg.loc[b, "dna_dzc"] = mean_nuclei_cm_fix[2]
             
     else:
-
+        # Save nuclear displacement as zeros if no adjustment
+        # is requested.
         for (b, indexes) in bin_indexes:
 
             df_agg.loc[b, "dna_dxc"] = 0
             df_agg.loc[b, "dna_dyc"] = 0
             df_agg.loc[b, "dna_dzc"] = 0
 
-    # Get meshes and contours
-
     hlimits = []
     vlimits = []
     all_mem_contours = []
     all_dna_contours = []
 
+    # Loop over 3 different projections: xy=[0,1], xz=[0,2] and
+    # yz=[1,2]
     for proj_id, projection in enumerate([[0, 1], [0, 2], [1, 2]]):
 
-        # Get contour projections
-
-        (
-            mem_contours,
-            mem_meshes,
-            mem_limits,
-        ) = get_contours_of_consecutive_reconstructions(
-            df=df_agg, prefix="mem_shcoeffs_L", proj=projection, lmax=32
+        # Get nuclear meshes and their 2D projections
+        # for 3 different projections,xy, xz and yz.
+        mem_contours, mem_meshes, mem_limits = get_contours_of_consecutive_reconstructions(
+            df = df_agg,
+            prefix = "mem_shcoeffs_L",
+            proj = projection,
+            lmax = 32
+        )
+        # Get cells meshes and their 2D projections
+        # for 3 different projections,xy, xz and yz.
+        dna_contours, dna_meshes, dna_limits = get_contours_of_consecutive_reconstructions(
+            df = df_agg,
+            prefix = "dna_shcoeffs_L",
+            proj = projection,
+            lmax = 32
         )
 
-        (
-            dna_contours,
-            dna_meshes,
-            dna_limits,
-        ) = get_contours_of_consecutive_reconstructions(
-            df=df_agg, prefix="dna_shcoeffs_L", proj=projection, lmax=32
-        )
-
-        # Fix the DNA meshes centroid and save them
+        # Change the nuclear position relative to the cell
+        # in the reconstructed meshes when running the
+        # first projection
         if proj_id == 0:
-            for (b, indexes), mem_mesh, dna_mesh in zip(
-                bin_indexes, mem_meshes, dna_meshes
-            ):
+            for (b, indexes), mem_mesh, dna_mesh in zip(bin_indexes, mem_meshes, dna_meshes):
                 for i in range(dna_mesh.GetNumberOfPoints()):
+                    # Meshes are centered at origin when
+                    # reconstructed.
                     r = dna_mesh.GetPoints().GetPoint(i)
                     u = np.array(r).copy()
                     u[0] += df_agg.loc[b, "dna_dxc"]
