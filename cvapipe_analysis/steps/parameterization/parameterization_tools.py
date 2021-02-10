@@ -75,4 +75,3 @@ def parameterize(data_folder, row, save_as):
             image_name = save_as.stem,
             channel_names = representations.channel_names
         )
-    

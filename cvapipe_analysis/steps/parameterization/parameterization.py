@@ -3,6 +3,7 @@
 
 import json
 import logging
+import warnings
 from pathlib import Path
 from typing import NamedTuple, Optional, Union, List, Dict
 
@@ -20,14 +21,13 @@ log = logging.getLogger(__name__)
 
 class DatasetFields:
     CellId = "CellId"
-    CellIndex = "CellIndex"
-    FOVId = "FOVId"
+    structure_name = "structure_name"
     CellRepresentationPath = "CellRepresentationPath"
 
 class SingleCellParameterizationResult(NamedTuple):
     cell_id: Union[int, str]
+    structure_name: str
     path: Path
-
 
 class SingleCellParameterizationError(NamedTuple):
     cell_id: int
@@ -44,7 +44,7 @@ class Parameterization(Step):
 
     @staticmethod
     def _single_cell_parameterization(
-        row_index: int,
+        index: int,
         row: pd.Series,
         save_dir: Path,
         load_data_dir: Path,
@@ -52,15 +52,15 @@ class Parameterization(Step):
     ) -> Union[SingleCellParameterizationResult, SingleCellParameterizationError]:
 
         # Get the ultimate end save path for this cell
-        save_path = save_dir / f"{row_index}.tif"
+        save_path = save_dir / f"{index}.tif"
 
         # Check skip
         if not overwrite and save_path.is_file():
-            log.info(f"Skipping cell parameterization for Cell Id: {row_index}")
-            return SingleCellParameterizationResult(row_index, save_path)
+            log.info(f"Skipping cell parameterization for Cell Id: {index}")
+            return SingleCellParameterizationResult(index, row['structure_name'], save_path)
 
         # Overwrite or didn't exist
-        log.info(f"Beginning cell parameterization for CellId: {row_index}")
+        log.info(f"Beginning cell parameterization for CellId: {index}")
 
         # Wrap errors for debugging later
         try:
@@ -70,20 +70,19 @@ class Parameterization(Step):
                 save_as = save_path
             )
             
-            log.info(f"Completed cell parameterization for CellId: {row_index}")
-            return SingleCellParameterizationResult(row_index, save_path)
+            log.info(f"Completed cell parameterization for CellId: {index}")
+            return SingleCellParameterizationResult(index, row['structure_name'], save_path)
 
         # Catch and return error
         except Exception as e:
             log.info(
-                f"Failed cell parameterization for CellId: {row_index}. Error: {e}"
+                f"Failed cell parameterization for CellId: {index}. Error: {e}"
             )
-            return SingleCellParameterizationError(row_index, str(e))
+            return SingleCellParameterizationError(index, str(e))
 
     @log_run_params
     def run(
         self,
-        debug=False,
         distributed_executor_address: Optional[str] = None,
         overwrite: bool = False,
         **kwargs):
@@ -98,7 +97,7 @@ class Parameterization(Step):
         )
         
         # Keep only the columns that will be used from now on
-        columns_to_keep = ['crop_raw', 'crop_seg', 'name_dict']
+        columns_to_keep = ['structure_name','crop_raw', 'crop_seg', 'name_dict']
         df = df[columns_to_keep]
         
         # Load manifest from feature calculation step
@@ -134,13 +133,14 @@ class Parameterization(Step):
             )
 
         # Generate features paths rows
-        cell_parameterization_dataset = []
         errors = []
+        df_param = []
         for result in results:
             if isinstance(result, SingleCellParameterizationResult):
-                cell_parameterization_dataset.append(
+                df_param.append(
                     {
                         DatasetFields.CellId: result.cell_id,
+                        DatasetFields.structure_name: result.structure_name,
                         DatasetFields.CellRepresentationPath: result.path,
                     }
                 )
@@ -149,11 +149,16 @@ class Parameterization(Step):
                     {DatasetFields.CellId: result.cell_id, "Error": result.error}
                 )
         # Convert to DataFrame
-        cell_parameterization_dataset = pd.DataFrame(cell_parameterization_dataset)
-        
+        df_param = pd.DataFrame(df_param).set_index('CellId')
+
+        # Display errors if any
+        if len(errors)>0:
+            warnings.warn("One or more errors found.")
+            print(errors)
+                
         # Save manifest
-        self.manifest = cell_parameterization_dataset
+        self.manifest = df_param
         manifest_save_path = self.step_local_staging_dir / "manifest.csv"
         self.manifest.to_csv(manifest_save_path)
-            
+
         return manifest_save_path
