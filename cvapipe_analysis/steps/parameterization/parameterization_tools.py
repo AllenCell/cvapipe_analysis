@@ -2,7 +2,7 @@ from aicsimageio import writers
 from aicsshparam import shtools
 from aicscytoparam import cytoparam
 
-from ..compute_features.compute_features_tools import get_segmentations
+from ..compute_features.compute_features_tools import get_segmentations, get_raws
 
 def parameterize(data_folder, row, save_as):
     
@@ -30,16 +30,29 @@ def parameterize(data_folder, row, save_as):
         channels = eval(channels)['crop_seg']
     )
 
-    # Rotate structure channel with same angle used to align the cell
+    # Load FP image
+    _, _, struct = get_raws(
+        folder = data_folder,
+        path_to_raw = row['crop_raw'],
+        channels = eval(channels)['crop_raw']
+    )
+        
+    # Rotate structure segmentation with same angle used to align the cell
     seg_str = shtools.apply_image_alignment_2d(
         image = seg_str,
+        angle = row['mem_shcoeffs_transform_angle_lcc']
+    ).squeeze()
+
+    # Rotate FP structure with same angle used to align the cell
+    seg_str = shtools.apply_image_alignment_2d(
+        image = struct,
         angle = row['mem_shcoeffs_transform_angle_lcc']
     ).squeeze()
 
     # Find cell coefficients and centroid. Also rename coeffs to agree
     # with aics-cytoparam
     coeffs_mem = dict(
-        (f"{k.replace('mem_shcoeffs_','').replace('_lcc','')}",v)
+        (f"{k.replace('mem_','').replace('_lcc','')}",v)
         for k,v in row.items() if 'mem_shcoeffs_L' in k
     )
     centroid_mem = [
@@ -48,7 +61,7 @@ def parameterize(data_folder, row, save_as):
     # Find nuclear coefficients and centroid. Also rename coeffs to agree
     # with aics-cytoparam
     coeffs_dna = dict(
-        (f"{k.replace('dna_shcoeffs_','').replace('_lcc','')}",v)
+        (f"{k.replace('dna_','').replace('_lcc','')}",v)
         for k,v in row.items() if 'dna_shcoeffs_L' in k
     )
     centroid_dna = [
@@ -63,7 +76,8 @@ def parameterize(data_folder, row, save_as):
         centroid_nuc = centroid_dna,
         nisos = [32,32],
         images_to_probe = [
-            ('structure_segmentation', seg_str)
+            ('structure', struct),
+            ('structure_seg', seg_str)
         ]
     )
     
