@@ -1,29 +1,63 @@
 import vtk
 import math
 import operator
+import warnings
 import numpy as np
 import pandas as pd
-from tqdm import tqdm
+from pathlib import Path
 from functools import reduce
 import matplotlib.pyplot as plt
-from matplotlib import animation
 from aicsshparam import shtools
-from distributed import LocalCluster, Client
+from matplotlib import animation
+from typing import Dict, List, Optional, Union
 from aics_dask_utils import DistributedHandler
-from vtk.util.numpy_support import vtk_to_numpy
+from vtk.util.numpy_support import vtk_to_numpy, numpy_to_vtk
 
+from .dim_reduction import pPCA
 
-def filter_extremes_based_on_percentile(df, features, pct):
+def filter_extremes_based_on_percentile(
+    df: pd.DataFrame,
+    features: List,
+    pct: float
+):
 
+    """
+    Exclude extreme data points that fall in the percentile range
+    [0,pct] or [100-pct,100] of at least one of the features
+    provided.
+
+    Parameters
+    --------------------
+    df: pandas df
+        Input dataframe that contains the features.
+    features: List
+        List of column names to be used to filter the data
+        points.
+    pct: float
+        Specifies the percentile range; data points that
+        fall in the percentile range [0,pct] or [100-pct,100]
+        of at least one of the features are removed.
+
+    Returns
+    -------
+    df: pandas dataframe
+        Filtered dataframe.
+    """
+    
+    # Temporary column to store whether a data point is an
+    # extreme point or not.
     df["extreme"] = False
 
     for f in features:
 
+        # Calculated the extreme interval fot the current feature
         finf, fsup = np.percentile(df[f].values, [pct, 100 - pct])
 
+        # Points in either high or low extreme as flagged
         df.loc[(df[f] < finf), "extreme"] = True
         df.loc[(df[f] > fsup), "extreme"] = True
 
+    # Drop extreme points and temporary column
     df = df.loc[df.extreme == False]
     df = df.drop(columns=["extreme"])
 
@@ -31,36 +65,94 @@ def filter_extremes_based_on_percentile(df, features, pct):
 
 
 def digitize_shape_mode(
-    df, feature, nbins, filter_extremes_pct=1, save=None, return_freqs_per_structs=False
+    df: pd.DataFrame,
+    feature: List,
+    nbins: int,
+    filter_based_on: List,
+    filter_extremes_pct: float = 1,
+    save: Optional[Path] = None,
+    return_freqs_per_structs: Optional[bool] = False
 ):
 
+    """
+    Discretize a given feature into nbins number of equally
+    spaced bins. The feature is first z-scored and the interval
+    from -2std to 2std is divided into nbins bins.
+
+    Parameters
+    --------------------
+    df: pandas df
+        Input dataframe that contains the feature to be
+        discretized.
+    features: str
+        Column name of the feature to be discretized.
+    nbins: int
+        Number of bins to divide the feature into.
+    filter_extremes_pct: float
+        See parameter pct in function filter_extremes_based_on_percentile
+    filter_based_on: list
+        List of all column names that should be used for
+        filtering extreme data points.
+    save: Path
+        Path to a file where we save the number of data points
+        that fall in each bin
+    return_freqs_per_structs: bool
+        ??
+    Returns
+    -------
+        df: pandas dataframe
+            Input dataframe with data points filtered according
+            to filter_extremes_pct plus a column named "bin"
+            that denotes the bin in which a given data point
+            fall in.
+        bin_indexes: list of tuples
+            [(a,b)] where a is the bin number and b is a list
+            with the index of all data points that fall into
+            that bin.
+        bin_centers: list
+            List with values of feature at the center of each
+            bin
+        pc_std: float
+            Standard deviation used to z-score the feature.
+
+    """
+    
+    # Check if feature is available
     if feature not in df.columns:
         raise ValueError(f"Column {feature} not found.")
 
-    prefix = "".join([c for c in feature if not c.isdigit()])
-
     # Exclude extremeties
     df = filter_extremes_based_on_percentile(
-        df=df, features=[f for f in df.columns if prefix in f], pct=filter_extremes_pct
+        df = df,
+        features = filter_based_on,
+        pct = filter_extremes_pct
     )
 
+    # Get feature values
     values = df[feature].values.astype(np.float32)
 
     # Should be centered already, but enforce it here
     values -= values.mean()
     # Z-score
+    
     pc_std = values.std()
     values /= pc_std
 
+    # Calculate bin half width based on std interval and nbins
+    LINF = -2.0 # inferior limit = -2 std
+    LSUP = 2.0 # superior limit = 2 std
+    binw = (LSUP-LINF)/(2*(nbins-1))
+    
     # Force samples below/above -/+ 2std to fall into first/last bin
-    bin_centers = np.linspace(-2, 2, nbins)
-    bin_edges = np.unique([(b - 0.25, b + 0.25) for b in bin_centers])
+    bin_centers = np.linspace(LINF, LSUP, nbins)
+    bin_edges = np.unique([(b-binw, b+binw) for b in bin_centers])
     bin_edges[0] = -np.inf
     bin_edges[-1] = np.inf
+    
     # Aplly digitization
     df["bin"] = np.digitize(values, bin_edges)
 
-    # Report number of cells in each bin
+    # Report number of data points in each bin
     df_freq = pd.DataFrame(df["bin"].value_counts(sort=False))
     df_freq.index = df_freq.index.rename(f"{feature}_bin")
     df_freq = df_freq.rename(columns={"bin": "samples"})
@@ -68,12 +160,14 @@ def digitize_shape_mode(
         with open(f"{save}.txt", "w") as flog:
             print(df_freq, file=flog)
 
-    # Store the index of all cells in each bin
+    # Store the index of all data points in each bin
     bin_indexes = []
     df_agg = df.groupby(["bin"]).mean()
     for b, df_bin in df.groupby(["bin"]):
         bin_indexes.append((b, df_bin.index))
 
+    # Optionally return a dataframe with the number of data
+    # points in each bin stratifyied by structure_name.
     if return_freqs_per_structs:
         df_freq = (
             df[["structure_name", "bin"]].groupby(["structure_name", "bin"]).size()
@@ -85,11 +179,33 @@ def digitize_shape_mode(
 
     return df, bin_indexes, (bin_centers, pc_std)
 
+def find_plane_mesh_intersection(
+    proj: List,
+    mesh: vtk.vtkPolyData
+):
 
-def find_plane_mesh_intersection(proj, mesh):
+    """
+    Determine the points of mesh that intersect with the
+    plane defined by the proj:
 
+    Parameters
+    --------------------
+    proj: List
+        One of [0,1], [0,2] or [1,2] for xy-plane, xz-plane
+        and yz-plane, respectively.
+    mesh: vtk.vtkPolyData
+        Input triangle mesh.
+    Returns
+    -------
+        points: np.array
+            Nx3 array of xyz coordinates of mesh points
+            that intersect the plane.
+    """
+    
+    # Find axis orthogonal to the projection of interest
     ax = [a for a in [0, 1, 2] if a not in proj][0]
 
+    # Get all mesh points
     points = vtk_to_numpy(mesh.GetPoints().GetData())
 
     if not np.abs(points[:, ax]).sum():
@@ -101,9 +217,9 @@ def find_plane_mesh_intersection(proj, mesh):
     # Without this the code hangs when the mesh has any edge aligned with the
     # projection plane
     mid += 0.75
-
     offset = 0.1 * np.ptp(points, axis=0).max()
 
+    # Create a vtkPlaneSource
     plane = vtk.vtkPlaneSource()
     plane.SetXResolution(4)
     plane.SetYResolution(4)
@@ -122,23 +238,27 @@ def find_plane_mesh_intersection(proj, mesh):
     plane.Update()
     plane = plane.GetOutput()
 
+    # Trangulate the plane
     triangulate = vtk.vtkTriangleFilter()
     triangulate.SetInputData(plane)
     triangulate.Update()
     plane = triangulate.GetOutput()
 
+    # Calculate intersection
     intersection = vtk.vtkIntersectionPolyDataFilter()
     intersection.SetInputData(0, mesh)
     intersection.SetInputData(1, plane)
     intersection.Update()
     intersection = intersection.GetOutput()
 
-    points = []
-    for i in range(intersection.GetNumberOfPoints()):
-        r = intersection.GetPoints().GetPoint(i)
-        points.append(r)
-    points = np.array(points)
+    # Get coordinates of intersecting points
+    points = vtk_to_numpy(intersection.GetPoints().GetData())
 
+    # Sorting points clockwise
+    # This has been discussed here:
+    # https://stackoverflow.com/questions/51074984/sorting-according-to-clockwise-point-coordinates/51075469
+    # but seems not to be very efficient. Better version is proposed here:
+    # https://stackoverflow.com/questions/57566806/how-to-arrange-the-huge-list-of-2d-coordinates-in-a-clokwise-direction-in-python
     coords = points[:, proj]
     center = tuple(
         map(
@@ -156,76 +276,167 @@ def find_plane_mesh_intersection(proj, mesh):
         % 360,
     )
 
+    # Store sorted coordinates
     points[:, proj] = coords
 
     return points
 
 
-def get_shcoeff_matrix_from_dataframe(index, df, prefix, lmax):
+def get_shcoeff_matrix_from_dataframe(
+    row: pd.Series,
+    prefix: str,
+    lmax: int
+):
 
+    """
+    Reshape spherical harmonics expansion (SHE) coefficients
+    into a coefficients matrix of shape 2 x lmax x lmax, where
+    lmax is the degree of the expansion.
+
+    Parameters
+    --------------------
+    row: pd.Series
+        Series that contains the SHE coefficients.
+    prefix: str
+        String to identify the keys of the series that contain
+        the SHE coefficients.
+    lmax: int
+        Degree of the expansion
+    Returns
+    -------
+        coeffs: np.array
+            Array of shape 2 x lmax x lmax that contains the
+            SHE coefficients.
+    """
+    
+    # Empty matrix to store the SHE coefficients
     coeffs = np.zeros((2, lmax, lmax), dtype=np.float32)
 
     for l in range(lmax):
         for m in range(l + 1):
             try:
-                coeffs[0, l, m] = df.loc[
-                    index, [f for f in df.columns if f"{prefix}{l}M{m}C" in f]
-                ]
-                coeffs[1, l, m] = df.loc[
-                    index, [f for f in df.columns if f"{prefix}{l}M{m}S" in f]
-                ]
+                # Cosine SHE coefficients
+                coeffs[0, l, m] = row[[f for f in row.keys() if f"{prefix}{l}M{m}C" in f]]
+                # Sine SHE coefficients
+                coeffs[1, l, m] = row[[f for f in row.keys() if f"{prefix}{l}M{m}S" in f]]
+            # If a given (l,m) pair is not found, it is
+            # assumed to be zero
             except:
                 pass
 
+    # Error if no coefficients were found.
     if not np.abs(coeffs).sum():
         raise Exception(
-            f"Only zeros coefficients have been found. Problem with prefix: {prefix}"
+            f"No coefficients found. Please check prefix: {prefix}"
         )
 
     return coeffs
 
+def get_mesh_from_dataframe(
+    row: pd.Series,
+    prefix: str,
+    lmax: int
+):
 
-def get_mesh_from_dataframe(index, df, prefix, lmax):
+    """
+    Reconstruct the 3D triangle mesh corresponding to SHE
+    coefficients stored in a pandas Series format.
 
+    Parameters
+    --------------------
+    row: pd.Series
+        Series that contains the SHE coefficients.
+    prefix: str
+        String to identify the keys of the series that contain
+        the SHE coefficients.
+    lmax: int
+        Degree of the expansion
+    Returns
+    -------
+        mesh: vtk.vtkPolyData
+            Triangle mesh.
+    """
+    
+    # Reshape SHE coefficients
     coeffs = get_shcoeff_matrix_from_dataframe(
-        index=index, df=df, prefix=prefix, lmax=lmax
+        row = row,
+        prefix = prefix,
+        lmax = lmax
     )
 
+    # Use aicsshparam to convert SHE coefficients into
+    # triangle mesh
     mesh, _ = shtools.get_reconstruction_from_coeffs(coeffs)
 
     return mesh
 
 
-def get_shcoeffs_from_pc_coords(coords, pc, pca, coeff_names):
+def get_contours_of_consecutive_reconstructions(
+    df: pd.DataFrame,
+    prefix: str,
+    proj: List,
+    lmax: int
+):
 
-    # Use inverse PCA to transform PC coordinates back to SH coefficients
-    npts = len(coords)
-    pc_coords = np.zeros((npts, pca.n_components), dtype=np.float32)
-    pc_coords[:, pc] = coords
-    df_coeffs = pd.DataFrame(pca.inverse_transform(pc_coords))
-    df_coeffs.columns = coeff_names
-    df_coeffs.index = np.arange(1, 1 + npts)
+    """
+    Reconstruct the 3D triangle mesh corresponding to SHE
+    coefficients per index of the input dataframe and finds
+    the intersection between this mesh and a plane defined
+    by the input variable proj. The intersection serves as
+    a 2D contour of the mesh.
 
-    return df_coeffs
-
-
-def get_contours_of_consecutive_reconstructions(df, prefix, proj, lmax):
-
+    Parameters
+    --------------------
+    df: pd.DataFrame
+        dataframe that contains SHE coefficients that will be
+        used to reconstruct a triangle mesh per index.
+    prefix: str
+        String to identify the keys of the series that contain
+        the SHE coefficients.
+    proj: List
+        One of [0,1], [0,2] or [1,2] for xy-plane, xz-plane
+        and yz-plane, respectively.
+    lmax: int
+        Degree of the expansion
+    Returns
+    -------
+        contours: List
+            List of xyz points that intersect the reconstrcuted
+            meshes and the plane defined by proj. One per index.
+        meshes: List
+            List of reconstructed meshes. One per index.
+        limits: List
+            List of limits of reconstructed meshes. One per
+            index.
+    TBD
+    ---
+    
+        - Set bin as index of the dataframe outside this
+        function.
+    
+    """
+    
     if "bin" in df.columns:
         df = df.set_index("bin")
-
-    indexes = df.index
 
     meshes = []
     limits = []
     contours = []
 
-    for row, index in enumerate(indexes):
+    for index, row in df.iterrows():
 
-        mesh = get_mesh_from_dataframe(index=index, df=df, prefix=prefix, lmax=lmax)
+        # Get mesh of current index
+        mesh = get_mesh_from_dataframe(
+            row = row,
+            prefix = prefix,
+            lmax = lmax
+        )
 
+        # Find intersection between current mesh and plane
+        # defined by the input projection.
         proj_points = find_plane_mesh_intersection(proj=proj, mesh=mesh)
 
+        # Find x, y and z limits of mesh points coordinates
         limit = mesh.GetBounds()
 
         meshes.append(mesh)
@@ -234,9 +445,83 @@ def get_contours_of_consecutive_reconstructions(df, prefix, proj, lmax):
 
     return contours, meshes, limits
 
+def get_shcoeffs_from_pc_coords(
+    coords: np.array,
+    pc: int,
+    pca: pPCA
+):
+    
+    """
+    Uses the inverse PCA transform to convert one or more PC
+    coordiantes back into SHE coefficients.
+    
+    Parameters
+    --------------------
+    coords: np.array
+        One or more values along the principal component
+        denoted by pc.
+    pc: int
+        Integer that denotes the principal components the
+        coordinates refer to.
+    pca: sklearn.decomposition.PCA
+        PCA object to be used.
+    Returns
+    -------
+        df_coeffs: pd.DataFrame
+        DataFrame that stores the SHE coefficients.
+        
+    TBD:
+        Class for PCA object that stores the features names.
+    """
+    
+    # coords has shape (N,)
+    npts = len(coords)
+    # Creates a matrix of shape (N,M), where M is the
+    # reduced dimension
+    pc_coords = np.zeros((npts, pca.get_pca().n_components), dtype=np.float32)
+    # Copy input coordinates to the matrix
+    pc_coords[:, pc] = coords
+    # Uses inverse PCA and stores result into a dataframe
+    df_coeffs = pd.DataFrame(pca.get_pca().inverse_transform(pc_coords))
+    df_coeffs.columns = pca.get_feature_names()
+    df_coeffs.index = np.arange(1, 1 + npts)
 
-def transform_coords_to_mem_space(xo, yo, zo, angle, cm, flip):
+    return df_coeffs
 
+def transform_coords_to_mem_space(
+    xo: float,
+    yo: float,
+    zo: float,
+    angle: float,
+    cm: List
+):
+
+    """
+    Converts a xyz-coordinate into coordinate system of
+    aligned cell, defined by the angle and cell centroid.
+    
+    Parameters
+    --------------------
+    xo: float
+        x-coordinate
+    yo: float
+        y-coordinate
+    zo: float
+        z-coordinate
+    angle: float
+        Cell alignment angle in degrees.
+    cm: tuple
+        xyz-coordinates of cell centroid.
+    Returns
+    -------
+        xt: float
+        Transformed x-coodinate
+        yt: float
+        Transformed y-coodinate
+        zt: float
+        Transformed z-coodinate
+    """
+    
     angle = np.pi * angle / 180.0
 
     rot_mx = np.array(
@@ -247,152 +532,188 @@ def transform_coords_to_mem_space(xo, yo, zo, angle, cm, flip):
         ]
     )
 
-    pt_rot = np.matmul(rot_mx, np.array([xo - cm[0], yo - cm[1], zo - cm[2]]))
+    pt_rot = np.matmul(rot_mx, np.array([xo-cm[0], yo-cm[1], zo-cm[2]]))
 
-    xt = pt_rot[0] * flip[0]
-    yt = pt_rot[1] * flip[1]
+    xt = pt_rot[0]
+    yt = pt_rot[1]
     zt = pt_rot[2]
 
     return xt, yt, zt
 
-
 def animate_shape_modes_and_save_meshes(
-    df,
-    df_agg,
-    bin_indexes,
-    feature,
-    save,
-    fix_nuclear_position=True,
-    plot_limits=None,
-    distributed_executor_address=None,
+    df_agg: pd.DataFrame,
+    mode: str,
+    save: Path,
+    plot_limits: Optional[List] = None,
+    fix_nuclear_position: Optional[bool] = None,
+    distributed_executor_address: Optional[str] = None,
 ):
 
-    if fix_nuclear_position:
+    """
+    Generate animated GIFs to illustrate cell and nuclear
+    shape variation as a single shape space dimension is
+    transversed. The function also saves the cell and
+    nuclear shape in VTK polydata format.
+    
+    Parameters
+    --------------------        
+    df_agg: pd.DataFrame
+        Dataframe that contains the cell and nuclear SHE
+        coefficients that will be reconstructed. Each line
+        of this dataframe will generate 3 animated GIFs:
+        one for each projection (xy, xz, and yz).        
+    bin_indexes: List
+        [(a,b)] a's are integers for identifying the bin
+        number and b's are lists of all data points id's
+        that fall into that bin.
+    mode: str
+        Either DNA, MEM or DNA_MEM to specify whether the
+        shape space has been created based on nucleus, cell
+        or jointly combined cell and nuclear shape.
+    save: Path
+        Path to save results.
+    plot_limits: Optional[bool] = None
+        List of floats to be used as x-axis limits and
+        y-axis limits in the animated GIFs. Default values
+        used for the single-cell images dataset are
+        [-150, 150, -80, 80],
+    fix_nuclear_position: Tuple or None
+        Use None here to not change the nuclear location
+        relative to the cell. Otherwise, this should be a
+        tuple like (df,bin_indexes), where df is a single
+        cell dataframe that contains the columns necessary
+        to correct the nuclear location realtive to the cell.
+        bin_indexes is alist of tuple (a,b), where a is an
+        integer for that specifies the bin number and b is
+        a list of all data point ids from the single cell
+        dataframe that fall into that bin.
+    distributed_executor_address: Optionalstr = None
+        Dask executor address.        
+    """
+    
+    if fix_nuclear_position is not None:
 
+        df, bin_indexes = fix_nuclear_position
+        
         def process_this_index(index_row):
-
+            '''
+            Change the coordinate system of nuclear centroid
+            from nuclear to the aligned cell.
+            '''
             index, row = index_row
 
             dxc, dyc, dzc = transform_coords_to_mem_space(
-                xo=row["dna_position_x_centroid_lcc"],
-                yo=row["dna_position_y_centroid_lcc"],
-                zo=row["dna_position_z_centroid_lcc"],
-                angle=row["mem_shcoeffs_transform_angle_lcc"],
-                cm=[row[f"mem_position_{k}_centroid_lcc"] for k in ["x", "y", "z"]],
-                flip=[row[f"mem_shcoeffs_transform_{k}flip_lcc"] for k in ["x", "y"]],
+                xo = row["dna_position_x_centroid_lcc"],
+                yo = row["dna_position_y_centroid_lcc"],
+                zo = row["dna_position_z_centroid_lcc"],
+                # Cell alignment angle
+                angle = row["mem_shcoeffs_transform_angle_lcc"],
+                # Cell centroid
+                cm = [row[f"mem_position_{k}_centroid_lcc"] for k in ["x", "y", "z"]],
             )
 
             return (dxc, dyc, dzc)
 
-        # Get instances for placing nucleus in the right location
-        # Remember that nuclear location must be averaged after transformation
-        # to mem space
-
+        # Change the reference system of the vector that
+        # defines the nuclear location relative to the cell
+        # of all cells that fall into the same bin.
         for (b, indexes) in bin_indexes:
-
-            df_tmp = df.loc[df.index.isin(indexes)]
-
-            futures = []
-            results = []
+            # Subset with cells from the same bin.
+            df_tmp = df.loc[df.index.isin(indexes)]            
+            # Change reference system for all cells in parallel.
+            nuclei_cm_fix = []
             with DistributedHandler(distributed_executor_address) as handler:
-                # Generate bounded arrays
-                future = handler.client.map(
+                future = handler.batched_map(
                     process_this_index,
                     [index_row for index_row in df_tmp.iterrows()],
                 )
-                futures.append(future)
-                result = handler.gather(future)
-                results.append(result)
-
-            all_results = []
-            for this_xyz in results:
-                all_results.append(this_xyz)
-
-            xyz = np.array(all_results[0]).mean(axis=0)
-
-            df_agg.loc[b, "dna_dxc"] = xyz[0]
-            df_agg.loc[b, "dna_dyc"] = xyz[1]
-            df_agg.loc[b, "dna_dzc"] = xyz[2]
-
+                nuclei_cm_fix.append(future)
+            # Average changed nuclear centroid over all cells
+            mean_nuclei_cm_fix = np.array(nuclei_cm_fix[0]).mean(axis=0)
+            # Store
+            df_agg.loc[b, "dna_dxc"] = mean_nuclei_cm_fix[0]
+            df_agg.loc[b, "dna_dyc"] = mean_nuclei_cm_fix[1]
+            df_agg.loc[b, "dna_dzc"] = mean_nuclei_cm_fix[2]
+            
     else:
-
-        for (b, indexes) in bin_indexes:
-
-            df_agg.loc[b, "dna_dxc"] = 0
-            df_agg.loc[b, "dna_dyc"] = 0
-            df_agg.loc[b, "dna_dzc"] = 0
-
-    # Get meshes and contours
+        # Save nuclear displacement as zeros if no adjustment
+        # is requested.
+        df_agg["dna_dxc"] = 0
+        df_agg["dna_dyc"] = 0
+        df_agg["dna_dzc"] = 0
 
     hlimits = []
     vlimits = []
     all_mem_contours = []
     all_dna_contours = []
 
+    # Loop over 3 different projections: xy=[0,1], xz=[0,2] and
+    # yz=[1,2]
     for proj_id, projection in enumerate([[0, 1], [0, 2], [1, 2]]):
 
-        # Get contour projections
-
-        (
-            mem_contours,
-            mem_meshes,
-            mem_limits,
-        ) = get_contours_of_consecutive_reconstructions(
-            df=df_agg, prefix="mem_shcoeffs_L", proj=projection, lmax=32
+        # Get nuclear meshes and their 2D projections
+        # for 3 different projections,xy, xz and yz.
+        mem_contours, mem_meshes, mem_limits = get_contours_of_consecutive_reconstructions(
+            df = df_agg,
+            prefix = "mem_shcoeffs_L",
+            proj = projection,
+            lmax = 32
+        )
+        # Get cells meshes and their 2D projections
+        # for 3 different projections,xy, xz and yz.
+        dna_contours, dna_meshes, dna_limits = get_contours_of_consecutive_reconstructions(
+            df = df_agg,
+            prefix = "dna_shcoeffs_L",
+            proj = projection,
+            lmax = 32
         )
 
-        (
-            dna_contours,
-            dna_meshes,
-            dna_limits,
-        ) = get_contours_of_consecutive_reconstructions(
-            df=df_agg, prefix="dna_shcoeffs_L", proj=projection, lmax=32
-        )
-
-        # Fix the DNA meshes centroid and save them
         if proj_id == 0:
-            for (b, indexes), mem_mesh, dna_mesh in zip(
-                bin_indexes, mem_meshes, dna_meshes
-            ):
-                for i in range(dna_mesh.GetNumberOfPoints()):
-                    r = dna_mesh.GetPoints().GetPoint(i)
-                    u = np.array(r).copy()
-                    u[0] += df_agg.loc[b, "dna_dxc"]
-                    u[1] += df_agg.loc[b, "dna_dyc"]
-                    u[2] += df_agg.loc[b, "dna_dzc"]
-                    dna_mesh.GetPoints().SetPoint(i, u)
-
-                shtools.save_polydata(mem_mesh, f"{save}/MEM_{feature}_{b:02d}.vtk")
-                shtools.save_polydata(dna_mesh, f"{save}/DNA_{feature}_{b:02d}.vtk")
+            # Change the nuclear position relative to the cell
+            # in the reconstructed meshes when running the
+            # first projection
+            for b, mem_mesh, dna_mesh in zip(df_agg.index, mem_meshes, dna_meshes):
+                # Get nuclear mesh coordinates
+                dna_coords = vtk_to_numpy(dna_mesh.GetPoints().GetData())
+                # Shift coordinates according averaged
+                # nuclear centroid relative to the cell
+                dna_coords[:,0] += df_agg.loc[b, "dna_dxc"]
+                dna_coords[:,1] += df_agg.loc[b, "dna_dyc"]
+                dna_coords[:,2] += df_agg.loc[b, "dna_dzc"]
+                dna_mesh.GetPoints().SetData(numpy_to_vtk(dna_coords))
+                # Save meshes as vtk polydatas
+                shtools.save_polydata(mem_mesh, f"{save}/MEM_{mode}_{b:02d}.vtk")
+                shtools.save_polydata(dna_mesh, f"{save}/DNA_{mode}_{b:02d}.vtk")
 
         all_mem_contours.append(mem_contours)
         all_dna_contours.append(dna_contours)
 
-        xmin = np.min([b[0] for b in mem_limits])
-        xmax = np.max([b[1] for b in mem_limits])
-        ymin = np.min([b[2] for b in mem_limits])
-        ymax = np.max([b[3] for b in mem_limits])
-        zmin = np.min([b[4] for b in mem_limits])
-        zmax = np.max([b[5] for b in mem_limits])
+        # Store bounds
+        xmin = np.min([lim[0] for lim in mem_limits])
+        xmax = np.max([lim[1] for lim in mem_limits])
+        ymin = np.min([lim[2] for lim in mem_limits])
+        ymax = np.max([lim[3] for lim in mem_limits])
+        zmin = np.min([lim[4] for lim in mem_limits])
+        zmax = np.max([lim[5] for lim in mem_limits])
 
+        # Vertical and horizontal limits for plots
         hlimits += [xmin, xmax, ymin, ymax]
         vlimits += [ymin, ymax, zmin, zmax]
 
-    hmin = np.min(hlimits)
-    hmax = np.max(hlimits)
-    vmin = np.min(vlimits)
-    vmax = np.max(vlimits)
-
+    # Set limits for plots
     if plot_limits is not None:
         hmin, hmax, vmin, vmax = plot_limits
-
+    else:
+        hmin = np.min(hlimits)
+        hmax = np.max(hlimits)
+        vmin = np.min(vlimits)
+        vmax = np.max(vlimits)
     offset = 0.05 * (hmax - hmin)
 
+    # Plot 2D contours and animate accross bins
     for projection, mem_contours, dna_contours in zip(
         [[0, 1], [0, 2], [1, 2]], all_mem_contours, all_dna_contours
     ):
-
-        # Animate contours
 
         hcomp = projection[0]
         vcomp = projection[1]
@@ -403,15 +724,15 @@ def animate_shape_modes_and_save_meshes(
         ax.set_ylim(vmin - offset, vmax + offset)
         ax.set_aspect("equal")
 
-        (mline,) = ax.plot(
-            [], [], lw=2, color="#F200FF" if "MEM" in feature else "#3AADA7"
-        )
-        (dline,) = ax.plot(
-            [], [], lw=2, color="#3AADA7" if "DNA" in feature else "#F200FF"
-        )
+        # initial plot for cell
+        (mline,) = ax.plot([], [], lw=2, color="#F200FF" if "MEM" in mode else "#3AADA7")
+        # initial plot for nucleus
+        (dline,) = ax.plot([], [], lw=2, color="#3AADA7" if "DNA" in mode else "#F200FF")
 
         def animate(i):
-
+            '''
+            Animates cell and nuclear contour accross bins
+            '''
             mct = mem_contours[i]
             mx = mct[:, hcomp]
             my = mct[:, vcomp]
@@ -422,152 +743,28 @@ def animate_shape_modes_and_save_meshes(
 
             hlabel = ["x", "y", "z"][[0, 1, 2].index(projection[0])]
             vlabel = ["x", "y", "z"][[0, 1, 2].index(projection[1])]
-            dx = dx + df_agg.loc[i + 1, f"dna_d{hlabel}c"]
-            dy = dy + df_agg.loc[i + 1, f"dna_d{vlabel}c"]
+            # Shift 2D nuclear coordinates according averaged
+            # nuclear centroid relative to the cell
+            dx += df_agg.loc[i + 1, f"dna_d{hlabel}c"]
+            dy += df_agg.loc[i + 1, f"dna_d{vlabel}c"]
 
             mline.set_data(mx, my)
             dline.set_data(dx, dy)
 
-            return (
-                mline,
-                dline,
-            )
-
+            return (mline, dline)
+            
+        # Generate animated GIF using scikit-image
         anim = animation.FuncAnimation(
             fig, animate, frames=len(mem_contours), interval=100, blit=True
         )
 
-        anim.save(
-            f"{save}/{feature}_{''.join(str(x) for x in projection)}.gif",
-            writer="imagemagick",
-            fps=len(mem_contours),
-        )
-
-        plt.close("all")
-
-
-def reconstruct_shape_mode(
-    pca,
-    features,
-    mode,
-    mode_name,
-    map_points,
-    reconstruct_on,
-    save,
-    lmax=32,
-    plot_limits=None,
-):
-
-    # Use inverse PCA to transform PC coordinates back to SH coefficients
-    npts = len(map_points)
-    pc_coords = np.zeros((npts, pca.n_components), dtype=np.float32)
-    pc_coords[:, mode] = map_points
-    df_coeffs = pd.DataFrame(pca.inverse_transform(pc_coords))
-    df_coeffs.columns = features
-    df_coeffs.index = np.arange(1, 1 + npts)
-
-    return df_coeffs
-
-    # Generate figure with outlines
-    fig, axs = plt.subplots(
-        1, 3 * len(reconstruct_on), figsize=(8 * len(reconstruct_on), 4)
-    )
-
-    alphao = 0.3
-    alphaf = 0.7
-    cmap = plt.cm.get_cmap("jet")
-
-    for row, index in tqdm(
-        enumerate(df_coeffs.index),
-        total=df_coeffs.shape[0],
-        desc=f"{mode}, Bin",
-        leave=False,
-    ):
-
-        for axo, (prefix, _) in tqdm(
-            enumerate(reconstruct_on),
-            total=len(reconstruct_on),
-            desc="Attribute",
-            leave=False,
-        ):
-
-            mesh = get_mesh_from_dataframe(
-                index=index, df=df_coeffs, prefix=prefix, lmax=lmax
+        try:
+            anim.save(
+                f"{save}/{mode}_{''.join(str(x) for x in projection)}.gif",
+                writer = "imagemagick",
+                fps = len(mem_contours)
             )
-
-            for axi, proj in tqdm(
-                enumerate([[0, 1], [0, 2], [1, 2]]),
-                total=3,
-                desc="Projection",
-                leave=False,
-            ):
-
-                proj_points = find_plane_mesh_intersection(proj=proj, mesh=mesh)
-
-                if index == df_coeffs.index[0]:
-                    param_c = "blue"
-                    param_s = "-"
-                    param_w = 2
-                    param_a = 1
-                elif index == df_coeffs.index[-1]:
-                    param_c = "magenta"
-                    param_s = "-"
-                    param_w = 2
-                    param_a = 1
-                else:
-                    param_c = "gray"
-                    param_s = "-"
-                    param_w = 1
-                    param_a = alphao + (alphaf - alphao) * row / (npts - 1)
-
-                axs[len(reconstruct_on) * axi + axo].plot(
-                    proj_points[:, proj[0]],
-                    proj_points[:, proj[1]],
-                    # c=param_c,
-                    c=cmap(row / (npts - 1)),
-                    linestyle=param_s,
-                    linewidth=param_w,
-                    alpha=param_a,
-                )
-
-                if plot_limits is None:
-
-                    if "xmin" not in locals():
-                        xmin = proj_points[:, proj[0]].min()
-                        ymin = proj_points[:, proj[1]].min()
-                        xmax = proj_points[:, proj[0]].max()
-                        ymax = proj_points[:, proj[1]].max()
-                    else:
-                        xmin = np.min([proj_points[:, proj[0]].min(), xmin])
-                        ymin = np.min([proj_points[:, proj[1]].min(), ymin])
-                        xmax = np.max([proj_points[:, proj[0]].max(), xmax])
-                        ymax = np.max([proj_points[:, proj[1]].max(), ymax])
-
-                else:
-
-                    xmin, xmax, ymin, ymax = plot_limits
-
-                shtools.save_polydata(mesh, f"{save}_{prefix}_{index:02d}.vtk")
-
-    for axi, labs in enumerate([("X", "Y"), ("X", "Z"), ("Y", "Z")]):
-        for axo, rec in zip([0, 1], reconstruct_on):
-            axs[len(reconstruct_on) * axi + axo].set_title(rec[1], fontsize=14)
-            axs[len(reconstruct_on) * axi + axo].set_xlim(xmin, xmax)
-            axs[len(reconstruct_on) * axi + axo].set_ylim(ymin, ymax)
-            axs[len(reconstruct_on) * axi + axo].set_aspect("equal")
-        plt.figtext(
-            0.18 + 0.33 * axi,
-            0.85,
-            f"{labs[0]}{labs[1]} Projection",
-            va="center",
-            ha="center",
-            size=14,
-        )
-
-    fig.suptitle(f"Shape mode: {1+mode} ({mode_name})", fontsize=18)
-    fig.subplots_adjust(top=0.78)
-    plt.tight_layout()
-    plt.savefig(f"{save}.jpg")
-    plt.close("all")
-
-    return df_coeffs
+        except:
+            warnings.warn("Export to animated GIF has failed. Please check your imagemagick installation.")
+            
+        plt.close("all")

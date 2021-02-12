@@ -62,11 +62,11 @@ requirements = [
     "scipy",
     "scikit-image",
     "aicsimageio",
-    "umap-learn",
-    "imgkit",
-    "xvfbwrapper",
-    "aicsshparam",
-    "vtk==8.1.2",  # required by aicsshparam
+    #"umap-learn",
+    "imgkit==1.0.2",
+    "xvfbwrapper==0.2.9",
+    "aicsshparam==0.0.14",
+    "vtk==9.0.1",
     "quilt3",
     "ffmpeg",
 ]

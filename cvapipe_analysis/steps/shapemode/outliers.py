@@ -22,16 +22,12 @@ def initial_parsing(df):
         "mem_shape_volume_lcc",
         "dna_roundness_surface_area_lcc",
         "dna_shape_volume_lcc",
-        "str_connectivity_number_cc",
+        "str_connectivity_cc",
         "str_shape_volume",
         "mem_position_depth_lcc",
-        "mem_position_height_lcc",
-        "mem_position_width_lcc",
-        "dna_position_depth_lcc",
-        "dna_position_height_lcc",
-        "dna_position_width_lcc",
+        "dna_position_depth_lcc"
     ]
-
+    
     cells = cells[keepcolumns]
 
     # %% Rename columns
@@ -41,25 +37,20 @@ def initial_parsing(df):
             "mem_shape_volume_lcc": "Cell volume",
             "dna_roundness_surface_area_lcc": "Nuclear surface area",
             "dna_shape_volume_lcc": "Nuclear volume",
-            "str_connectivity_number_cc": "Number of pieces",
+            "str_connectivity_cc": "Number of pieces",
             "str_shape_volume": "Structure volume",
             "str_shape_volume_lcc": "Structure volume alt",
             "mem_position_depth_lcc": "Cell height",
-            "mem_position_height_lcc": "Cell xbox",
-            "mem_position_width_lcc": "Cell ybox",
-            "dna_position_depth_lcc": "Nucleus height",
-            "dna_position_height_lcc": "Nucleus xbox",
-            "dna_position_width_lcc": "Nucleus ybox",
+            "dna_position_depth_lcc": "Nucleus height"
         }
     )
-
+    
     # %% Add a column
     cells["Cytoplasmic volume"] = cells["Cell volume"] - cells["Nuclear volume"]
 
     return cells
 
-
-def outliers_removal(df, output_dir):
+def outliers_removal(df, output_dir, log, detect_based_on_structure_features):
     """
     TBD
     """
@@ -74,27 +65,18 @@ def outliers_removal(df, output_dir):
     # Remove outliers
 
     # %% Remove cells that lack a Structure Volume value
-    print(np.any(cells.isnull()))
     cells_ao = cells[["CellId", "structure_name"]].copy()
     cells_ao["Outlier"] = "No"
-    print(cells.shape)
-    CellIds_remove = (
-        cells.loc[cells["Structure volume"].isnull(), "CellId"].squeeze().to_numpy()
-    )
-    cells_ao.loc[
-        cells_ao["CellId"].isin(CellIds_remove), "Outlier"
-    ] = "yes_missing_structure_volume"
+    CellIds_remove = cells.loc[cells["Structure volume"].isnull(), "CellId"].values
+    cells_ao.loc[cells_ao["CellId"].isin(CellIds_remove), "Outlier"] = "yes_missing_structure_volume"
     cells = cells.drop(cells[cells["CellId"].isin(CellIds_remove)].index)
     cells.reset_index(drop=True)
-    print(
+    log.info(
         f"Removing {len(CellIds_remove)} cells that lack a Structure Volume measurement value"
     )
-    print(cells.shape)
-    print(np.any(cells.isnull()))
-
-    # %%
-    print("FIX LINE BELOW")
-    # cells["Piece std"] = cells["Piece std"].replace(np.nan, 0)
+    log.info(
+        f"Shape of remaining dataframe: {cells.shape}"
+    )
 
     # %% Feature set for cell and nuclear features
     cellnuc_metrics = [
@@ -147,19 +129,17 @@ def outliers_removal(df, output_dir):
 
         metricX = cellnuc_metrics[xy_pair[0]]
         metricY = cellnuc_metrics[xy_pair[1]]
-        print(f"{metricX} vs {metricY}")
+        log.info(f"{metricX} vs {metricY}")
 
         # data
         x = cells[metricX].to_numpy() / fac
         y = cells[metricY].to_numpy() / fac
-        # x = cells[metricX].sample(1000,random_state = 1117).to_numpy() / fac
-        # y = cells[metricY].sample(1000,random_state = 1117).to_numpy() / fac
 
         # density estimate, repeat because of probabilistic nature of density estimate
         # used here
         for r in np.arange(Rounds):
             remove_cells[f"{metricX} vs {metricY}_{r}"] = np.nan
-            print(f"Round {r + 1} of {Rounds}")
+            log.info(f"Round {r + 1} of {Rounds}")
             rs = int(r)
             xS, yS = resample(
                 x, y, replace=False, n_samples=np.amin([N, len(x)]), random_state=rs
@@ -172,14 +152,12 @@ def outliers_removal(df, output_dir):
                 f"{metricX} vs {metricY}_{r}",
             ] = cell_dens
 
-    # remove_cells = pd.read_csv(data_root_extra / 'cell_nucleus.csv')
-
     # %% Summarize across repeats
     remove_cells_summary = cells["CellId"].to_frame().copy()
     for i, xy_pair in enumerate(pairs):
         metricX = cellnuc_metrics[xy_pair[0]]
         metricY = cellnuc_metrics[xy_pair[1]]
-        print(f"{metricX} vs {metricY}")
+        log.info(f"{metricX} vs {metricY}")
         metricX = cellnuc_metrics[xy_pair[0]]
         metricY = cellnuc_metrics[xy_pair[1]]
         filter_col = [
@@ -217,7 +195,7 @@ def outliers_removal(df, output_dir):
         CellIds_remove = np.union1d(
             CellIds_remove, CellIds_remove_dict[f"{metricX} vs {metricY}"]
         )
-        print(len(CellIds_remove))
+        log.info(len(CellIds_remove))
 
     # %% Plot and remove outliers
     plotname = "CellNucleus"
@@ -287,7 +265,7 @@ def outliers_removal(df, output_dir):
         2,
         CellIds_remove_dict,
     )
-    print(cells.shape)
+    log.info(cells.shape)
     CellIds_remove = (
         cells.loc[cells.index[CellIds_remove], "CellId"].squeeze().to_numpy()
     )
@@ -295,10 +273,10 @@ def outliers_removal(df, output_dir):
         cells_ao["CellId"].isin(CellIds_remove), "Outlier"
     ] = "yes_abnormal_cell_or_nuclear_metric"
     cells = cells.drop(cells.index[cells["CellId"].isin(CellIds_remove)])
-    print(
+    log.info(
         f"Removing {len(CellIds_remove)} cells due to abnormal cell or nuclear metric"
     )
-    print(cells.shape)
+    log.info(cells.shape)
     oplot(
         cellnuc_metrics,
         cellnuc_abbs,
@@ -374,50 +352,55 @@ def outliers_removal(df, output_dir):
     N = 1000
     fac = 1000
     Rounds = 5
+    
+    if detect_based_on_structure_features:
+    
+        # We may want to skip this part when running the test dataset
+        # or any small dataset that does not have enough cells per
+        # structure.
+    
+        # %% For all pairs compute densities
+        remove_cells = cells["CellId"].to_frame().copy()
+        for xm, metric in enumerate(selected_metrics):
+            for ys, struct in enumerate(selected_structures):
 
-    # %% For all pairs compute densities
-    remove_cells = cells["CellId"].to_frame().copy()
-    for xm, metric in enumerate(selected_metrics):
-        for ys, struct in enumerate(selected_structures):
-
-            # data
-            x = (
-                cells.loc[cells["structure_name"] == struct, [metric]]
-                .squeeze()
-                .to_numpy()
-                / fac
-            )
-            y = (
-                cells.loc[cells["structure_name"] == struct, [structure_metric]]
-                .squeeze()
-                .to_numpy()
-                / fac
-            )
-
-            # density estimate, repeat because of probabilistic nature of density
-            # estimate used here
-            for r in np.arange(Rounds):
-                if ys == 0:
-                    remove_cells[f"{metric} vs {structure_metric}_{r}"] = np.nan
-                # print(f"Round {r+1} of {Rounds}")
-                rs = int(r)
-                xS, yS = resample(
-                    x, y, replace=False, n_samples=np.amin([N, len(x)]), random_state=rs
+                # data
+                x = (
+                    cells.loc[cells["structure_name"] == struct, [metric]]
+                    .squeeze()
+                    .to_numpy()
+                    / fac
                 )
-                k = gaussian_kde(np.vstack([xS, yS]))
-                cell_dens = k(np.vstack([x.flatten(), y.flatten()]))
-                cell_dens = cell_dens / np.sum(cell_dens)
-                remove_cells.loc[
-                    cells["structure_name"] == struct,
-                    f"{metric} vs {structure_metric}_{r}",
-                ] = cell_dens
+                y = (
+                    cells.loc[cells["structure_name"] == struct, [structure_metric]]
+                    .squeeze()
+                    .to_numpy()
+                    / fac
+                )
+
+                # density estimate, repeat because of probabilistic nature of density
+                # estimate used here
+                for r in np.arange(Rounds):
+                    if ys == 0:
+                        remove_cells[f"{metric} vs {structure_metric}_{r}"] = np.nan
+                    rs = int(r)
+                    xS, yS = resample(
+                        x, y, replace=False, n_samples=np.amin([N, len(x)]), random_state=rs
+                    )
+                    k = gaussian_kde(np.vstack([xS, yS]))
+                    cell_dens = k(np.vstack([x.flatten(), y.flatten()]))
+                    cell_dens = cell_dens / np.sum(cell_dens)
+                    remove_cells.loc[
+                        cells["structure_name"] == struct,
+                        f"{metric} vs {structure_metric}_{r}",
+                    ] = cell_dens
 
     # remove_cells = pd.read_csv(data_root_extra / 'structures.csv')
 
     # %% Summarize across repeats
     remove_cells_summary = cells["CellId"].to_frame().copy()
     for xm, metric in enumerate(selected_metrics):
-        print(metric)
+        log.info(metric)
 
         filter_col = [
             col
@@ -449,7 +432,7 @@ def outliers_removal(df, output_dir):
     CellIds_remove_dict = {}
     CellIds_remove = np.empty(0, dtype=int)
     for xm, metric in enumerate(selected_metrics):
-        print(metric)
+        log.info(metric)
         CellIds_remove_dict[f"{metric} vs {structure_metric}"] = np.argwhere(
             remove_cells_summary[f"{metric} vs {structure_metric}"].to_numpy()
             < cell_dens_th_S
@@ -457,7 +440,7 @@ def outliers_removal(df, output_dir):
         CellIds_remove = np.union1d(
             CellIds_remove, CellIds_remove_dict[f"{metric} vs {structure_metric}"]
         )
-        print(len(CellIds_remove))
+        log.info(len(CellIds_remove))
 
     # %% Plot and remove outliers
     plotname = "Structures"
@@ -533,7 +516,7 @@ def outliers_removal(df, output_dir):
         2,
         CellIds_remove_dict,
     )
-    print(cells.shape)
+    log.info(cells.shape)
     CellIds_remove = (
         cells.loc[cells.index[CellIds_remove], "CellId"].squeeze().to_numpy()
     )
@@ -541,8 +524,8 @@ def outliers_removal(df, output_dir):
         cells_ao["CellId"].isin(CellIds_remove), "Outlier"
     ] = "yes_abnormal_structure_volume_metrics"
     cells = cells.drop(cells.index[cells["CellId"].isin(CellIds_remove)])
-    print(f"Removing {len(CellIds_remove)} cells due to structure volume metrics")
-    print(cells.shape)
+    log.info(f"Removing {len(CellIds_remove)} cells due to structure volume metrics")
+    log.info(cells.shape)
     splot(
         selected_metrics,
         selected_metrics_abb,
