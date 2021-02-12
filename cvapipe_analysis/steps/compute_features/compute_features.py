@@ -152,7 +152,7 @@ class ComputeFeatures(Step):
             
         # Create features directory
         features_dir = self.step_local_staging_dir / "cell_features"
-        features_dir.mkdir(exist_ok=True)
+        features_dir.mkdir(parents=True, exist_ok=True)
 
         load_data_dir = self.project_local_staging_dir / 'loaddata'
 
