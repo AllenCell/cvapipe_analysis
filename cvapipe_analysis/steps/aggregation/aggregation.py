@@ -11,7 +11,7 @@ from datastep import Step, log_run_params
 import pandas as pd
 from tqdm import tqdm
 
-from .aggregation_tools import aggregate_intensities_of_shape_mode
+from .aggregation_tools import create_5d_hyperstacks
 
 ###############################################################################
 
@@ -46,16 +46,23 @@ class Aggregation(Step):
         path_to_shapemode_manifest = self.project_local_staging_dir / 'shapemode/manifest.csv'
         if not path_to_shapemode_manifest.exists():
             raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), path_to_shapemode_manifest)
-        df_shapemode = pd.read_csv(path_to_shapemode_manifest, index_col='CellId')
-        log.info(f"Shape of shape mode manifest: {df_shapemode.shape}")
+        df = pd.read_csv(path_to_shapemode_manifest, index_col='CellId')
+        log.info(f"Shape of shape mode manifest: {df.shape}")
 
         # Merge the two dataframes (they do not have
         # necessarily the same size)
-        df = df_shapemode.merge(df_param[['CellRepresentationPath']], left_index=True, right_index=True)
-                
+        df = df.merge(df_param[['CellRepresentationPath']], left_index=True, right_index=True)
+
+        # Also read the manifest with paths to VTK files
+        path_to_shapemode_paths = self.project_local_staging_dir / 'shapemode/shapemode.csv'
+        if not path_to_shapemode_paths.exists():
+            raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), path_to_shapemode_paths)
+        df_shapemode_paths = pd.read_csv(path_to_shapemode_paths, index_col=0)
+        log.info(f"Shape of shape mode paths manifest: {df_shapemode_paths.shape}")
+        
         # Make necessary folders
-        agg_dir = self.step_local_staging_dir / 'agg_representations'
-        agg_dir.mkdir(parents=True, exist_ok=True)
+        hyper_dir = self.step_local_staging_dir / 'hyperstacks'
+        hyper_dir.mkdir(parents=True, exist_ok=True)
 
         # Agg representations per cells and shape mode.
         # Here we use principal components cerated with cell
@@ -66,20 +73,24 @@ class Aggregation(Step):
         pc_names = [f for f in df.columns if PREFIX in f]
         
         # Loop over shape modes
-        df_agg = pd.DataFrame([])
+        df_hyperstacks_paths = pd.DataFrame([])
         for pc_idx, pc_name in enumerate(pc_names):
 
-            result = aggregate_intensities_of_shape_mode(
-                df = df,
-                pc_names = pc_names,
-                pc_idx = pc_idx,
-                save_dir = agg_dir
+            log.info(f"Running PC: {pc_name}.")
+
+            df_paths = create_5d_hyperstacks(
+                df=df,
+                df_paths=df_shapemode_paths,
+                pc_names=pc_names,
+                pc_idx=pc_idx,
+                nbins=9,
+                save_dir=hyper_dir
             )
             
-            df_agg = df_agg.append(pd.DataFrame(result), ignore_index=True)
+            df_hyperstacks_paths = df_hyperstacks_paths.append(df_paths, ignore_index=True)
 
         # Save manifest
-        self.manifest = df_agg
+        self.manifest = df_hyperstacks_paths
         manifest_path = self.step_local_staging_dir / 'manifest.csv'
         self.manifest.to_csv(manifest_path)
 
