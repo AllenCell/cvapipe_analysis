@@ -1,9 +1,11 @@
 import vtk
+import warnings
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
 from pathlib import Path
 from aicsshparam import shtools
+from aicscytoparam import cytoparam
 from aicsimageio import AICSImage, writers
 from typing import Dict, List, Optional, Union
 from aics_dask_utils import DistributedHandler
@@ -96,8 +98,8 @@ def aggregate_intensities_of_shape_mode(
     df: pd.DataFrame,
     pc_names: List,
     pc_idx: int,
-    save_dir: Path,
-    nbins: Optional[int] = 9
+    nbins: int,
+    save_dir: Path
 ):
 
     """
@@ -130,27 +132,25 @@ def aggregate_intensities_of_shape_mode(
     result: List
         List of dict with keys for the pc_name, representation
         name, aggregation type and path to aggregated
-        representation.
-        
-    TBD:
-    -----
-    
-        - Save a CSV with the numberof cells used in the
-        aggregation process.
-    
+        representation.    
     """
     
     # Name of the PC to be processed
     pc_name = pc_names[pc_idx]
-    
+        
     # Find the indexes of cells in each bin
-    df_filtered, bin_indexes, _ = digitize_shape_mode(
-        df = df,
-        feature = pc_name,
-        nbins = nbins,
-        filter_based_on = pc_names
+    df_filtered, bin_indexes, _, df_freq = digitize_shape_mode(
+        df=df,
+        feature=pc_name,
+        nbins=nbins,
+        filter_based_on=pc_names,
+        return_freqs_per_structs=True
     )
 
+    # Save dataframe with number of cells
+    save_as = save_dir / f"{pc_name}_ncells.csv"
+    df_freq.to_csv(save_as)
+    
     # Loop over different structures
     agg_struct = {}
     n_structs = len(df_filtered.structure_name.unique())
@@ -178,46 +178,209 @@ def aggregate_intensities_of_shape_mode(
     # representation and aggregation types (avg and std).
     rep_names = list(agg_struct[s][b].keys())
     agg_types = list(agg_struct[s][b][rep_names[0]])
-    
-    # Find dimensions of 2D representations:
-    ny, nx = agg_struct[s][b][rep_names[0]][agg_types[0]].shape
-    
-    STRUCT_SEQ = ["FBL","NPM1","SON","SMC1A","HIST1H2BJ","LMNB1" ,"NUP153" ,"SEC61B","ATP2A2","TOMM20","SLC25A17","RAB5A","LAMP1","ST6GAL1","CETN2","TUBA1B","AAVS1","ACTB","ACTN1","MYH10","GJA1","TJP1","DSP","CTNNB1","PXN"]
-    
-    # Create 5D hyperstacks
-    result = []
-    for rn in rep_names:
-        for at in agg_types:
-            # Empty hypermatrix
-            data = np.zeros((1,nbins,n_structs,1,ny,nx), np.float32)
-            # Populate hypermatrix with representations
-            for sid, struct in enumerate(STRUCT_SEQ):
-                if struct in agg_struct:
-                    for b in range(1, nbins+1):
-                        if b in agg_struct[struct]:
-                            data[0,b-1,sid,0] = agg_struct[struct][b][rn][at]
-    
-            # Convert hypermatrix to hyperstack
-            data = AICSImage(data)
-            data.channel_names = STRUCT_SEQ
             
+    return agg_struct, rep_names, agg_types
+
+
+def load_meshes_and_parameterize(
+    pc_name: str,
+    bin_number: int,
+    df: pd.DataFrame
+):
+
+    """
+    Load idealized cell and nuclear meshes of a specific bin of
+    a specific PC.
+
+    Parameters
+    --------------------
+    pc_name: str
+        Name of the principal component.
+    bin_number: int
+        Number of the bin along the principal component.
+    df: pd.DataFrame
+        DataFrame that contains the path to cell and nuclear
+        meshes of idealized shapes from shape space. This
+        dataframe is produced by the shapemode step.
+
+    Returns
+    -------
+    domain: np.array
+        Numpy array with cell and nucleus voxelization. Cell
+        voxels are labeled with 1 and nuclear voxels are labeled
+        as 2. Background is 0.
+    """
+    
+    # Use bin number and pc_name to find index of idealized shape in
+    # the dataframe
+    index = df.loc[(df.shapemode==pc_name) & (df.bin==bin_number)].index
+    if len(index) > 1:
+        warnings.warn(f"More than one index found for pc {pc_name} and\
+        bin {bin_number}. Something seems wrong with the dataframe of\
+        VTK paths generated in the step shapemode. Continuing with\
+        first index.")
+    index = index[0]
+    # Load nuclear mesh
+    mesh_dna_path = df.at[index, 'dnaMeshPath']
+    reader_dna = vtk.vtkPolyDataReader()
+    reader_dna.SetFileName(mesh_dna_path)
+    reader_dna.Update()
+    mesh_dna = reader_dna.GetOutput()
+    # Load cell mesh
+    mesh_mem_path = df.at[index, 'memMeshPath']
+    reader_mem = vtk.vtkPolyDataReader()
+    reader_mem.SetFileName(mesh_mem_path)
+    reader_mem.Update()
+    mesh_mem = reader_mem.GetOutput()
+
+    # Voxelize
+    domain, origin = cytoparam.voxelize_meshes([mesh_mem, mesh_dna])
+
+    # Parameterize
+    coords_param, _ = cytoparam.parameterize_image_coordinates(
+        seg_mem = (domain>0).astype(np.uint8),
+        seg_nuc = (domain>1).astype(np.uint8),
+        lmax = 16,
+        nisos = [32,32]
+    )
+
+    return domain, coords_param
+
+
+def _run_morphing(
+    agg_type,
+    rep_name,
+    bin_number,
+    struct,
+    agg_structs,
+    domain,
+    coords
+):
+    
+    '''Wrapper for running cytoparam.morph_representation_on_shape in
+    parallel.
+    '''
+    
+    gfp = None
+    # Check if the bin is available, meaning cells have been found
+    # for this particular bin.
+    if bin_number in agg_structs[struct]:
+        # Get the current represnetation
+        rep = agg_structs[struct][bin_number][rep_name][agg_type]
+        # Use cytoparam to morph the aggregated representation into
+        # the idealized cell and nuclear shape
+        gfp = cytoparam.morph_representation_on_shape(
+            img = domain,
+            param_img_coords = coords,
+            representation = rep
+        )
+        
+    return gfp
+    
+    
+def create_5d_hyperstacks(
+    df: pd.DataFrame,
+    df_paths: pd.DataFrame,
+    pc_names: List,
+    pc_idx: int,
+    save_dir: Path,
+    nbins: int,
+    distributed_executor_address: Optional[str]=None
+):
+
+    # Aggregate representations: avg and std
+    agg_structs, rep_names, agg_types = aggregate_intensities_of_shape_mode(
+        df=df,
+        pc_names=pc_names,
+        pc_idx=pc_idx,
+        nbins=nbins,
+        save_dir=save_dir
+    )
+
+    pc_name = pc_names[pc_idx]
+
+    # List of structures. This list determines the order in which the
+    # channels of the hyperstack are going to be saved. In the future
+    # this could come as a parameter extracted from a config file.
+    structs = ["FBL", "NPM1", "SON", "SMC1A", "HIST1H2BJ", "LMNB1" ,"NUP153" ,
+               "SEC61B", "ATP2A2", "TOMM20", "SLC25A17", "RAB5A", "LAMP1", 
+               "ST6GAL1", "CETN2", "TUBA1B", "AAVS1", "ACTB", "ACTN1", "MYH10",
+               "GJA1", "TJP1", "DSP", "CTNNB1", "PXN"]
+    ns = len(structs)
+    
+    df_results = []
+    # Loop over all representations
+    for rep_name in rep_names:
+        # Loop over all aggregation types
+        for agg_type in agg_types:
+            # Loop over bins
+            hyperstack = []
+            for b in tqdm(range(1,1+nbins)):
+                # Parameterize idealized cell and nuclear shape of current bin
+                domain, coords_param = load_meshes_and_parameterize(
+                    pc_name=pc_name,
+                    bin_number=b,
+                    df=df_paths
+                )
+                # Morph average representations into idealized cell and nuclear shape
+                with DistributedHandler(distributed_executor_address) as handler:
+                    gfps = handler.batched_map(
+                        _run_morphing,
+                        *[
+                            [agg_type] * ns,
+                            [rep_name] * ns,
+                            [b] * ns,
+                            structs,
+                            [agg_structs] * ns,
+                            [domain] * ns,
+                            [coords_param] * ns
+                        ]
+                    )
+                stack = np.zeros((ns,*domain.shape), dtype=np.float32)
+                for sid, struct in enumerate(structs):
+                    if gfps[sid] is not None:
+                        stack[sid] = gfps[sid].copy()
+                hyperstack.append(stack)
+
+            # Calculate largest czyx bounding box across bins
+            shapes = np.array([stack.shape for stack in hyperstack])
+            lbb = shapes.max(axis=0)
+            
+            # Pad all stacks so they end up with similar shapes
+            for b in range(nbins):
+                # Calculate padding values
+                stack_shape = np.array(hyperstack[b].shape)
+                # Inferior padding
+                pinf = (0.5 * (lbb - stack_shape)).astype(np.int)
+                # Superior padding
+                psup = lbb - (stack_shape + pinf)
+                # Everything into the same list
+                pad = [(i,s) for i,s in zip(pinf, psup)]
+                # Pad
+                hyperstack[b] = np.pad(hyperstack[b], list(pad))
+
+            # Final hyperstack. This variable has ~4Gb for the
+            # full hiPS single-cell images dataset.
+            hyperstack = np.array(hyperstack)
+
             # Save hyperstack
-            save_as = save_dir / f"{pc_name}_{rn}_{at}.tif"
+            save_as = save_dir / f"{pc_name}_{rep_name}_{agg_type}.tif"
             with writers.ome_tiff_writer.OmeTiffWriter(save_as, overwrite_file=True) as writer:
                 writer.save(
-                    data.get_image_data('TCZYX', S=0),
+                    hyperstack,
                     dimension_order = 'TCZYX',
-                    image_name = f"{pc_name}_{rn}_{at}",
-                    channel_names = STRUCT_SEQ
+                    image_name = f"{pc_name}_{rep_name}_{agg_type}",
+                    channel_names = structs
                 )
+                
+            # Store paths
+            df_results = df_paths.append({
+                'shapemode': pc_name,
+                'aggregation_type': agg_type,
+                'scalar': rep_name,
+                'hyperstackPath': save_as
+            }, ignore_index=True)
 
-            # Store file name
-            result.append({
-                'feature': pc_name,
-                'representation': rn,
-                'aggtype': at,
-                'AggFilePath': save_as
-            })
-            
-    return result
+    df_results = pd.DataFrame(df_results)
 
+    return df_paths

@@ -169,13 +169,14 @@ def digitize_shape_mode(
     # Optionally return a dataframe with the number of data
     # points in each bin stratifyied by structure_name.
     if return_freqs_per_structs:
+
         df_freq = (
             df[["structure_name", "bin"]].groupby(["structure_name", "bin"]).size()
         )
         df_freq = pd.DataFrame(df_freq)
         df_freq = df_freq.rename(columns={0: "samples"})
         df_freq = df_freq.unstack(level=1)
-        return df_agg, bin_indexes, (bin_centers, pc_std), df_freq
+        return df, bin_indexes, (bin_centers, pc_std), df_freq
 
     return df, bin_indexes, (bin_centers, pc_std)
 
@@ -588,8 +589,16 @@ def animate_shape_modes_and_save_meshes(
         a list of all data point ids from the single cell
         dataframe that fall into that bin.
     distributed_executor_address: Optionalstr = None
-        Dask executor address.        
+        Dask executor address.
+    
+    Return
+    ------
+        df_paths: pd.DataFrame
+        Dataframe with path for VTK meshes and GIF files
+        generated.
     """
+    
+    df_paths = []
     
     if fix_nuclear_position is not None:
 
@@ -684,7 +693,14 @@ def animate_shape_modes_and_save_meshes(
                 # Save meshes as vtk polydatas
                 shtools.save_polydata(mem_mesh, f"{save}/MEM_{mode}_{b:02d}.vtk")
                 shtools.save_polydata(dna_mesh, f"{save}/DNA_{mode}_{b:02d}.vtk")
-
+                # Save paths
+                df_paths.append({
+                    'bin': b,
+                    'shapemode': mode,
+                    'memMeshPath': f"{save}/MEM_{mode}_{b:02d}.vtk",
+                    'dnaMeshPath': f"{save}/DNA_{mode}_{b:02d}.vtk"
+                })
+                
         all_mem_contours.append(mem_contours)
         all_dna_contours.append(dna_contours)
 
@@ -700,6 +716,9 @@ def animate_shape_modes_and_save_meshes(
         hlimits += [xmin, xmax, ymin, ymax]
         vlimits += [ymin, ymax, zmin, zmax]
 
+    # Dataframe with paths to be returned
+    df_paths = pd.DataFrame(df_paths)
+        
     # Set limits for plots
     if plot_limits is not None:
         hmin, hmax, vmin, vmax = plot_limits
@@ -764,7 +783,14 @@ def animate_shape_modes_and_save_meshes(
                 writer = "imagemagick",
                 fps = len(mem_contours)
             )
+            # Path of GIF files
+            df_paths['gifXYPath'] = f"{save}/{mode}_01.gif"
+            df_paths['gifXZPath'] = f"{save}/{mode}_02.gif"
+            df_paths['gifYZPath'] = f"{save}/{mode}_12.gif"
+            
         except:
             warnings.warn("Export to animated GIF has failed. Please check your imagemagick installation.")
             
         plt.close("all")
+
+    return df_paths
