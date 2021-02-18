@@ -2,9 +2,9 @@
 
 ## Analysis Pipeline for Cell Variance
 
-Here you will find all the code necessary to i) reproduce the results shown in our paper [[1]](https://www.biorxiv.org/content/10.1101/2020.12.08.415562v1) or ii) apply our methodology to you own dataset.
+Here you will find all the code necessary to i) reproduce the results shown in our paper [1] or ii) apply our methodology to you own dataset.
 
-[1] - Viana, Matheus P., et al. "Robust integrated intracellular organization of the human iPS cell: where, how much, and how variable?." bioRxiv (2020).
+[1] - [Viana, Matheus P., et al. "Robust integrated intracellular organization of the human iPS cell: where, how much, and how variable?." bioRxiv (2020)](https://www.biorxiv.org/content/10.1101/2020.12.08.415562v1).
 
 ---
 
