@@ -2,7 +2,7 @@
 
 ## Analysis Pipeline for Cell Variance
 
-Here you will find all the code necessary to i) reproduce the results shown in our paper [1](https://www.biorxiv.org/content/10.1101/2020.12.08.415562v1) or ii) apply our methodology to you own dataset.
+Here you will find all the code necessary to i) reproduce the results shown in our paper [[1]](https://www.biorxiv.org/content/10.1101/2020.12.08.415562v1) or ii) apply our methodology to you own dataset.
 
 [1] - Viana, Matheus P., et al. "Robust integrated intracellular organization of the human iPS cell: where, how much, and how variable?." bioRxiv (2020).
 
@@ -23,7 +23,7 @@ then clone this repo
 git clone https://github.com/AllenCell/cvapipe_analysis.git
 ```
 
-and install it
+and install it with
 
 ```
 cd cvapipe_analysis
@@ -79,7 +79,7 @@ cvapipe_analysis aggregation run
 
 This step depends on steps 3 and 4.
 
-## Running the pipeline in your own data
+## Running the pipeline on your own data
 
 **TBD**
 
