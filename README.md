@@ -54,7 +54,7 @@ This step saves the single-cell images in the folders `local_staging/loaddata/cr
 cvapipe_analysis computefeatures run
 ```
 
-This step extract single-cell features, including cell, nuclear and intracellular volumes and spherical harmonics coefficients for cell and cnuclear shape. This step depends on step 1.
+This step extract single-cell features, including cell, nuclear and intracellular volumes and other basic features. Here we also use `aics-shparam` [link](https://github.com/AllenCell/aics-shparam) to compute the spherical harmonics coefficients for cell and nuclear shape. This step depends on step 1.
 
 This step saves the features in the file `local_staging/computefeatures/manifest.raw`.
 
@@ -66,6 +66,11 @@ cvapipe_analysis shapemode run
 Here we implement a few pre-processing steps. First, all mitotic cells are removed from the dataset. Next we use a feature-based outlier detection to detect and remove outliers form the dataset. The remaining dataset is used as input for principal component analysis. Finally, we compute cell and nuclear shape modes. This step depends on step 2.
 
 A couple of output files are produced on this step:
+
+**Folder: `local_staging/shapemode/`**
+
+- TBD
+- TBD
 
 **Folder: `local_staging/shapemode/tables/`**
 
@@ -95,7 +100,15 @@ Views of tables above are also saved as JPG files in the same folder.
 cvapipe_analysis parameterize run
 ```
 
-This step depends on step 1.
+Here we use `aics-cytoparam` [link](https://github.com/AllenCell/aics-cytoparam) to create parameterization for all the single-cell data. This steps depends on step 2.
+
+**Folder: `local_staging/parameterization/`**
+
+- `manifest.csv`: Dataframe with the path the representation for each cell.
+
+**Folder: `local_staging/parameterization/representations/`**
+
+- `xx.tif`: Multichannels TIFF image with the cell representation.
 
 ### 5. Create 5D hypterstacks
 ```
