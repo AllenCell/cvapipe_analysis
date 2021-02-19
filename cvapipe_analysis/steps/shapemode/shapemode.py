@@ -147,8 +147,11 @@ class Shapemode(Step):
         # alignment procedure defined in the compute_features
         # step (lines 81-98).
         features_to_use = {
+            # Uncomment for shape space with nuclear SHE coefficients only
             #'DNA': ['dna_shcoeffs_L'],
+            # Uncomment for shape space with cell SHE coefficients only
             #'MEM': ['mem_shcoeffs_L'],
+            # Shape space with cell and nuclear SHE coefficients
             'DNA_MEM': ['dna_shcoeffs_L', 'mem_shcoeffs_L']
         }
         
