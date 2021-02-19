@@ -54,7 +54,7 @@ This step saves the single-cell images in the folders `local_staging/loaddata/cr
 cvapipe_analysis computefeatures run
 ```
 
-This step extract single-cell features, including cell, nuclear and intracellular volumes and other basic features. Here we also use `aics-shparam` [link](https://github.com/AllenCell/aics-shparam) to compute the spherical harmonics coefficients for cell and nuclear shape. This step depends on step 1.
+This step extract single-cell features, including cell, nuclear and intracellular volumes and other basic features. Here we also use `aics-shparam` [(link)](https://github.com/AllenCell/aics-shparam) to compute the spherical harmonics coefficients for cell and nuclear shape. This step depends on step 1.
 
 This step saves the features in the file `local_staging/computefeatures/manifest.raw`.
 
@@ -100,7 +100,7 @@ Views of tables above are also saved as JPG files in the same folder.
 cvapipe_analysis parameterize run
 ```
 
-Here we use `aics-cytoparam` [link](https://github.com/AllenCell/aics-cytoparam) to create parameterization for all the single-cell data. This steps depends on step 2.
+Here we use `aics-cytoparam` [(link)](https://github.com/AllenCell/aics-cytoparam) to create parameterization for all the single-cell data. This steps depends on step 2.
 
 **Folder: `local_staging/parameterization/`**
 
