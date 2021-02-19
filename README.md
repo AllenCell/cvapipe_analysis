@@ -87,7 +87,7 @@ Views of tables above are also saved as JPG files in the same folder.
 
 **Folder: `local_staging/shapemode/avgcell/`**
 
-- `xx.vtk`: vtkPolyData files corresponding to 3D cell and nuclear meshes. We recommend [Paraview](www.paraview.org) to open this files.
+- `xx.vtk`: vtkPolyData files corresponding to 3D cell and nuclear meshes. We recommend [Paraview](https://www.paraview.org) to open this files.
 - `xx.gif`: Animated GIF illustrating cell and nuclear shape modes from 3 different projections.
 
 ### 4. Create single-cell parameterization
