@@ -63,7 +63,32 @@ This step saves the features in the file `local_staging/computefeatures/manifest
 cvapipe_analysis shapemode run
 ```
 
-Preprocessing???? Here we compute cell and nuclear shape modes. Shape modesThis step depends on step 2.
+Here we implement a few pre-processing steps. First, all mitotic cells are removed from the dataset. Next we use a feature-based outlier detection to detect and remove outliers form the dataset. The remaining dataset is used as input for principal component analysis. Finally, we compute cell and nuclear shape modes. This step depends on step 2.
+
+A couple of output files are produced on this step:
+
+* Folder: `local_staging/shapemode/tables/`
+
+- `main_summary.csv`: Number of cells stratifyed by cell line, workflow, imaging mode and fov position.
+- `outliers_summary.csv`: Number of cells identifyed as outlier in each cell line.
+- `cell_stage_summary.csv`: Number of cells at different stages of cell cycle.
+
+Views of tables above are also saved as JPG files in the same folder.
+
+* Folder: `local_staging/shapemode/outliers/`
+
+- `manifest_outliers.csv`: Dataframe with cells flagged as outlier or not.
+- `xx.png`: Diagnostic plots for outlier detection.
+
+* Folder: `local_staging/shapemode/pca/`
+
+- `correlations_xx.png`: Correlation plots between principal components.
+- `pca_xx.jpg`: Explained variance by each principal component.
+
+* Folder: `local_staging/shapemode/avgcell/`
+
+- `xx.vtk`: vtkPolyData files corresponding to 3D cell and nuclear meshes. We recommend [Paraview](paraview.org) to open this files.
+- `xx.gif`: Animated GIF illustrating cell and nuclear shape modes from 3 different projections.
 
 ### 4. Create single-cell parameterization
 ```
