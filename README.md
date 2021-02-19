@@ -67,7 +67,7 @@ Here we implement a few pre-processing steps. First, all mitotic cells are remov
 
 A couple of output files are produced on this step:
 
-* Folder: `local_staging/shapemode/tables/`
+**Folder: `local_staging/shapemode/tables/`**
 
 - `main_summary.csv`: Number of cells stratifyed by cell line, workflow, imaging mode and fov position.
 - `outliers_summary.csv`: Number of cells identifyed as outlier in each cell line.
@@ -75,19 +75,19 @@ A couple of output files are produced on this step:
 
 Views of tables above are also saved as JPG files in the same folder.
 
-* Folder: `local_staging/shapemode/outliers/`
+**Folder: `local_staging/shapemode/outliers/`**
 
 - `manifest_outliers.csv`: Dataframe with cells flagged as outlier or not.
 - `xx.png`: Diagnostic plots for outlier detection.
 
-* Folder: `local_staging/shapemode/pca/`
+**Folder: `local_staging/shapemode/pca/`**
 
 - `correlations_xx.png`: Correlation plots between principal components.
 - `pca_xx.jpg`: Explained variance by each principal component.
 
-* Folder: `local_staging/shapemode/avgcell/`
+**Folder: `local_staging/shapemode/avgcell/`**
 
-- `xx.vtk`: vtkPolyData files corresponding to 3D cell and nuclear meshes. We recommend [Paraview](paraview.org) to open this files.
+- `xx.vtk`: vtkPolyData files corresponding to 3D cell and nuclear meshes. We recommend [Paraview](www.paraview.org) to open this files.
 - `xx.gif`: Animated GIF illustrating cell and nuclear shape modes from 3 different projections.
 
 ### 4. Create single-cell parameterization
