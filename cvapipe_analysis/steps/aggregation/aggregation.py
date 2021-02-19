@@ -88,7 +88,7 @@ class Aggregation(Step):
             )
             
             df_hyperstacks_paths = df_hyperstacks_paths.append(df_paths, ignore_index=True)
-
+            
         # Save manifest
         self.manifest = df_hyperstacks_paths
         manifest_path = self.step_local_staging_dir / 'manifest.csv'

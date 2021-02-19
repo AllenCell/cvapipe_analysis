@@ -374,13 +374,13 @@ def create_5d_hyperstacks(
                 )
                 
             # Store paths
-            df_results = df_paths.append({
+            df_results.append({
                 'shapemode': pc_name,
                 'aggregation_type': agg_type,
                 'scalar': rep_name,
                 'hyperstackPath': save_as
-            }, ignore_index=True)
+            })
 
     df_results = pd.DataFrame(df_results)
 
-    return df_paths
+    return df_results
