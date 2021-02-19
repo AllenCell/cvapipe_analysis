@@ -95,7 +95,7 @@ Views of tables above are also saved as JPG files in the same folder.
 - `xx.vtk`: vtkPolyData files corresponding to 3D cell and nuclear meshes. We recommend [Paraview](https://www.paraview.org) to open this files.
 - `xx.gif`: Animated GIF illustrating cell and nuclear shape modes from 3 different projections.
 
-### 4. Create single-cell parameterization
+### 4. Create parameterized intensity representation
 ```
 cvapipe_analysis parameterize run
 ```
@@ -104,7 +104,7 @@ Here we use `aics-cytoparam` [(link)](https://github.com/AllenCell/aics-cytopara
 
 **Folder: `local_staging/parameterization/`**
 
-- `manifest.csv`: Dataframe with the path the representation for each cell.
+- `manifest.csv`: Dataframe with the paths to parameterized intensity representation of each cell.
 
 **Folder: `local_staging/parameterization/representations/`**
 
@@ -115,7 +115,15 @@ Here we use `aics-cytoparam` [(link)](https://github.com/AllenCell/aics-cytopara
 cvapipe_analysis aggregation run
 ```
 
-This step depends on steps 3 and 4.
+This step generates aggregation of multiple cells representations and morph them into idealized shapes from the shape space. This step depends on steps 3 and 4.
+
+**Folder: `local_staging/aggregation/`**
+
+- `manifest.csv`: TBD
+
+**Folder: `local_staging/aggregation/hyperstacks/`**
+
+- `xx.tif`: 5D-hyperstacks. One file per shape mode, per image type (raw vs. segmentation) and per aggregation type (avg. vs. std.)
 
 ## Running the pipeline on your own data
 
