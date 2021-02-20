@@ -69,8 +69,8 @@ A couple of output files are produced on this step:
 
 **Folder: `local_staging/shapemode/`**
 
-- TBD
-- TBD
+- `manifest.csv`: Dataframe with mitotic and outlier cells removed. All cells in this dataframe are used as input for PCA.
+- `shapemode.csv`: DataFrame with path to all animated GIFs and VTK mesh files produced in this step.
 
 **Folder: `local_staging/shapemode/tables/`**
 
@@ -119,7 +119,7 @@ This step generates aggregation of multiple cells representations and morph them
 
 **Folder: `local_staging/aggregation/`**
 
-- `manifest.csv`: TBD
+- `manifest.csv`: Manifest with path to hyperstack created in this step.
 
 **Folder: `local_staging/aggregation/hyperstacks/`**
 
