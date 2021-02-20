@@ -13,7 +13,7 @@ Here you will find all the code necessary to i) reproduce the results shown in o
 First, create a conda environment for this project:
 
 ```
-conda create --name cvapipe_analysis python=3.7
+conda create --name cvapipe_analysis python=3.8
 conda activate cvapipe_analysis
 ```
 
