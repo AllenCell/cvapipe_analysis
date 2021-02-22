@@ -2,6 +2,8 @@
 
 ## Analysis Pipeline for Cell Variance
 
+![Shape modes](docs/logo.png)
+
 Here you will find all the code necessary to i) reproduce the results shown in our paper [1] or ii) apply our methodology to you own dataset.
 
 [1] - [Viana, Matheus P., et al. "Robust integrated intracellular organization of the human iPS cell: where, how much, and how variable?." bioRxiv (2020)](https://www.biorxiv.org/content/10.1101/2020.12.08.415562v1).
@@ -13,8 +15,8 @@ Here you will find all the code necessary to i) reproduce the results shown in o
 First, create a conda environment for this project:
 
 ```
-conda create --name cvapipe_analysis python=3.7
-conda activate cvapipe_analysis
+conda create --name cvapipe python=3.8
+conda activate cvapipe
 ```
 
 then clone this repo
@@ -69,8 +71,8 @@ A couple of output files are produced on this step:
 
 **Folder: `local_staging/shapemode/`**
 
-- TBD
-- TBD
+- `manifest.csv`: Dataframe with mitotic and outlier cells removed. All cells in this dataframe are used as input for PCA.
+- `shapemode.csv`: DataFrame with path to all animated GIFs and VTK mesh files produced in this step.
 
 **Folder: `local_staging/shapemode/tables/`**
 
@@ -119,7 +121,7 @@ This step generates aggregation of multiple cells representations and morph them
 
 **Folder: `local_staging/aggregation/`**
 
-- `manifest.csv`: TBD
+- `manifest.csv`: Manifest with path to hyperstack created in this step.
 
 **Folder: `local_staging/aggregation/hyperstacks/`**
 
