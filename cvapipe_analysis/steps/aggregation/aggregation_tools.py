@@ -340,6 +340,8 @@ def create_5d_hyperstacks(
                 for sid, struct in enumerate(structs):
                     if gfps[sid] is not None:
                         stack[sid] = gfps[sid].copy()
+                # Concatenate domain to morphed representations
+                stack = np.vstack([stack, domain.reshape(1, *domain.shape)])
                 hyperstack.append(stack)
 
             # Calculate largest czyx bounding box across bins
@@ -370,7 +372,8 @@ def create_5d_hyperstacks(
                     hyperstack,
                     dimension_order = 'TCZYX',
                     image_name = f"{pc_name}_{rep_name}_{agg_type}",
-                    channel_names = structs
+                    # Add domain to list of structures
+                    channel_names = structs + ['domain']
                 )
                 
             # Store paths
