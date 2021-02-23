@@ -1,4 +1,5 @@
 import vtk
+import pickle
 import warnings
 import numpy as np
 import pandas as pd
@@ -296,8 +297,12 @@ def create_5d_hyperstacks(
         nbins=nbins,
         save_dir=save_dir
     )
-
+    
     pc_name = pc_names[pc_idx]
+
+    # Save representations in a pickle file
+    save_reps_as = save_dir / f"{pc_name}.tif"
+    pickle.dump(agg_structs, open(save_rep_as, "wb"))
 
     # List of structures. This list determines the order in which the
     # channels of the hyperstack are going to be saved. In the future
@@ -381,7 +386,8 @@ def create_5d_hyperstacks(
                 'shapemode': pc_name,
                 'aggregation_type': agg_type,
                 'scalar': rep_name,
-                'hyperstackPath': save_as
+                'hyperstackPath': save_as,
+                'representations': save_reps_as
             })
 
     df_results = pd.DataFrame(df_results)
