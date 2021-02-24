@@ -147,11 +147,15 @@ class Shapemode(Step):
         # alignment procedure defined in the compute_features
         # step (lines 81-98).
         features_to_use = {
-            'DNA': ['dna_shcoeffs_L'],
-            'MEM': ['mem_shcoeffs_L'],
+            # Uncomment for shape space with nuclear SHE coefficients only
+            #'DNA': ['dna_shcoeffs_L'],
+            # Uncomment for shape space with cell SHE coefficients only
+            #'MEM': ['mem_shcoeffs_L'],
+            # Shape space with cell and nuclear SHE coefficients
             'DNA_MEM': ['dna_shcoeffs_L', 'mem_shcoeffs_L']
         }
         
+        df_shapemode_paths = pd.DataFrame([])
         for prefix, feature_prefixes in features_to_use.items():
 
             log.info(f"[{prefix}] - PCA on {', '.join(feature_prefixes)}")
@@ -222,7 +226,7 @@ class Shapemode(Step):
                 # Reconstruct cell and nuclear shape. Also adjust nuclear
                 # position relative to the cell when the shape space is
                 # created by a joint combination of cell and nuclear shape.
-                animate_shape_modes_and_save_meshes(
+                df_paths = animate_shape_modes_and_save_meshes(
                     df_agg = df_mappoints_shcoeffs,
                     mode = pc_name,
                     save = dir_avgshape,
@@ -230,6 +234,13 @@ class Shapemode(Step):
                     plot_limits = [-150, 150, -80, 80],
                 )
 
+                df_shapemode_paths = df_shapemode_paths.append(df_paths, ignore_index=True)
+
+                import pdb; pdb.set_trace()
+
+        # Save datafrme with path for meshes and gifs
+        dataframe_path = self.step_local_staging_dir / 'shapemode.csv'
+        df_shapemode_paths.to_csv(dataframe_path)
         # Save manifest
         self.manifest = df
         manifest_path = self.step_local_staging_dir / 'manifest.csv'

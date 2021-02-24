@@ -235,5 +235,29 @@ def get_segmentations(folder, path_to_seg, channels):
 
     return segs[ch_dna], segs[ch_mem], segs[ch_str]
     
+def get_raws(folder, path_to_raw, channels):
 
+    """
+    Find the raw images.
+
+    Parameters
+    --------------------
+    path_to_seg: str
+        Path to the 4D raw image.
+    channels: list of str
+        Name of channels of the 4D raw image.
+
+    Returns
+    -------
+    result: nuc, mem, struct
+        3D raw images of nucleus, cell and structure.
+    """
+
+    ch_dna = channels.index('dna')
+    ch_mem = channels.index('membrane')
+    ch_str = channels.index('structucture')
+    
+    raw = AICSImage(folder/path_to_raw).data.squeeze()
+
+    return raw[ch_dna], raw[ch_mem], raw[ch_str]
     
