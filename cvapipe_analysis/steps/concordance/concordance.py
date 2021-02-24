@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Union
 from datastep import Step, log_run_params
 
+import yaml
 import pandas as pd
 
 ###############################################################################
@@ -29,12 +30,17 @@ class Concordance(Step):
         **kwargs
     ):
 
+        # Load config file
+        config = yaml.load(open("config.yaml", "r"), Loader=yaml.FullLoader)
+        
         # Load parameterization dataframe
         path_to_agg_manifest = self.project_local_staging_dir / 'aggregation/manifest.csv'
         if not path_to_agg_manifest.exists():
             raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), path_to_agg_manifest)
         df_agg = pd.read_csv(path_to_agg_manifest)
         log.info(f"Shape of agg manifest: {df_agg.shape}")
+
+        
         
         '''
         # Save manifest
