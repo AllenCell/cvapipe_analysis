@@ -302,7 +302,7 @@ def create_5d_hyperstacks(
 
     # Save representations in a pickle file
     save_reps_as = save_dir / f"{pc_name}.pkl"
-    pickle.dump(agg_structs, open(save_rep_as, "wb"))
+    pickle.dump(agg_structs, open(save_reps_as, "wb"))
 
     # List of structures. This list determines the order in which the
     # channels of the hyperstack are going to be saved. In the future
