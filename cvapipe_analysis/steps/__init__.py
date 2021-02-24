@@ -17,5 +17,5 @@ __all__ = [
     "ComputeFeatures",
     "Parameterization",
     "Aggregation",
-    "Concordance",
+    "Concordance"
 ]
