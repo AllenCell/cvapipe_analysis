@@ -301,7 +301,7 @@ def create_5d_hyperstacks(
     pc_name = pc_names[pc_idx]
 
     # Save representations in a pickle file
-    save_reps_as = save_dir / f"{pc_name}.tif"
+    save_reps_as = save_dir / f"{pc_name}.pkl"
     pickle.dump(agg_structs, open(save_rep_as, "wb"))
 
     # List of structures. This list determines the order in which the
@@ -387,7 +387,7 @@ def create_5d_hyperstacks(
                 'aggregation_type': agg_type,
                 'scalar': rep_name,
                 'hyperstackPath': save_as,
-                'representations': save_reps_as
+                'representationPath': save_reps_as
             })
 
     df_results = pd.DataFrame(df_results)
