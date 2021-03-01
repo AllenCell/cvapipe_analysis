@@ -1,0 +1,26 @@
+appName: cvapipe_analysis
+
+resources:
+    # In case a (slurm) cluster is available
+    cores: 30
+    nworkers: 10
+    memory: "4GB"
+    queue: "aics_cpu_general"
+    walltime: "48:00:00"    
+
+mappoints:
+    # Number of map points along each principal component
+    nbins: 9
+    
+aggregation:
+    # Shape space used to create aggregated images.
+    # Choices are:
+    # DNA_PC: shape space of nucleus alone
+    # MEM_PC: shape space of cell alone
+    # DNA_MEM_PC: shape space of nucleus and cell together
+    aggregate_on: "DNA_MEM_PC"
+
+structures:
+    # Gene names of each tagged structure. These match
+    # the column structure_name in the manifest.
+    genes: ["FBL", "NPM1", "SON", "SMC1A", "HIST1H2BJ", "LMNB1", "NUP153", "SEC61B", "ATP2A2", "TOMM20", "SLC25A17", "RAB5A", "LAMP1",  "ST6GAL1", "CETN2", "TUBA1B", "AAVS1", "ACTB", "ACTN1", "MYH10", "GJA1", "TJP1", "DSP", "CTNNB1", "PXN"]

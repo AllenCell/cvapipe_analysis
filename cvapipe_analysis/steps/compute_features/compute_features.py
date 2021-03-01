@@ -4,12 +4,16 @@
 import json
 import logging
 from pathlib import Path
+from datetime import datetime
 from typing import NamedTuple, Optional, Union, List, Dict
 
+import yaml
 import pandas as pd
 from tqdm import tqdm
+from dask_jobqueue import SLURMCluster
 from datastep import Step, log_run_params
 from aics_dask_utils import DistributedHandler
+
 from .compute_features_tools import get_segmentations, get_features
 import numpy as np    
 
@@ -132,10 +136,14 @@ class ComputeFeatures(Step):
         self,
         debug=False,
         distributed_executor_address: Optional[str] = None,
+        cluster: Optional[bool] = None,
         overwrite: bool = False,
         **kwargs
     ):
-
+        
+        # Load configuration file
+        config = yaml.load(open('config.yaml', "r"), Loader=yaml.FullLoader)
+        
         # Load manifest from previous step
         df = pd.read_csv(
             self.project_local_staging_dir / 'loaddata/manifest.csv',
@@ -155,6 +163,32 @@ class ComputeFeatures(Step):
         features_dir.mkdir(parents=True, exist_ok=True)
 
         load_data_dir = self.project_local_staging_dir / 'loaddata'
+
+        if cluster:
+            # Forces a distributed cluster instantiation
+            log_dir_name = datetime.now().isoformat().split(".")[0]
+            log_dir = Path(f".dask_logs/{log_dir_name}").expanduser()
+            log_dir.mkdir(parents=True, exist_ok=True)
+
+            # Create cluster
+            log.info("Creating SLURMCluster")
+            cluster = SLURMCluster(
+                cores=config["resources"]["cores"],
+                memory=config["resources"]["memory"],
+                queue=config["resources"]["queue"],
+                walltime=config["resources"]["walltime"],
+                local_directory=str(log_dir),
+                log_directory=str(log_dir),
+            )
+
+            # Spawn workers
+            cluster.scale(jobs=config["resources"]["nworkers"])
+            log.info("Created SLURMCluster")
+
+            # Use the port from the created connector to set executor address
+            distributed_executor_address = cluster.scheduler_address
+
+            log.info(f"Dask dashboard available at: {cluster.dashboard_link}")
 
         # Process each row
         with DistributedHandler(distributed_executor_address) as handler:
