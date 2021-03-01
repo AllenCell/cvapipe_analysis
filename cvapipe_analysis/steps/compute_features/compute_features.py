@@ -72,57 +72,61 @@ class ComputeFeatures(Step):
         log.info(f"Beginning cell feature generation for CellId: {row_index}")
 
         # Wrap errors for debugging later
-        # try:
-        # Find the correct segmentation for nucleus,
-        # cell and structure
-        # channels = df.at[index,'name_dict']
-        channels = row.name_dict
-        seg_dna, seg_mem, seg_str = get_segmentations(
-            folder=load_data_dir,
-            path_to_seg=row.crop_seg,
-            channels=eval(channels)["crop_seg"],
-        )
+        try:
+            # Find the correct segmentation for nucleus,
+            # cell and structure
+            # channels = df.at[index,'name_dict']
+            channels = row.name_dict
+            seg_dna, seg_mem, seg_str = get_segmentations(
+                folder=load_data_dir,
+                path_to_seg=row.crop_seg,
+                channels=eval(channels)["crop_seg"],
+            )
 
-        # Compute nuclear features
-        features_dna = get_features(input_image=seg_dna, input_reference_image=seg_mem)
+            # Compute nuclear features
+            features_dna = get_features(
+                input_image=seg_dna, input_reference_image=seg_mem
+            )
 
-        # Compute cell features
-        features_mem = get_features(input_image=seg_mem, input_reference_image=seg_mem)
+            # Compute cell features
+            features_mem = get_features(
+                input_image=seg_mem, input_reference_image=seg_mem
+            )
 
-        # Compute structure features
-        features_str = get_features(
-            input_image=seg_str, input_reference_image=None, compute_shcoeffs=False
-        )
+            # Compute structure features
+            features_str = get_features(
+                input_image=seg_str, input_reference_image=None, compute_shcoeffs=False
+            )
 
-        # Append prefix to features names
-        features_dna = dict(
-            (f"dna_{key}", value) for (key, value) in features_dna.items()
-        )
-        features_mem = dict(
-            (f"mem_{key}", value) for (key, value) in features_mem.items()
-        )
-        features_str = dict(
-            (f"str_{key}", value) for (key, value) in features_str.items()
-        )
+            # Append prefix to features names
+            features_dna = dict(
+                (f"dna_{key}", value) for (key, value) in features_dna.items()
+            )
+            features_mem = dict(
+                (f"mem_{key}", value) for (key, value) in features_mem.items()
+            )
+            features_str = dict(
+                (f"str_{key}", value) for (key, value) in features_str.items()
+            )
 
-        # Concatenate all features for this cell
-        features = features_dna.copy()
-        features.update(features_mem)
-        features.update(features_str)
+            # Concatenate all features for this cell
+            features = features_dna.copy()
+            features.update(features_mem)
+            features.update(features_str)
 
-        # Save to JSON
-        with open(save_path, "w") as write_out:
-            json.dump(features, write_out)
+            # Save to JSON
+            with open(save_path, "w") as write_out:
+                json.dump(features, write_out)
 
-        log.info(f"Completed cell feature generation for CellId: {row_index}")
-        return SingleCellFeaturesResult(row_index, save_path)
+            log.info(f"Completed cell feature generation for CellId: {row_index}")
+            return SingleCellFeaturesResult(row_index, save_path)
 
-        # # Catch and return error
-        # except Exception as e:
-        #     log.info(
-        #         f"Failed cell feature generation for CellId: {row_index}. Error: {e}"
-        #     )
-        #     return SingleCellFeaturesError(row_index, str(e))
+        # Catch and return error
+        except Exception as e:
+            log.info(
+                f"Failed cell feature generation for CellId: {row_index}. Error: {e}"
+            )
+            return SingleCellFeaturesError(row_index, str(e))
 
     @log_run_params
     def run(
