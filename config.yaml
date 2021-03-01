@@ -2,9 +2,9 @@ appName: cvapipe_analysis
 
 resources:
     # In case a (slurm) cluster is available
-    cores: 30
+    cores: 4
     nworkers: 10
-    memory: "4GB"
+    memory: "20GB"
     queue: "aics_cpu_general"
     walltime: "48:00:00"    
 
