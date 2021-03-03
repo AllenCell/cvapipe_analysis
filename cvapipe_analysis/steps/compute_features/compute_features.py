@@ -147,7 +147,7 @@ class ComputeFeatures(Step):
         # Keep only the columns that will be used from now on
         columns_to_keep = ["crop_raw", "crop_seg", "name_dict"]
         df = df[columns_to_keep]
-
+        
         # Create features directory
         features_dir = self.step_local_staging_dir / "cell_features"
         features_dir.mkdir(parents=True, exist_ok=True)
@@ -184,15 +184,20 @@ class ComputeFeatures(Step):
                     {DatasetFields.CellId: result.cell_id, "Error": result.error}
                 )
 
+        for error in errors:
+            log.info(error)
+
         # Gather all features into a single manifest
         df_features = pd.DataFrame([])
         for index in tqdm(df.index, desc="Merging features"):
-            with open(
-                self.step_local_staging_dir / f"cell_features/{index}.json", "r"
-            ) as fjson:
-                features = json.load(fjson)
+            if (self.step_local_staging_dir / f"cell_features/{index}.json").exists():
+                with open(self.step_local_staging_dir / f"cell_features/{index}.json", "r") as fjson:
+                    features = json.load(fjson)
                 features = pd.Series(features, name=index)
                 df_features = df_features.append(features)
+            else:
+                log.info(f"File not found: {index}.json")
+                
         df_features.index = df_features.index.rename("CellId")
 
         # Save manifest

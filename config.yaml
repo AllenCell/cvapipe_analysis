@@ -6,9 +6,9 @@ project:
 
 resources:
     # In case a (slurm) cluster is available
-    cores: 5
-    nworkers: 30
-    memory: "20GB"
+    cores: 32
+    nworkers: 10
+    memory: "128GB"
     queue: "aics_cpu_general"
     walltime: "48:00:00"    
 
