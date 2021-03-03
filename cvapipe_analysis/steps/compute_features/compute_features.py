@@ -7,15 +7,13 @@ from pathlib import Path
 from datetime import datetime
 from typing import NamedTuple, Optional, Union, List, Dict
 
-import yaml
 import pandas as pd
 from tqdm import tqdm
-import dask
-from dask_jobqueue import SLURMCluster
 from datastep import Step, log_run_params
 from aics_dask_utils import DistributedHandler
-from dask.distributed import Client
 
+from ...tools import general
+from ...tools import cluster
 from .compute_features_tools import get_segmentations, get_features
 import numpy as np
 
@@ -133,19 +131,19 @@ class ComputeFeatures(Step):
         self,
         debug=False,
         distributed_executor_address: Optional[str] = None,
-        cluster: Optional[bool] = None,
+        slurm: Optional[bool] = None,
         overwrite: bool = False,
         **kwargs,
     ):
 
         # Load configuration file
-        config = yaml.load(open("config.yaml", "r"), Loader=yaml.FullLoader)
-
+        config = general.load_config_file()
+        
         # Load manifest from previous step
         df = pd.read_csv(
             self.project_local_staging_dir / "loaddata/manifest.csv", index_col="CellId"
         )
-
+        
         # Keep only the columns that will be used from now on
         columns_to_keep = ["crop_raw", "crop_seg", "name_dict"]
         df = df[columns_to_keep]
@@ -156,53 +154,15 @@ class ComputeFeatures(Step):
 
         load_data_dir = self.project_local_staging_dir / "loaddata"
 
-        if cluster:
-            # Forces a distributed cluster instantiation
-            log_dir_name = datetime.now().isoformat().split(".")[0]
-            log_dir = Path(f".dask_logs/{log_dir_name}").expanduser()
-            log_dir.mkdir(parents=True, exist_ok=True)
-
-            # Configure dask config
-            dask.config.set(
-                {
-                    "scheduler.work-stealing": False,
-                    "logging.distributed.worker": "info",
-                }
-            )
-
-            # Create cluster
-            log.info("Creating SLURMCluster")
-            cluster = SLURMCluster(
-                cores=config["resources"]["cores"],
-                memory=config["resources"]["memory"],
-                queue=config["resources"]["queue"],
-                walltime=config["resources"]["walltime"],
-                local_directory=str(log_dir),
-                log_directory=str(log_dir),
-            )
-
-            # Spawn workers
-            cluster.scale(jobs=config["resources"]["nworkers"])
-            log.info("Created SLURMCluster")
-            client = Client(cluster)
-            print(client.get_versions(check=True))
-
-            # Use the port from the created connector to set executor address
-            distributed_executor_address = cluster.scheduler_address
-
-            log.info(f"Dask dashboard available at: {cluster.dashboard_link}")
-
+        if slurm:
+            distributed_executor_address = cluster.get_distributed_executor_address_on_slurm(log, config)
+            
         # Process each row
         with DistributedHandler(distributed_executor_address) as handler:
             # Start processing
             results = handler.batched_map(
                 self._generate_single_cell_features,
-                # Convert dataframe iterrows into two lists of items to iterate over
-                # One list will be row index
-                # One list will be the pandas series of every row
                 *zip(*list(df.iterrows())),
-                # Pass the other parameters as list of the same thing for each
-                # mapped function call
                 [features_dir for i in range(len(df))],
                 [load_data_dir for i in range(len(df))],
                 [overwrite for i in range(len(df))],
