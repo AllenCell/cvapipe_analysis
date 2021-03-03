@@ -13,17 +13,16 @@ import logging
 import fire
 
 from cvapipe_analysis import steps
+from cvapipe_analysis import tools
 from cvapipe_analysis.bin.all import All
 
-###############################################################################
 
 log = logging.getLogger()
 logging.basicConfig(
     level=logging.INFO, format="[%(levelname)4s:%(lineno)4s %(asctime)s] %(message)s"
 )
 
-###############################################################################
-
+tools.general.create_workflow_file_from_config()
 
 def cli():
     step_map = {
