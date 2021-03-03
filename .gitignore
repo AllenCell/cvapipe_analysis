@@ -116,3 +116,4 @@ ENV/
 	
 # mypy
 .mypy_cache/
+workflow_config.json
