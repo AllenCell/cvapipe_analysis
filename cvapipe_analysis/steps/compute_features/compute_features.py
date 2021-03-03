@@ -4,14 +4,18 @@
 import json
 import logging
 from pathlib import Path
+from datetime import datetime
 from typing import NamedTuple, Optional, Union, List, Dict
 
 import pandas as pd
 from tqdm import tqdm
 from datastep import Step, log_run_params
 from aics_dask_utils import DistributedHandler
+
+from ...tools import general
+from ...tools import cluster
 from .compute_features_tools import get_segmentations, get_features
-import numpy as np    
+import numpy as np
 
 ###############################################################################
 
@@ -38,7 +42,6 @@ class SingleCellFeaturesError(NamedTuple):
 
 
 class ComputeFeatures(Step):
-
     def __init__(
         self,
         direct_upstream_tasks: List["Step"] = [],
@@ -75,38 +78,34 @@ class ComputeFeatures(Step):
             seg_dna, seg_mem, seg_str = get_segmentations(
                 folder=load_data_dir,
                 path_to_seg=row.crop_seg,
-                channels=eval(channels)['crop_seg']
+                channels=eval(channels)["crop_seg"],
             )
 
             # Compute nuclear features
             features_dna = get_features(
-                input_image=seg_dna,
-                input_reference_image=seg_mem
+                input_image=seg_dna, input_reference_image=seg_mem
             )
 
             # Compute cell features
             features_mem = get_features(
-                input_image=seg_mem,
-                input_reference_image=seg_mem
+                input_image=seg_mem, input_reference_image=seg_mem
             )
 
             # Compute structure features
             features_str = get_features(
-                input_image=seg_str,
-                input_reference_image=None,
-                compute_shcoeffs=False
+                input_image=seg_str, input_reference_image=None, compute_shcoeffs=False
             )
 
             # Append prefix to features names
             features_dna = dict(
-                (f'dna_{key}', value) for (key, value) in features_dna.items()
+                (f"dna_{key}", value) for (key, value) in features_dna.items()
             )
             features_mem = dict(
-                (f'mem_{key}', value) for (key, value) in features_mem.items()
+                (f"mem_{key}", value) for (key, value) in features_mem.items()
             )
             features_str = dict(
-                (f'str_{key}', value) for (key, value) in features_str.items()
-            )    
+                (f"str_{key}", value) for (key, value) in features_str.items()
+            )
 
             # Concatenate all features for this cell
             features = features_dna.copy()
@@ -132,44 +131,41 @@ class ComputeFeatures(Step):
         self,
         debug=False,
         distributed_executor_address: Optional[str] = None,
+        slurm: Optional[bool] = None,
         overwrite: bool = False,
-        **kwargs
+        **kwargs,
     ):
 
+        # Load configuration file
+        config = general.load_config_file()
+        
         # Load manifest from previous step
         df = pd.read_csv(
-            self.project_local_staging_dir / 'loaddata/manifest.csv',
-            index_col='CellId'
+            self.project_local_staging_dir / "loaddata/manifest.csv", index_col="CellId"
         )
-
+        
         # Keep only the columns that will be used from now on
-        columns_to_keep = ['crop_raw', 'crop_seg', 'name_dict']
+        columns_to_keep = ["crop_raw", "crop_seg", "name_dict"]
         df = df[columns_to_keep]
-      
-        # Sample the dataset if running debug mode
-        if debug:
-            df = df.sample(n=8, random_state=666)
-            
+        
         # Create features directory
         features_dir = self.step_local_staging_dir / "cell_features"
         features_dir.mkdir(parents=True, exist_ok=True)
 
-        load_data_dir = self.project_local_staging_dir / 'loaddata'
+        load_data_dir = self.project_local_staging_dir / "loaddata"
 
+        if slurm:
+            distributed_executor_address = cluster.get_distributed_executor_address_on_slurm(log, config)
+            
         # Process each row
         with DistributedHandler(distributed_executor_address) as handler:
             # Start processing
             results = handler.batched_map(
                 self._generate_single_cell_features,
-                # Convert dataframe iterrows into two lists of items to iterate over
-                # One list will be row index
-                # One list will be the pandas series of every row
                 *zip(*list(df.iterrows())),
-                # Pass the other parameters as list of the same thing for each
-                # mapped function call
                 [features_dir for i in range(len(df))],
                 [load_data_dir for i in range(len(df))],
-                [overwrite for i in range(len(df))]
+                [overwrite for i in range(len(df))],
             )
 
         # Generate features paths rows
@@ -188,18 +184,25 @@ class ComputeFeatures(Step):
                     {DatasetFields.CellId: result.cell_id, "Error": result.error}
                 )
 
+        for error in errors:
+            log.info(error)
+
         # Gather all features into a single manifest
         df_features = pd.DataFrame([])
-        for index in tqdm(df.index, desc='Merging features'):
-            with open(self.step_local_staging_dir / f"cell_features/{index}.json", "r") as fjson:
-                features = json.load(fjson)
+        for index in tqdm(df.index, desc="Merging features"):
+            if (self.step_local_staging_dir / f"cell_features/{index}.json").exists():
+                with open(self.step_local_staging_dir / f"cell_features/{index}.json", "r") as fjson:
+                    features = json.load(fjson)
                 features = pd.Series(features, name=index)
                 df_features = df_features.append(features)
-        df_features.index = df_features.index.rename('CellId')
+            else:
+                log.info(f"File not found: {index}.json")
+                
+        df_features.index = df_features.index.rename("CellId")
 
         # Save manifest
         self.manifest = df_features
         manifest_save_path = self.step_local_staging_dir / "manifest.csv"
         self.manifest.to_csv(manifest_save_path)
-            
+
         return manifest_save_path

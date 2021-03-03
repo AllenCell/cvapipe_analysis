@@ -93,6 +93,9 @@ dask-worker-space/
 # SageMath parsed files
 *.sage.py
 
+# Dask log
+.dask*
+
 # dotenv
 .env
 
@@ -110,6 +113,7 @@ ENV/
 
 # mkdocs documentation
 /site
-
+	
 # mypy
 .mypy_cache/
+workflow_config.json
