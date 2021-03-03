@@ -29,6 +29,7 @@ def cast_features(features):
         elif isinstance(value, np.ndarray):
             features[key] = value.tolist()
         else:
+            # To deal with the case value = np.nan
             features[key] = int(value)
             
     return features
@@ -217,6 +218,14 @@ def get_segmentations(folder, path_to_seg, channels):
     result: seg_nuc, seg_mem, seg_str
         3D binary images of nucleus, cell and structure.
     """
+
+    seg_channel_names = ['dna_segmentation',
+                         'membrane_segmentation',
+                         'struct_segmentation_roof']
+
+    if not all(name in channels for name in seg_channel_names):
+        raise ValueError("One or more segmentation channels was\
+        not found.")
 
     ch_dna = channels.index('dna_segmentation')
     ch_mem = channels.index('membrane_segmentation')
