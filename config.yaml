@@ -1,9 +1,13 @@
 appName: cvapipe_analysis
 
+project:
+    # Sufix to append to local_staging
+    name: "test"
+
 resources:
     # In case a (slurm) cluster is available
-    cores: 4
-    nworkers: 10
+    cores: 5
+    nworkers: 30
     memory: "20GB"
     queue: "aics_cpu_general"
     walltime: "48:00:00"    
