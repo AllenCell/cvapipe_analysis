@@ -153,10 +153,6 @@ class ComputeFeatures(Step):
         # Keep only the columns that will be used from now on
         columns_to_keep = ['crop_raw', 'crop_seg', 'name_dict']
         df = df[columns_to_keep]
-      
-        # Sample the dataset if running debug mode
-        if debug:
-            df = df.sample(n=8, random_state=666)
             
         # Create features directory
         features_dir = self.step_local_staging_dir / "cell_features"
