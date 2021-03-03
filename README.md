@@ -99,7 +99,7 @@ Views of tables above are also saved as JPG files in the same folder.
 
 ### 4. Create parameterized intensity representation
 ```
-cvapipe_analysis parameterize run
+cvapipe_analysis parameterization run
 ```
 
 Here we use `aics-cytoparam` [(link)](https://github.com/AllenCell/aics-cytoparam) to create parameterization for all the single-cell data. This steps depends on step 2.
