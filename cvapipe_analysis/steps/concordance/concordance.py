@@ -29,6 +29,9 @@ class Concordance(Step):
         **kwargs
     ):
 
+        # Load config file
+        config = yaml.load(open("config.yaml", "r"), Loader=yaml.FullLoader)
+        
         # Load parameterization dataframe
         path_to_agg_manifest = self.project_local_staging_dir / 'aggregation/manifest.csv'
         if not path_to_agg_manifest.exists():
