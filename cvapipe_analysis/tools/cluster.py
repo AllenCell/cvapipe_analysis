@@ -27,7 +27,7 @@ def get_distributed_executor_address_on_slurm(log, config):
         queue=config["resources"]["queue"],
         walltime=config["resources"]["walltime"],
         local_directory=str(log_dir),
-        log_directory=str(log_dir)
+        log_directory=str(log_dir),
     )
 
     # Spawn workers

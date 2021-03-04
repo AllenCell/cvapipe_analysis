@@ -7,6 +7,7 @@ from pathlib import Path
 from datetime import datetime
 from typing import NamedTuple, Optional, Union, List, Dict
 
+import numpy as np
 import pandas as pd
 from tqdm import tqdm
 from datastep import Step, log_run_params
@@ -14,14 +15,9 @@ from aics_dask_utils import DistributedHandler
 
 from ...tools import general
 from ...tools import cluster
-from .compute_features_tools import get_segmentations, get_features
-import numpy as np
-
-###############################################################################
+from .compute_features_tools import load_images_and_calculate_features
 
 log = logging.getLogger(__name__)
-
-###############################################################################
 
 
 class DatasetFields:
@@ -50,12 +46,12 @@ class ComputeFeatures(Step):
         super().__init__(direct_upstream_tasks=direct_upstream_tasks, config=config)
 
     @staticmethod
-    def _generate_single_cell_features(
+    def _run_feature_extraction(
         row_index: int,
         row: pd.Series,
         save_dir: Path,
         load_data_dir: Path,
-        overwrite: bool,
+        overwrite: bool
     ) -> Union[SingleCellFeaturesResult, SingleCellFeaturesError]:
 
         # Get the ultimate end save path for this cell
@@ -69,53 +65,16 @@ class ComputeFeatures(Step):
         # Overwrite or didn't exist
         log.info(f"Beginning cell feature generation for CellId: {row_index}")
 
+        channels = eval(row.name_dict)["crop_seg"]
+        seg_path = load_data_dir / row.crop_seg
+        
         # Wrap errors for debugging later
         try:
-            # Find the correct segmentation for nucleus,
-            # cell and structure
-            # channels = df.at[index,'name_dict']
-            channels = row.name_dict
-            seg_dna, seg_mem, seg_str = get_segmentations(
-                folder=load_data_dir,
-                path_to_seg=row.crop_seg,
-                channels=eval(channels)["crop_seg"],
+            load_images_and_calculate_features(
+                path_seg=seg_path,
+                channels=channels,
+                path_output=save_path
             )
-
-            # Compute nuclear features
-            features_dna = get_features(
-                input_image=seg_dna, input_reference_image=seg_mem
-            )
-
-            # Compute cell features
-            features_mem = get_features(
-                input_image=seg_mem, input_reference_image=seg_mem
-            )
-
-            # Compute structure features
-            features_str = get_features(
-                input_image=seg_str, input_reference_image=None, compute_shcoeffs=False
-            )
-
-            # Append prefix to features names
-            features_dna = dict(
-                (f"dna_{key}", value) for (key, value) in features_dna.items()
-            )
-            features_mem = dict(
-                (f"mem_{key}", value) for (key, value) in features_mem.items()
-            )
-            features_str = dict(
-                (f"str_{key}", value) for (key, value) in features_str.items()
-            )
-
-            # Concatenate all features for this cell
-            features = features_dna.copy()
-            features.update(features_mem)
-            features.update(features_str)
-
-            # Save to JSON
-            with open(save_path, "w") as write_out:
-                json.dump(features, write_out)
-
             log.info(f"Completed cell feature generation for CellId: {row_index}")
             return SingleCellFeaturesResult(row_index, save_path)
 
@@ -131,7 +90,7 @@ class ComputeFeatures(Step):
         self,
         debug=False,
         distributed_executor_address: Optional[str] = None,
-        slurm: Optional[bool] = None,
+        distribute: Optional[bool] = None,
         overwrite: bool = False,
         **kwargs,
     ):
@@ -154,14 +113,14 @@ class ComputeFeatures(Step):
 
         load_data_dir = self.project_local_staging_dir / "loaddata"
 
-        if slurm:
+        if distribute:
             distributed_executor_address = cluster.get_distributed_executor_address_on_slurm(log, config)
             
         # Process each row
         with DistributedHandler(distributed_executor_address) as handler:
             # Start processing
             results = handler.batched_map(
-                self._generate_single_cell_features,
+                self._run_feature_extraction,
                 *zip(*list(df.iterrows())),
                 [features_dir for i in range(len(df))],
                 [load_data_dir for i in range(len(df))],
