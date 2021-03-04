@@ -27,4 +27,36 @@ aggregation:
 structures:
     # Gene names of each tagged structure. These match
     # the column structure_name in the manifest.
+
     genes: ["FBL", "NPM1", "SON", "SMC1A", "HIST1H2BJ", "LMNB1", "NUP153", "SEC61B", "ATP2A2", "TOMM20", "SLC25A17", "RAB5A", "LAMP1",  "ST6GAL1", "CETN2", "TUBA1B", "AAVS1", "ACTB", "ACTN1", "MYH10", "GJA1", "TJP1", "DSP", "CTNNB1", "PXN"]
+
+    # >> Results are going to be ordered according to
+    # this sequence.
+    genes: ["FBL", "NPM1", "SON", "SMC1A", "HIST1H2BJ", "LMNB1", "NUP153", "SEC61B", "ATP2A2", "TOMM20", "SLC25A17", "RAB5A", "LAMP1",  "ST6GAL1", "CETN2", "TUBA1B", "AAVS1", "ACTB", "ACTN1", "MYH10", "GJA1", "TJP1", "DSP", "CTNNB1", "PXN"]
+    # Mapping between gene name and description
+    desc:
+        "FBL": "nucleoli (DFC)"
+        "NPM1": "nucleoli (GC)"
+        "SON": "nuclear speckles"
+        "SMC1A": "cohesins"
+        "HIST1H2BJ": "histones"
+        "LMNB1": "nuclear envelope"
+        "NUP153": "nuclear pores"
+        "SEC61B": "ER (Sec61 beta)"
+        "ATP2A2": "ER (SERCA2)"
+        "TOMM20": "mitochondria"
+        "SLC25A17": "peroxisomes"
+        "RAB5A": "endosomes"
+        "LAMP1": "lysosomes"
+        "ST6GAL1": "Golgi"
+        "CETN2": "centrioles"
+        "TUBA1B": "microtubules"
+        "AAVS1": "plasma membrane"
+        "ACTB": "actin filaments"
+        "ACTN1": "actin bundles"
+        "MYH10": "actomyosin bundles"
+        "CTNNB1": "adherens junctions"
+        "GJA1": "gap junctions"
+        "TJP1": "tight junctions"
+        "DSP": "desmosomes"
+        "PXN": "matrix adhesions"

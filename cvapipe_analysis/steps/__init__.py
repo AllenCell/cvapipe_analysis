@@ -7,6 +7,7 @@ from .load_data import LoadData
 from .compute_features import ComputeFeatures
 from .parameterization import Parameterization
 from .aggregation import Aggregation
+from .concordance import Concordance
 
 __all__ = [
     "MultiResStructCompare",
@@ -15,5 +16,6 @@ __all__ = [
     "LoadData",
     "ComputeFeatures",
     "Parameterization",
-    "Aggregation"
+    "Aggregation",
+    "Concordance"
 ]
