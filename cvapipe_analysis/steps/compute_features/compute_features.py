@@ -153,6 +153,8 @@ class ComputeFeatures(Step):
 
         for error in errors:
             log.info(error)
+
+        log.info("Reading features from JSON files. This might take a while.")
             
         df_features = []
         N_CORES = len(os.sched_getaffinity(0))
@@ -163,9 +165,13 @@ class ComputeFeatures(Step):
         df_features = pd.DataFrame(df_features)
         df_features.index = df_features.index.rename("CellId")
 
+        log.info("Saving manifest.")
+        
         # Save manifest
         self.manifest = df_features
         manifest_save_path = self.step_local_staging_dir / "manifest.csv"
         self.manifest.to_csv(manifest_save_path)
 
+        log.info("Manifest saved.")
+        
         return manifest_save_path
