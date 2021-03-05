@@ -99,9 +99,8 @@ class ComputeFeatures(Step):
         config = general.load_config_file()
         
         # Load manifest from previous step
-        df = pd.read_csv(
-            self.project_local_staging_dir / "loaddata/manifest.csv", index_col="CellId"
-        )
+        path_manifest = self.project_local_staging_dir / "loaddata/manifest.csv"
+        df = pd.read_csv(path_manifest, index_col="CellId")
         
         # Keep only the columns that will be used from now on
         columns_to_keep = ["crop_raw", "crop_seg", "name_dict"]
@@ -114,18 +113,31 @@ class ComputeFeatures(Step):
         load_data_dir = self.project_local_staging_dir / "loaddata"
 
         if distribute:
-            distributed_executor_address = cluster.get_distributed_executor_address_on_slurm(log, config)
             
-        # Process each row
-        with DistributedHandler(distributed_executor_address) as handler:
-            # Start processing
-            results = handler.batched_map(
-                self._run_feature_extraction,
-                *zip(*list(df.iterrows())),
-                [features_dir for i in range(len(df))],
-                [load_data_dir for i in range(len(df))],
-                [overwrite for i in range(len(df))],
-            )
+            cluster.run_distributed_feature_extraction(
+                df,
+                path_manifest,
+                load_data_dir,
+                features_dir,
+                config,
+                log)
+
+            log.info(f"{config['resources']['nworkers']} have been launched. Please come back when the calculation is complete.")
+            
+            return None
+            
+        else:
+            
+            # Process each row
+            with DistributedHandler(distributed_executor_address) as handler:
+                # Start processing
+                results = handler.batched_map(
+                    self._run_feature_extraction,
+                    *zip(*list(df.iterrows())),
+                    [features_dir for i in range(len(df))],
+                    [load_data_dir for i in range(len(df))],
+                    [overwrite for i in range(len(df))],
+                )
 
         # Generate features paths rows
         cell_features_dataset = []

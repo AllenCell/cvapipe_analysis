@@ -1,6 +1,10 @@
+import os
 import json
 import argparse
+import concurrent
 import numpy as np
+import pandas as pd
+from pathlib import Path
 from aicsimageio import AICSImage
 from aicsshparam import shtools, shparam
 from skimage import measure as skmeasure
@@ -337,12 +341,41 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Manage parallel cytoplasm parameterization')
     parser.add_argument('--config', help='Path to the JSON config file.', required=True)
     args = vars(parser.parse_args())
-
+    
     with open(args['config'], 'r') as f:
         config = json.load(f)
     
-    load_images_and_calculate_features(
-        path_seg=config['path'],
-        channels=config['channels'],
-        path_output=config['output']
+    # Keep the header
+    skip = config['skip']
+    if skip > 0:
+        skip = range(1, skip+1)
+    
+    df = pd.read_csv(
+        config['csv'],
+        index_col='CellId',
+        skiprows=skip,
+        nrows=config['nrows']
     )
+    
+    print(f"Processing dataframe of shape {df.shape}")
+        
+    def wrapper_for_feature_calculation(index):
+        row = df.loc[index]
+        path_seg = Path(config['data_folder']) / row.crop_seg
+        channels = eval(row.name_dict)["crop_seg"]
+        path_output = Path(config['output']) / f"{index}.json"
+
+        try:
+            load_images_and_calculate_features(
+                path_seg=path_seg,
+                channels=channels,
+                path_output=path_output
+            )        
+            print(f"Index {index} complete.")
+        except:
+            print(f"Index {index} FAILED.")
+
+    N_CORES = len(os.sched_getaffinity(0))
+    with concurrent.futures.ProcessPoolExecutor(N_CORES) as executor:
+        executor.map(wrapper_for_feature_calculation, df.index)
+

@@ -2,15 +2,16 @@ appName: cvapipe_analysis
 
 project:
     # Sufix to append to local_staging
-    name: "test"
+    name: "full"
 
 resources:
     # In case a (slurm) cluster is available
-    cores: 1
-    nworkers: 128
-    memory: "24GB"
+    cores: 30
+    nworkers: 32
+    memory: "8GB"
     queue: "aics_cpu_general"
     walltime: "9-24:00:00"
+    path_python_env: "/home/matheus.viana/anaconda3/envs/cvapipe/bin/python"
 
 mappoints:
     # Number of map points along each principal component
