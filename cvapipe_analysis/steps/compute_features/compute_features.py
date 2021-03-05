@@ -155,16 +155,16 @@ class ComputeFeatures(Step):
             log.info(error)
 
         log.info("Reading features from JSON files. This might take a while.")
-            
-        df_features = []
+
         N_CORES = len(os.sched_getaffinity(0))
         with concurrent.futures.ProcessPoolExecutor(N_CORES) as executor:
-            df_features.append(
-                tqdm(executor.map(self._load_features_from_json, cell_features_dataset),
+            df_features = list(tqdm(
+                executor.map(self._load_features_from_json, cell_features_dataset),
                      total=len(cell_features_dataset)))
+            
         df_features = pd.DataFrame(df_features)
         df_features.index = df_features.index.rename("CellId")
-
+        
         log.info("Saving manifest.")
         
         # Save manifest
