@@ -1,9 +1,16 @@
+import os
+import json
+import argparse
+import concurrent
 import numpy as np
+import pandas as pd
+from pathlib import Path
 from aicsimageio import AICSImage
 from aicsshparam import shtools, shparam
 from skimage import measure as skmeasure
 from skimage import morphology as skmorpho
 
+        
 def cast_features(features):
     
     """
@@ -200,7 +207,8 @@ def get_features(input_image, input_reference_image, compute_shcoeffs=True):
     
     return features
 
-def get_segmentations(folder, path_to_seg, channels):
+
+def get_segmentations(path_seg, channels):
 
     """
     Find the segmentations that should be used for features
@@ -208,7 +216,7 @@ def get_segmentations(folder, path_to_seg, channels):
 
     Parameters
     --------------------
-    path_to_seg: str
+    path_seg: str
         Path to the 4D binary image.
     channels: list of str
         Name of channels of the 4D binary image.
@@ -231,18 +239,18 @@ def get_segmentations(folder, path_to_seg, channels):
     ch_mem = channels.index('membrane_segmentation')
     ch_str = channels.index('struct_segmentation_roof')
     
-    segs = AICSImage(folder/path_to_seg).data.squeeze()
+    segs = AICSImage(path_seg).data.squeeze()
 
     return segs[ch_dna], segs[ch_mem], segs[ch_str]
     
-def get_raws(folder, path_to_raw, channels):
+def get_raws(path_raw, channels):
 
     """
     Find the raw images.
 
     Parameters
     --------------------
-    path_to_seg: str
+    path_raw: str
         Path to the 4D raw image.
     channels: list of str
         Name of channels of the 4D raw image.
@@ -257,7 +265,117 @@ def get_raws(folder, path_to_raw, channels):
     ch_mem = channels.index('membrane')
     ch_str = channels.index('structucture')
     
-    raw = AICSImage(folder/path_to_raw).data.squeeze()
+    raw = AICSImage(path_raw).data.squeeze()
 
     return raw[ch_dna], raw[ch_mem], raw[ch_str]
+
+
+def load_images_and_calculate_features(path_seg, channels, path_output):
     
+    """
+    Load segmentation images, compute features and saves features
+    as a JSON file.
+
+    Parameters
+    --------------------
+    path_seg: Path
+        Path to the 4D binary image.
+    channels: list of str
+        Name of channels of the 4D raw image.
+    path_outout: Path
+        Path to save the features.
+
+    """
+    
+    # Find the correct segmentation for nucleus,
+    # cell and structure
+    seg_dna, seg_mem, seg_str = get_segmentations(
+        path_seg=path_seg,
+        channels=channels
+    )
+
+    # Compute nuclear features
+    features_dna = get_features(
+        input_image=seg_dna, input_reference_image=seg_mem
+    )
+
+    # Compute cell features
+    features_mem = get_features(
+        input_image=seg_mem, input_reference_image=seg_mem
+    )
+
+    # Compute structure features
+    features_str = get_features(
+        input_image=seg_str, input_reference_image=None, compute_shcoeffs=False
+    )
+
+    # Append prefix to features names
+    features_dna = dict(
+        (f"dna_{key}", value) for (key, value) in features_dna.items()
+    )
+    features_mem = dict(
+        (f"mem_{key}", value) for (key, value) in features_mem.items()
+    )
+    features_str = dict(
+        (f"str_{key}", value) for (key, value) in features_str.items()
+    )
+
+    # Concatenate all features for this cell
+    features = features_dna.copy()
+    features.update(features_mem)
+    features.update(features_str)
+
+    # Save to JSON
+    with open(path_output, "w") as f:
+        json.dump(features, f)
+
+    return
+
+
+if __name__ == "__main__":
+    
+    """
+    You can also run feature calculation from a config file.
+    """
+    
+    parser = argparse.ArgumentParser(description='Manage parallel cytoplasm parameterization')
+    parser.add_argument('--config', help='Path to the JSON config file.', required=True)
+    args = vars(parser.parse_args())
+    
+    with open(args['config'], 'r') as f:
+        config = json.load(f)
+    
+    # Keep the header
+    skip = config['skip']
+    if skip > 0:
+        skip = range(1, skip+1)
+    
+    df = pd.read_csv(
+        config['csv'],
+        index_col='CellId',
+        skiprows=skip,
+        nrows=config['nrows']
+    )
+    
+    print(f"Processing dataframe of shape {df.shape}")
+        
+    def wrapper_for_feature_calculation(index):
+        row = df.loc[index]
+        path_seg = Path(config['data_folder']) / row.crop_seg
+        channels = eval(row.name_dict)["crop_seg"]
+        path_output = Path(config['output']) / f"{index}.json"
+
+        try:
+            load_images_and_calculate_features(
+                path_seg=path_seg,
+                channels=channels,
+                path_output=path_output
+            )        
+            print(f"Index {index} complete.")
+        except:
+            print(f"Index {index} FAILED.")
+
+    N_CORES = len(os.sched_getaffinity(0))
+    with concurrent.futures.ProcessPoolExecutor(N_CORES) as executor:
+        executor.map(wrapper_for_feature_calculation, df.index)
+
