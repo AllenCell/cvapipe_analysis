@@ -165,7 +165,7 @@ class ComputeFeatures(Step):
         df_features = pd.DataFrame(df_features)
         df_features.index = df_features.index.rename("CellId")
         
-        log.info("Saving manifest.")
+        log.info(f"Saving manifest of shape {df_features.shape}.")
         
         # Save manifest
         self.manifest = df_features
