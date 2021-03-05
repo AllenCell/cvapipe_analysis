@@ -1,12 +1,14 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+import os
 import json
 import logging
 from pathlib import Path
 from datetime import datetime
 from typing import NamedTuple, Optional, Union, List, Dict
 
+import concurrent
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
@@ -19,21 +21,13 @@ from .compute_features_tools import load_images_and_calculate_features
 
 log = logging.getLogger(__name__)
 
-
-class DatasetFields:
-    CellId = "CellId"
-    CellIndex = "CellIndex"
-    FOVId = "FOVId"
-    CellFeaturesPath = "CellFeaturesPath"
-
-
 class SingleCellFeaturesResult(NamedTuple):
-    cell_id: Union[int, str]
-    path: Path
+    CellId: Union[int, str]
+    PathToFeatureJSON: Path
 
 
 class SingleCellFeaturesError(NamedTuple):
-    cell_id: int
+    CellId: int
     error: str
 
 
@@ -85,6 +79,15 @@ class ComputeFeatures(Step):
             )
             return SingleCellFeaturesError(row_index, str(e))
 
+    @staticmethod
+    def _load_features_from_json(cell_feature_result):
+        if cell_feature_result.PathToFeatureJSON.exists():
+            with open(cell_feature_result.PathToFeatureJSON, "r") as fjson:
+                features = json.load(fjson)
+            return pd.Series(features, name=cell_feature_result.CellId)
+        else:
+            log.info(f"File not found: {str(cell_feature_result.PathToFeatureJSON)}.json")
+
     @log_run_params
     def run(
         self,
@@ -100,7 +103,7 @@ class ComputeFeatures(Step):
         
         # Load manifest from previous step
         path_manifest = self.project_local_staging_dir / "loaddata/manifest.csv"
-        df = pd.read_csv(path_manifest, index_col="CellId")
+        df = pd.read_csv(path_manifest, index_col="CellId", low_memory=False)
         
         # Keep only the columns that will be used from now on
         columns_to_keep = ["crop_raw", "crop_seg", "name_dict"]
@@ -114,15 +117,15 @@ class ComputeFeatures(Step):
 
         if distribute:
             
-            cluster.run_distributed_feature_extraction(
-                df,
-                path_manifest,
-                load_data_dir,
-                features_dir,
-                config,
-                log)
+            nworkers = config['resources']['nworkers']
+            data = cluster.data_to_distribute(df, nworkers)
+            data.set_rel_path_to_dataframe(path_manifest)
+            data.set_rel_path_to_input_images(load_data_dir)
+            data.set_rel_path_to_output(features_dir)
+            
+            cluster.run_distributed_feature_extraction(data, config, log)
 
-            log.info(f"{config['resources']['nworkers']} have been launched. Please come back when the calculation is complete.")
+            log.info(f"{nworkers} have been launched. Please come back when the calculation is complete.")
             
             return None
             
@@ -144,31 +147,20 @@ class ComputeFeatures(Step):
         errors = []
         for result in results:
             if isinstance(result, SingleCellFeaturesResult):
-                cell_features_dataset.append(
-                    {
-                        DatasetFields.CellId: result.cell_id,
-                        DatasetFields.CellFeaturesPath: result.path,
-                    }
-                )
+                cell_features_dataset.append(result)
             else:
-                errors.append(
-                    {DatasetFields.CellId: result.cell_id, "Error": result.error}
-                )
+                errors.append(error)
 
         for error in errors:
             log.info(error)
-
-        # Gather all features into a single manifest
-        df_features = pd.DataFrame([])
-        for index in tqdm(df.index, desc="Merging features"):
-            if (self.step_local_staging_dir / f"cell_features/{index}.json").exists():
-                with open(self.step_local_staging_dir / f"cell_features/{index}.json", "r") as fjson:
-                    features = json.load(fjson)
-                features = pd.Series(features, name=index)
-                df_features = df_features.append(features)
-            else:
-                log.info(f"File not found: {index}.json")
-                
+            
+        df_features = []
+        N_CORES = len(os.sched_getaffinity(0))
+        with concurrent.futures.ProcessPoolExecutor(N_CORES) as executor:
+            df_features.append(
+                tqdm(executor.map(self._load_features_from_json, cell_features_dataset),
+                     total=len(cell_features_dataset)))
+        df_features = pd.DataFrame(df_features)
         df_features.index = df_features.index.rename("CellId")
 
         # Save manifest
