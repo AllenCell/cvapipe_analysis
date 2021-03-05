@@ -7,6 +7,8 @@ from typing import Dict, List, Optional, Union
 from datastep import Step, log_run_params
 
 import pandas as pd
+
+from ...tools import general
 from .outliers import outliers_removal
 from .dim_reduction import pca_analysis
 from .avgshape import digitize_shape_mode
@@ -38,6 +40,9 @@ class Shapemode(Step):
         no_structural_outliers: bool = False,
         **kwargs
     ):
+        
+        # Load configuration file
+        config = general.load_config_file()
         
         # Load feature dataframe
         path_to_metadata_manifest = self.project_local_staging_dir / 'loaddata/manifest.csv'

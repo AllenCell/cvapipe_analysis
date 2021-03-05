@@ -3,15 +3,57 @@ import dask
 import shutil
 import subprocess
 import numpy as np
+import pandas as pd
 from pathlib import Path
-from datetime import datetime
-from dask.distributed import Client
-from dask_jobqueue import SLURMCluster
+from typing import NamedTuple, Optional, Union, List, Dict
 
 
-def run_distributed_feature_extraction(df, path_df, data_folder, output_folder, config, log):
+class data_to_distribute:
+    
+    
+    def __init__(self, df: pd.DataFrame, nworkers: int):
+        self.df = df.copy().reset_index()
+        self.nrows = len(df)
+        self.nworkers = nworkers
+        self.chunk_size = self.nrows // self.nworkers
 
-    log.info("Cleaning distribute directory.")
+        
+    def get_next_chunk(self):
+        for chunk, df_chunk in self.df.groupby(np.arange(self.nrows)//self.chunk_size):
+            id_ini = int(df_chunk.index[0])
+            id_end = int(df_chunk.index[-1])
+            nrows = id_end - id_ini + 1
+            yield chunk, id_ini, nrows
+
+            
+    def set_rel_path_to_dataframe(self, path):
+        self.rel_path_dataframe = path
+
+        
+    def get_abs_path_to_dataframe_as_str(self):
+        path = Path().absolute() / self.rel_path_dataframe
+        return str(path)
+
+    
+    def set_rel_path_to_input_images(self, path):
+        self.rel_path_to_input_images = path
+
+        
+    def get_abs_path_to_input_images_as_str(self):
+        path = Path().absolute() / self.rel_path_to_input_images
+        return str(path)
+        
+        
+    def set_rel_path_to_output(self, path):
+        self.rel_path_to_output = path
+
+        
+    def get_abs_path_to_output_as_str(self):
+        path = Path().absolute() / self.rel_path_to_output
+        return str(path)
+
+    
+def clean_distribute_folder():
     
     try:
         shutil.rmtree('.distribute')
@@ -21,53 +63,56 @@ def run_distributed_feature_extraction(df, path_df, data_folder, output_folder, 
         dir_dist = Path(".distribute") / folder
         dir_dist.mkdir(parents=True, exist_ok=True)
 
-    nrows = len(df)
-    nworkers = config['resources']['nworkers']
-    
-    df = df.reset_index(drop=False)
-    
-    log.info("Creating config files.")
-    
-    root = Path().absolute()
-    
-    chunk_size = len(df) // nworkers
-    
-    for chunk, df_chunk in df.groupby(np.arange(nrows)//chunk_size):
-
-        id_ini = int(df_chunk.index[0])
-        id_end = int(df_chunk.index[-1])
-        nrows = id_end - id_ini + 1
         
-        # Script config
+def write_script_file(chunk, config):
+
+    mem = config['resources']['memory']
+    cores = config['resources']['cores']
+    
+    root = str(Path().absolute())
+    abs_path_script = f"{root}/.distribute/scripts/{chunk}.script"
+    abs_path_script_output = f"{root}/.distribute/log/{chunk}.out"
+    abs_path_python_env = config['resources']['path_python_env']
+    abs_path_python_file = f"{root}/cvapipe_analysis/steps/compute_features/compute_features_tools.py"
+    abs_path_config_file = f"{root}/.distribute/config/{chunk}.json"
+
+    with open(abs_path_script, "w") as fs:
+        print("#!/bin/bash", file=fs)
+        print(f"#SBATCH --job-name=cvapipe-{chunk}", file=fs)
+        print("#SBATCH --partition aics_cpu_general", file=fs)
+        print(f"#SBATCH --mem-per-cpu {mem}", file=fs)
+        print(f"#SBATCH --cpus-per-task {cores}", file=fs)
+        print(f"#SBATCH --output {abs_path_script_output}", file=fs)
+        print(f"srun {abs_path_python_env} {abs_path_python_file} --config {abs_path_config_file}", file=fs)
+
+    return abs_path_script
+
+
+def run_distributed_feature_extraction(data, config, log):
+    
+    log.info("Cleaning distribute directory.")
+    clean_distribute_folder()
+    
+    for chunk, id_ini, nrows in data.get_next_chunk():
         
         script_config = {
-            "csv": str(root / path_df),
+            "csv": data.get_abs_path_to_dataframe_as_str(),
+            "output": data.get_abs_path_to_output_as_str(),
+            "data_folder": data.get_abs_path_to_input_images_as_str(),
             "skip": id_ini,
-            "nrows": nrows,
-            "data_folder": str(root / data_folder),
-            "output": str(root / output_folder)
+            "nrows": nrows
         }
-            
-        with open(f".distribute/config/{chunk}.json", "w") as fj:
-            json.dump(script_config, fj, indent=4, sort_keys=True)
-    
-        # Script
 
-        script_name = f".distribute/scripts/{chunk}.script"
-        
-        with open(script_name, "w") as fs:
-            print("#!/bin/bash", file=fs)
-            print(f"#SBATCH --job-name=cvapipe-{chunk}", file=fs)
-            print("#SBATCH --partition aics_cpu_general", file=fs)
-            print(f"#SBATCH --mem-per-cpu {config['resources']['memory']}", file=fs)
-            print(f"#SBATCH --cpus-per-task {config['resources']['cores']}", file=fs)
-            print(f"#SBATCH --output {str(root)}/.distribute/log/{chunk}.out", file=fs)
-            print(f"srun {config['resources']['path_python_env']} {str(root)}/cvapipe_analysis/steps/compute_features/compute_features_tools.py --config {str(root)}/.distribute/config/{chunk}.json", file=fs)
+        rel_path_config_file = f".distribute/config/{chunk}.json"
+        with open(rel_path_config_file, "w") as fj:
+            json.dump(script_config, fj, indent=4, sort_keys=True)
+
+        abs_path_script = write_script_file(chunk, config)
     
         log.info(f"Submitting job cvapipe {chunk}...")
 
-        submission = 'sbatch ' + script_name
+        submission = 'sbatch ' + abs_path_script
         process = subprocess.Popen(submission, stdout=subprocess.PIPE, shell=True)
         (out, err) = process.communicate()
-
+        
     return
