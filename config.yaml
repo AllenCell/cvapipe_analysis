@@ -13,9 +13,13 @@ resources:
     walltime: "9-24:00:00"
     path_python_env: "/home/matheus.viana/anaconda3/envs/cvapipe/bin/python"
 
-mappoints:
+pca:
+    # Number of principal components to be calculated
+    number_of_pcs: 8
     # Number of map points along each principal component
-    nbins: 9
+    number_map_points: 9
+    # limits of x and y axies in the animated GIFs
+    plot_limits: [-150, 150, -80, 80]
 
 aggregation:
     # Shape space used to create aggregated images.
@@ -26,13 +30,10 @@ aggregation:
     aggregate_on: "DNA_MEM_PC"
 
 structures:
-    # Gene names of each tagged structure. These match
-    # the column structure_name in the manifest.
-
-    genes: ["FBL", "NPM1", "SON", "SMC1A", "HIST1H2BJ", "LMNB1", "NUP153", "SEC61B", "ATP2A2", "TOMM20", "SLC25A17", "RAB5A", "LAMP1",  "ST6GAL1", "CETN2", "TUBA1B", "AAVS1", "ACTB", "ACTN1", "MYH10", "GJA1", "TJP1", "DSP", "CTNNB1", "PXN"]
 
     # >> Results are going to be ordered according to
-    # this sequence.
+    # this sequence. These match the column structure_name
+    # in the manifest.
     genes: ["FBL", "NPM1", "SON", "SMC1A", "HIST1H2BJ", "LMNB1", "NUP153", "SEC61B", "ATP2A2", "TOMM20", "SLC25A17", "RAB5A", "LAMP1",  "ST6GAL1", "CETN2", "TUBA1B", "AAVS1", "ACTB", "ACTN1", "MYH10", "GJA1", "TJP1", "DSP", "CTNNB1", "PXN"]
     # Mapping between gene name and description
     desc:
