@@ -55,16 +55,18 @@ class data_to_distribute:
     
 def clean_distribute_folder():
     
-    try:
-        shutil.rmtree('.distribute')
-    except: pass
-    
-    for folder in ['log','scripts','config']:
-        dir_dist = Path(".distribute") / folder
-        dir_dist.mkdir(parents=True, exist_ok=True)
-
+    folders = ['log','scripts','config']
         
-def write_script_file(chunk, config):
+    for folder in folders:
+        path_subfolder = Path(".distribute") / folder
+        try:
+            shutil.rmtree(str(path_subfolder))
+        except: pass
+        path_subfolder.mkdir(parents=True, exist_ok=True)
+
+    return
+
+def write_script_file(chunk, config, rel_path_python_file):
 
     mem = config['resources']['memory']
     cores = config['resources']['cores']
@@ -73,7 +75,7 @@ def write_script_file(chunk, config):
     abs_path_script = f"{root}/.distribute/scripts/{chunk}.script"
     abs_path_script_output = f"{root}/.distribute/log/{chunk}.out"
     abs_path_python_env = config['resources']['path_python_env']
-    abs_path_python_file = f"{root}/cvapipe_analysis/steps/compute_features/compute_features_tools.py"
+    abs_path_python_file = f"{root}/{rel_path_python_file}"
     abs_path_config_file = f"{root}/.distribute/config/{chunk}.json"
 
     with open(abs_path_script, "w") as fs:
@@ -88,7 +90,7 @@ def write_script_file(chunk, config):
     return abs_path_script
 
 
-def run_distributed_feature_extraction(data, config, log):
+def distribute_python_code(data, config, log, rel_path_python_file):
     
     log.info("Cleaning distribute directory.")
     clean_distribute_folder()
@@ -107,7 +109,7 @@ def run_distributed_feature_extraction(data, config, log):
         with open(rel_path_config_file, "w") as fj:
             json.dump(script_config, fj, indent=4, sort_keys=True)
 
-        abs_path_script = write_script_file(chunk, config)
+        abs_path_script = write_script_file(chunk, config, rel_path_python_file)
     
         log.info(f"Submitting job cvapipe {chunk}...")
 
