@@ -1,8 +1,13 @@
+import os
+import json
+import argparse
+import concurrent
+from pathlib import Path
 from aicsimageio import writers
 from aicsshparam import shtools
 from aicscytoparam import cytoparam
 
-from ..compute_features.compute_features_tools import get_segmentations, get_raws
+from cvapipe_analysis.tools import general
 
 def parameterize(data_folder, row, save_as):
     
@@ -23,30 +28,30 @@ def parameterize(data_folder, row, save_as):
     """
 
     # Load correct segmentations
-    channels = row['name_dict']
-    _, _, seg_str = get_segmentations(
-        folder = data_folder,
-        path_to_seg = row['crop_seg'],
-        channels = eval(channels)['crop_seg']
+    channels = eval(row.name_dict)
+    path_seg = data_folder / row.crop_seg
+    _, _, seg_str = general.get_segmentations(
+        path_seg=path_seg,
+        channels=channels['crop_seg']
     )
 
     # Load FP image
-    _, _, struct = get_raws(
-        folder = data_folder,
-        path_to_raw = row['crop_raw'],
-        channels = eval(channels)['crop_raw']
+    path_raw = data_folder / row.crop_raw
+    _, _, struct = general.get_raws(
+        path_raw=path_raw,
+        channels=channels['crop_raw']
     )
         
     # Rotate structure segmentation with same angle used to align the cell
     seg_str = shtools.apply_image_alignment_2d(
         image = seg_str,
-        angle = row['mem_shcoeffs_transform_angle_lcc']
+        angle = row.mem_shcoeffs_transform_angle_lcc
     ).squeeze()
 
     # Rotate FP structure with same angle used to align the cell
     seg_str = shtools.apply_image_alignment_2d(
         image = struct,
-        angle = row['mem_shcoeffs_transform_angle_lcc']
+        angle = row.mem_shcoeffs_transform_angle_lcc
     ).squeeze()
 
     # Find cell coefficients and centroid. Also rename coeffs to agree
@@ -89,3 +94,33 @@ def parameterize(data_folder, row, save_as):
             image_name = save_as.stem,
             channel_names = representations.channel_names
         )
+
+if __name__ == "__main__":
+    
+    parser = argparse.ArgumentParser(description='Batch single cell parameterization.')
+    parser.add_argument('--config', help='Path to the JSON config file.', required=True)
+    args = vars(parser.parse_args())
+    
+    with open(args['config'], 'r') as f:
+        config = json.load(f)
+    
+    df = general.read_chunk_of_dataframe(config)
+        
+    print(f"Processing dataframe of shape {df.shape}")
+        
+    def wrapper_for_parameterization(index):
+        
+        row = df.loc[index]
+        data_folder = Path(config['data_folder'])
+        path_output = Path(config['output']) / f"{index}.tif"
+
+        try:
+            parameterize(data_folder, row, path_output)
+            print(f"Index {index} complete.")
+        except:
+            print(f"Index {index} FAILED.")
+            
+    N_CORES = len(os.sched_getaffinity(0))
+    with concurrent.futures.ProcessPoolExecutor(N_CORES) as executor:
+        executor.map(wrapper_for_parameterization, df.index)
+
