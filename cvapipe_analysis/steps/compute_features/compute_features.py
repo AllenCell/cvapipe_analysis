@@ -113,7 +113,7 @@ class ComputeFeatures(Step):
             data.set_rel_path_to_input_images(load_data_dir)
             data.set_rel_path_to_output(features_dir)
             python_file = "cvapipe_analysis/steps/compute_features/compute_features_tools.py"
-            cluster.run_distributed_feature_extraction(data, config, log, python_file)
+            cluster.distribute_python_code(data, config, log, python_file)
 
             log.info(f"{nworkers} have been launched. Please come back when the calculation is complete.")
             
