@@ -49,7 +49,7 @@ class Parameterization(Step):
 
         if not overwrite and save_path.is_file():
             log.info(f"Skipping cell parameterization for Cell Id: {index}")
-            return SingleCellParameterizationResult(index, row['structure_name'], save_path)
+            return SingleCellParameterizationResult(index, save_path)
 
         log.info(f"Beginning cell parameterization for CellId: {index}")
 
@@ -74,7 +74,7 @@ class Parameterization(Step):
         config = general.load_config_file()
         
         # For parameterization we need to load the single cell
-        # metadata dataframe and the single cell feature dataframe
+        # metadata dataframe and the single cell features dataframe
 
         # Load manifest from load_data step
         path_meta_manifest = self.project_local_staging_dir/'loaddata/manifest.csv'
