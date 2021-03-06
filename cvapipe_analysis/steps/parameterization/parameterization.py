@@ -11,26 +11,19 @@ import pandas as pd
 from tqdm import tqdm
 from datastep import Step, log_run_params
 from aics_dask_utils import DistributedHandler
-from .parameterization_tools import parameterize
 
-###############################################################################
+from cvapipe_analysis.tools import general
+from cvapipe_analysis.tools import cluster
+from .parameterization_tools import parameterize
 
 log = logging.getLogger(__name__)
 
-###############################################################################
-
-class DatasetFields:
-    CellId = "CellId"
-    structure_name = "structure_name"
-    CellRepresentationPath = "CellRepresentationPath"
-
 class SingleCellParameterizationResult(NamedTuple):
-    cell_id: Union[int, str]
-    structure_name: str
-    path: Path
+    CellId: Union[int, str]
+    PathToRepresentationFile: Path
 
 class SingleCellParameterizationError(NamedTuple):
-    cell_id: int
+    CellId: int
     error: str
 
 class Parameterization(Step):
@@ -54,57 +47,46 @@ class Parameterization(Step):
         # Get the ultimate end save path for this cell
         save_path = save_dir / f"{index}.tif"
 
-        # Check skip
         if not overwrite and save_path.is_file():
             log.info(f"Skipping cell parameterization for Cell Id: {index}")
             return SingleCellParameterizationResult(index, row['structure_name'], save_path)
 
-        # Overwrite or didn't exist
         log.info(f"Beginning cell parameterization for CellId: {index}")
 
-        # Wrap errors for debugging later
         try:
-            parameterize(
-                data_folder = load_data_dir,
-                row = row.to_dict(),
-                save_as = save_path
-            )
-            
+            parameterize(load_data_dir, row, save_path)            
             log.info(f"Completed cell parameterization for CellId: {index}")
-            return SingleCellParameterizationResult(index, row['structure_name'], save_path)
+            return SingleCellParameterizationResult(index, save_path)
 
-        # Catch and return error
         except Exception as e:
-            log.info(
-                f"Failed cell parameterization for CellId: {index}. Error: {e}"
-            )
+            log.info(f"Failed cell parameterization for CellId: {index}. Error: {e}")
             return SingleCellParameterizationError(index, str(e))
 
     @log_run_params
     def run(
         self,
         distributed_executor_address: Optional[str] = None,
+        distribute: Optional[bool] = False,
         overwrite: bool = False,
         **kwargs):
 
+        # Load configuration file
+        config = general.load_config_file()
+        
         # For parameterization we need to load the single cell
         # metadata dataframe and the single cell feature dataframe
 
         # Load manifest from load_data step
-        df = pd.read_csv(
-            self.project_local_staging_dir/'loaddata/manifest.csv',
-            index_col = 'CellId'
-        )
+        path_meta_manifest = self.project_local_staging_dir/'loaddata/manifest.csv'
+        df = pd.read_csv(path_meta_manifest, index_col='CellId', low_memory=False)
         
         # Keep only the columns that will be used from now on
         columns_to_keep = ['structure_name','crop_raw', 'crop_seg', 'name_dict']
         df = df[columns_to_keep]
         
         # Load manifest from feature calculation step
-        df_features = pd.read_csv(
-            self.project_local_staging_dir/'computefeatures/manifest.csv',
-            index_col = 'CellId'
-        )
+        path_features_manifest = self.project_local_staging_dir/'computefeatures/manifest.csv'
+        df_features = pd.read_csv(path_features_manifest, index_col='CellId', low_memory=False)
                 
         # Merge the two dataframes
         df = df.join(df_features, how='inner')
@@ -116,38 +98,43 @@ class Parameterization(Step):
         # Data folder
         load_data_dir = self.project_local_staging_dir/'loaddata'
         
-        # Process each row
-        with DistributedHandler(distributed_executor_address) as handler:
-            # Start processing
-            results = handler.batched_map(
-                self._single_cell_parameterization,
-                # Convert dataframe iterrows into two lists of items to iterate over
-                # One list will be row index
-                # One list will be the pandas series of every row
-                *zip(*list(df.iterrows())),
-                # Pass the other parameters as list of the same thing for each
-                # mapped function call
-                [save_dir for i in range(len(df))],
-                [load_data_dir for i in range(len(df))],
-                [overwrite for i in range(len(df))]
-            )
+        if distribute:
+            
+            log.info(f"Saving dataframe for workers...")
+            path_manifest = Path(".distribute/manifest.csv")
+            df.to_csv(path_manifest)
+            
+            nworkers = config['resources']['nworkers']
+            data = cluster.data_to_distribute(df, nworkers)
+            data.set_rel_path_to_dataframe(path_manifest)
+            data.set_rel_path_to_input_images(load_data_dir)
+            data.set_rel_path_to_output(save_dir)
+            python_file = "cvapipe_analysis/steps/parameterization/parameterization_tools.py"
+            cluster.distribute_python_code(data, config, log, python_file)
+
+            log.info(f"{nworkers} have been launched. Please come back when the calculation is complete.")
+            
+            return None
+
+        else:
+            
+            with DistributedHandler(distributed_executor_address) as handler:
+                results = handler.batched_map(
+                    self._single_cell_parameterization,
+                    *zip(*list(df.iterrows())),
+                    [save_dir for i in range(len(df))],
+                    [load_data_dir for i in range(len(df))],
+                    [overwrite for i in range(len(df))]
+                )
 
         # Generate features paths rows
         errors = []
         df_param = []
         for result in results:
             if isinstance(result, SingleCellParameterizationResult):
-                df_param.append(
-                    {
-                        DatasetFields.CellId: result.cell_id,
-                        DatasetFields.structure_name: result.structure_name,
-                        DatasetFields.CellRepresentationPath: result.path,
-                    }
-                )
+                df_param.append(result)
             else:
-                errors.append(
-                    {DatasetFields.CellId: result.cell_id, "Error": result.error}
-                )
+                errors.append(result)
         # Convert to DataFrame
         df_param = pd.DataFrame(df_param).set_index('CellId')
 
