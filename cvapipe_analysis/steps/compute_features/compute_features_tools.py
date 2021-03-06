@@ -5,12 +5,12 @@ import concurrent
 import numpy as np
 import pandas as pd
 from pathlib import Path
-from aicsimageio import AICSImage
 from aicsshparam import shtools, shparam
 from skimage import measure as skmeasure
 from skimage import morphology as skmorpho
 
-        
+from cvapipe_analysis.tools import general
+
 def cast_features(features):
     
     """
@@ -207,69 +207,6 @@ def get_features(input_image, input_reference_image, compute_shcoeffs=True):
     
     return features
 
-
-def get_segmentations(path_seg, channels):
-
-    """
-    Find the segmentations that should be used for features
-    calculation.
-
-    Parameters
-    --------------------
-    path_seg: str
-        Path to the 4D binary image.
-    channels: list of str
-        Name of channels of the 4D binary image.
-
-    Returns
-    -------
-    result: seg_nuc, seg_mem, seg_str
-        3D binary images of nucleus, cell and structure.
-    """
-
-    seg_channel_names = ['dna_segmentation',
-                         'membrane_segmentation',
-                         'struct_segmentation_roof']
-
-    if not all(name in channels for name in seg_channel_names):
-        raise ValueError("One or more segmentation channels was\
-        not found.")
-
-    ch_dna = channels.index('dna_segmentation')
-    ch_mem = channels.index('membrane_segmentation')
-    ch_str = channels.index('struct_segmentation_roof')
-    
-    segs = AICSImage(path_seg).data.squeeze()
-
-    return segs[ch_dna], segs[ch_mem], segs[ch_str]
-    
-def get_raws(path_raw, channels):
-
-    """
-    Find the raw images.
-
-    Parameters
-    --------------------
-    path_raw: str
-        Path to the 4D raw image.
-    channels: list of str
-        Name of channels of the 4D raw image.
-
-    Returns
-    -------
-    result: nuc, mem, struct
-        3D raw images of nucleus, cell and structure.
-    """
-
-    ch_dna = channels.index('dna')
-    ch_mem = channels.index('membrane')
-    ch_str = channels.index('structucture')
-    
-    raw = AICSImage(path_raw).data.squeeze()
-
-    return raw[ch_dna], raw[ch_mem], raw[ch_str]
-
-
 def load_images_and_calculate_features(path_seg, channels, path_output):
     
     """
@@ -289,7 +226,7 @@ def load_images_and_calculate_features(path_seg, channels, path_output):
     
     # Find the correct segmentation for nucleus,
     # cell and structure
-    seg_dna, seg_mem, seg_str = get_segmentations(
+    seg_dna, seg_mem, seg_str = general.get_segmentations(
         path_seg=path_seg,
         channels=channels
     )
@@ -333,44 +270,27 @@ def load_images_and_calculate_features(path_seg, channels, path_output):
 
 
 if __name__ == "__main__":
-    
-    """
-    You can also run feature calculation from a config file.
-    """
-    
-    parser = argparse.ArgumentParser(description='Manage parallel cytoplasm parameterization')
+        
+    parser = argparse.ArgumentParser(description='Batch feature extraction.')
     parser.add_argument('--config', help='Path to the JSON config file.', required=True)
     args = vars(parser.parse_args())
     
     with open(args['config'], 'r') as f:
         config = json.load(f)
     
-    # Keep the header
-    skip = config['skip']
-    if skip > 0:
-        skip = range(1, skip+1)
-    
-    df = pd.read_csv(
-        config['csv'],
-        index_col='CellId',
-        skiprows=skip,
-        nrows=config['nrows']
-    )
+    df = general.read_chunk_of_dataframe(config)
     
     print(f"Processing dataframe of shape {df.shape}")
         
     def wrapper_for_feature_calculation(index):
+        
         row = df.loc[index]
         path_seg = Path(config['data_folder']) / row.crop_seg
         channels = eval(row.name_dict)["crop_seg"]
         path_output = Path(config['output']) / f"{index}.json"
 
         try:
-            load_images_and_calculate_features(
-                path_seg=path_seg,
-                channels=channels,
-                path_output=path_output
-            )        
+            load_images_and_calculate_features(path_seg, channels, path_output)
             print(f"Index {index} complete.")
         except:
             print(f"Index {index} FAILED.")

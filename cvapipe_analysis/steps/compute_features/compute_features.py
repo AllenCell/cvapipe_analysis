@@ -15,8 +15,8 @@ from tqdm import tqdm
 from datastep import Step, log_run_params
 from aics_dask_utils import DistributedHandler
 
-from ...tools import general
-from ...tools import cluster
+from cvapipe_analysis.tools import general
+from cvapipe_analysis.tools import cluster
 from .compute_features_tools import load_images_and_calculate_features
 
 log = logging.getLogger(__name__)
@@ -51,32 +51,22 @@ class ComputeFeatures(Step):
         # Get the ultimate end save path for this cell
         save_path = save_dir / f"{row_index}.json"
 
-        # Check skip
         if not overwrite and save_path.is_file():
             log.info(f"Skipping cell feature generation for Cell Id: {row_index}")
             return SingleCellFeaturesResult(row_index, save_path)
 
-        # Overwrite or didn't exist
         log.info(f"Beginning cell feature generation for CellId: {row_index}")
 
         channels = eval(row.name_dict)["crop_seg"]
         seg_path = load_data_dir / row.crop_seg
-        
-        # Wrap errors for debugging later
+
         try:
-            load_images_and_calculate_features(
-                path_seg=seg_path,
-                channels=channels,
-                path_output=save_path
-            )
+            load_images_and_calculate_features(seg_path, channels, save_path)
             log.info(f"Completed cell feature generation for CellId: {row_index}")
             return SingleCellFeaturesResult(row_index, save_path)
 
-        # Catch and return error
         except Exception as e:
-            log.info(
-                f"Failed cell feature generation for CellId: {row_index}. Error: {e}"
-            )
+            log.info(f"Failed cell feature generation for CellId: {row_index}. Error: {e}")
             return SingleCellFeaturesError(row_index, str(e))
 
     @staticmethod
@@ -93,7 +83,7 @@ class ComputeFeatures(Step):
         self,
         debug=False,
         distributed_executor_address: Optional[str] = None,
-        distribute: Optional[bool] = None,
+        distribute: Optional[bool] = False,
         overwrite: bool = False,
         **kwargs,
     ):
@@ -122,18 +112,16 @@ class ComputeFeatures(Step):
             data.set_rel_path_to_dataframe(path_manifest)
             data.set_rel_path_to_input_images(load_data_dir)
             data.set_rel_path_to_output(features_dir)
-            
-            cluster.run_distributed_feature_extraction(data, config, log)
+            python_file = "cvapipe_analysis/steps/compute_features/compute_features_tools.py"
+            cluster.run_distributed_feature_extraction(data, config, log, python_file)
 
             log.info(f"{nworkers} have been launched. Please come back when the calculation is complete.")
             
             return None
             
         else:
-            
-            # Process each row
+
             with DistributedHandler(distributed_executor_address) as handler:
-                # Start processing
                 results = handler.batched_map(
                     self._run_feature_extraction,
                     *zip(*list(df.iterrows())),
