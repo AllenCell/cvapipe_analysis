@@ -108,12 +108,11 @@ class ComputeFeatures(Step):
         if distribute:
             
             nworkers = config['resources']['nworkers']
-            data = cluster.data_to_distribute(df, nworkers)
-            data.set_rel_path_to_dataframe(path_manifest)
-            data.set_rel_path_to_input_images(load_data_dir)
-            data.set_rel_path_to_output(features_dir)
-            python_file = "cvapipe_analysis/steps/compute_features/compute_features_tools.py"
-            cluster.distribute_python_code(data, config, log, python_file)
+            dist_feats = cluster.DistributeFeatures(df, nworkers)
+            dist_feats.set_rel_path_to_dataframe(path_manifest)
+            dist_feats.set_rel_path_to_input_images(load_data_dir)
+            dist_feats.set_rel_path_to_output(features_dir)
+            dist_feats.distribute(config, log)
 
             log.info(f"{nworkers} have been launched. Please come back when the calculation is complete.")
             

@@ -105,12 +105,11 @@ class Parameterization(Step):
             df.to_csv(path_manifest)
             
             nworkers = config['resources']['nworkers']
-            data = cluster.data_to_distribute(df, nworkers)
-            data.set_rel_path_to_dataframe(path_manifest)
-            data.set_rel_path_to_input_images(load_data_dir)
-            data.set_rel_path_to_output(save_dir)
-            python_file = "cvapipe_analysis/steps/parameterization/parameterization_tools.py"
-            cluster.distribute_python_code(data, config, log, python_file)
+            dist_param = cluster.DistributeParameterization(df, nworkers)
+            dist_param.set_rel_path_to_dataframe(path_manifest)
+            dist_param.set_rel_path_to_input_images(load_data_dir)
+            dist_param.set_rel_path_to_output(save_dir)
+            dist_param.distribute(config, log)
 
             log.info(f"{nworkers} have been launched. Please come back when the calculation is complete.")
             

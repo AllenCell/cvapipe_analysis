@@ -2,7 +2,7 @@ appName: cvapipe_analysis
 
 project:
     # Sufix to append to local_staging
-    name: "full"
+    name: "test"
 
 resources:
     # In case a (slurm) cluster is available
@@ -28,6 +28,18 @@ aggregation:
     # MEM_PC: shape space of cell alone
     # DNA_MEM_PC: shape space of nucleus and cell together
     aggregate_on: "DNA_MEM_PC"
+
+parameterization:
+    # List of images and their channels that should be
+    # parameterized
+    intensities: [['crop_raw', 'structure'], ['crop_seg', 'structure_seg']]
+    # Number of SHE coefficients used to describe cell
+    # and nuclear shape
+    lmax: 16
+    # Number of interplation points between nuclear
+    # centroid and nuclear shell, and from nuclear
+    # shell to cell membrane.
+    nisos: [32, 32]
 
 structures:
 
