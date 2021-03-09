@@ -16,12 +16,7 @@ from cvapipe_analysis.tools import general, cluster, shapespace
 from cvapipe_analysis.steps.shapemode.avgshape import digitize_shape_mode
 from .aggregation_tools import Aggregator
 
-###############################################################################
-
 log = logging.getLogger(__name__)
-
-###############################################################################
-
 
 class Aggregation(Step):
     def __init__(
@@ -61,14 +56,12 @@ class Aggregation(Step):
         df = df.merge(df_param[['PathToRepresentationFile']], left_index=True, right_index=True)
 
         # Also read the manifest with paths to VTK files
-        path_to_shapemode_paths = self.project_local_staging_dir / 'shapemode/shapemode.csv'
-        if not path_to_shapemode_paths.exists():
-            raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), path_to_shapemode_paths)
+        path_to_shapemode = self.project_local_staging_dir / 'shapemode'
         
         # Make necessary folders
         agg_dir = self.step_local_staging_dir / 'aggregations'
         agg_dir.mkdir(parents=True, exist_ok=True)
-
+        
         # Agg representations per cells and shape mode.
         # Here we use principal components gerated with cell
         # and nuclear SHE coefficients (DNA_MEM_PCx).
@@ -84,7 +77,7 @@ class Aggregation(Step):
             
             dist_agg = cluster.DistributeAggregation(df)
             dist_agg.set_rel_path_to_dataframe(path_manifest)
-            dist_agg.set_rel_path_to_shapemode_dataframe(path_to_shapemode_paths)
+            dist_agg.set_rel_path_to_shapemode_results(path_to_shapemode)
             dist_agg.set_rel_path_to_output(agg_dir)
             dist_agg.distribute(config, log)
 
@@ -93,30 +86,25 @@ class Aggregation(Step):
             return None
         
         else:
-            
-            df_shapemode_paths = pd.read_csv(path_to_shapemode_paths, index_col=0)
-            log.info(f"Shape of shape mode paths manifest: {df_shapemode_paths.shape}")
-            
+                        
+            space = shapespace.ShapeSpace(df[pc_names])            
             for pc_name in tqdm(pc_names):
+                space.set_active_axis(pc_name)
+                space.digitize_active_axis()
+                space.link_results_folder(path_to_shapemode)
                 for _, intensity in config['parameterization']['intensities']:
                     for agg in ['avg', 'std']:
-                        df_filtered, bin_indexes, _ = digitize_shape_mode(
-                            df=df,
-                            feature=pc_name,
-                            nbins=config['pca']['number_map_points'],
-                            filter_based_on=pc_names
-                        )
-                        for b in tqdm(range(1, 1+config['pca']['number_map_points']), leave=False):
+                        for b, _ in space.iter_map_points():
+                            indexes = space.get_indexes_in_bin(b)
                             for struct in tqdm(config['structures']['genes'], leave=False):
-                                df_struct = df_filtered.loc[df_filtered.structure_name==struct]
-                                name = f"{agg[0]}-{intensity}-{struct}-{pc_name}-B{b}.tif"
+                                df_struct = df.loc[(df.index.isin(indexes))&(df.structure_name==struct)]
+                                name = f"{agg}-{intensity}-{struct}-{pc_name}-B{b}.tif"
                                 save_as = agg_dir / name
                                 if overwrite or not save_as.is_file():
-                                    df_struct_bin = df_struct.loc[df_struct.index.isin(bin_indexes[b-1][1])]
-                                    if len(df_struct_bin) > 0:
+                                    if len(df_struct) > 0:
                                         Agg = Aggregator(pc_name, b, agg, intensity)
                                         Agg.set_config(config)
-                                        Agg.set_shape_space(df_struct_bin, df_shapemode_paths)
+                                        Agg.set_shape_space(df_struct, space)
                                         Agg.morph_parameterized_intensity_on_shape(save_as)
         '''
         # Loop over shape modes

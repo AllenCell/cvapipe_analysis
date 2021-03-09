@@ -30,7 +30,7 @@ def parameterize(data_folder, row, save_as):
     # Load correct segmentations
     channels = eval(row.name_dict)
     path_seg = data_folder / row.crop_seg
-    _, _, seg_str = general.get_segmentations(
+    seg_dna, mem_seg, seg_str = general.get_segmentations(
         path_seg=path_seg,
         channels=channels['crop_seg']
     )

@@ -8,6 +8,7 @@ from tqdm import tqdm
 from pathlib import Path
 from typing import NamedTuple, Optional, Union, List, Dict
 
+from cvapipe_analysis.tools import shapespace
 from cvapipe_analysis.steps.shapemode.avgshape import digitize_shape_mode
 
 class Distribute:
@@ -150,12 +151,12 @@ class DistributeAggregation(Distribute):
         self.rel_path_to_python_file = "cvapipe_analysis/steps/aggregation/aggregation_tools.py"
 
         
-    def set_rel_path_to_shapemode_dataframe(self, path):
-        self.rel_path_to_shapemode_dataframe = path
+    def set_rel_path_to_shapemode_results(self, path):
+        self.rel_path_to_shapemode_results = path
 
         
-    def get_abs_path_to_shapemode_dataframe_as_str(self):
-        path = self.root / self.rel_path_to_shapemode_dataframe
+    def get_abs_path_to_shapemode_results_as_str(self):
+        path = self.root / self.rel_path_to_shapemode_results
         return str(path)
 
 
@@ -169,11 +170,14 @@ class DistributeAggregation(Distribute):
         pc_names = [f for f in self.df.columns if PREFIX in f]
 
         pc_names = pc_names[:1]
-        
-        df_shapemode = pd.read_csv(self.get_abs_path_to_shapemode_dataframe_as_str(), index_col=0)
-        log.info(f"Shape of shape mode paths manifest: {df_shapemode.shape}")
 
+        space = shapespace.ShapeSpace(self.df[pc_names])
+        
         for pc_name in tqdm(pc_names):
+
+            space.set_active_axis(pc_name)
+            space.digitize_active_axis()
+            space.link_results_folder(Path(self.get_abs_path_to_shapemode_results_as_str()))
             
             for _, intensity in tqdm(config['parameterization']['intensities'], leave=False):
                 
@@ -205,7 +209,7 @@ class DistributeAggregation(Distribute):
 
                                 script_config = {
                                     "csv": self.get_abs_path_to_dataframe_as_str(),
-                                    "csv_shapemode": self.get_abs_path_to_shapemode_dataframe_as_str(),
+                                    "shapemode_results": self.get_abs_path_to_shapemode_results_as_str(),
                                     "output": self.get_abs_path_to_output_as_str(),
                                     "filename": f"{script_id}.tif"
                                 }

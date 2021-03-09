@@ -41,9 +41,9 @@ class Aggregator:
     def set_config(self, config):
         self.config = config
     
-    def set_shape_space(self, df, df_shapemode):
+    def set_shape_space(self, df, shapespace):
         self.df = df
-        self.df_shapemode = df_shapemode
+        self.space = shapespace
         self.find_available_parameterized_intensities()
         self.load_meshes_and_parameterize()
         
@@ -74,29 +74,10 @@ class Aggregator:
         
         return agg_pint[channel_id]
     
-    @staticmethod
-    def read_mesh(path):
-        reader = vtk.vtkPolyDataReader()
-        reader.SetFileName(path)
-        reader.Update()
-        return reader.GetOutput()
-    
     def load_meshes_and_parameterize(self):
-        
-        index = self.df_shapemode.loc[
-            (self.df_shapemode.shapemode==self.pc_name)&
-            (self.df_shapemode.bin==self.map_point)
-        ].index
-        
-        if len(index) > 1:
-            warnings.warn(f"More than one index found for pc {self.pc_name} and\
-            bin {self.map_point}. Something seems wrong with the dataframe of\
-            VTK paths generated in the step shapemode. Continuing with\
-            first index.")
-        index = index[0]
-        
-        mesh_dna = self.read_mesh(self.df_shapemode.at[index, 'dnaMeshPath'])
-        mesh_mem = self.read_mesh(self.df_shapemode.at[index, 'memMeshPath'])
+                
+        mesh_dna = self.space.get_dna_mesh_of_bin(self.map_point)
+        mesh_mem = self.space.get_mem_mesh_of_bin(self.map_point)
 
         domain, origin = cytoparam.voxelize_meshes([mesh_mem, mesh_dna])
 
@@ -126,7 +107,7 @@ class Aggregator:
         with writers.ome_tiff_writer.OmeTiffWriter(save_as, overwrite_file=True) as writer:
             writer.save(img, dimension_order='ZYX', image_name=save_as.stem)
         
-        return img
+        return
 
 if __name__ == "__main__":
     
@@ -137,20 +118,19 @@ if __name__ == "__main__":
     with open(args['config'], 'r') as f:
         config = json.load(f)
 
+    df = pd.read_csv(config['csv'], index_col='CellId')
+        
     def parse_filename(filename):
         agg, intensity, struct, pc_name, map_point = filename.split('-')
         map_point = int(map_point.split('.')[0].replace('B',''))
         return agg, intensity, struct, pc_name, map_point
-        
     agg, intensity, struct, pc_name, map_point = parse_filename(config['filename'])
+    
+    space = shapespace.ShapeSpaceBasic()
+    space.link_results_folder(config['shapemode_results'])
+    space.set_active_axis(pc_name)
 
-    Agg = Aggregator(pc_name, map_point, agg, intensity)
-    
-    df = pd.read_csv(config['csv'], index_col='CellId')
-    
-    df_shapemode = pd.read_csv(config['csv_shapemode'], index_col=0)
-    
-    Agg.set_shape_space(df, df_shapemode)
-    
     save_as = Path(config['output']) / config['filename']
-    _ = Agg.morph_parameterized_intensity_on_shape(save_as)
+    Agg = Aggregator(pc_name, map_point, agg, intensity)
+    Agg.set_shape_space(df, space)
+    Agg.morph_parameterized_intensity_on_shape(save_as)
