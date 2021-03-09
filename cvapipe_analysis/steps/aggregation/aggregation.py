@@ -1,6 +1,8 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+import pdb; pdb.set_trace()
+
 import os
 import errno
 import logging
@@ -12,8 +14,10 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 
+
+
+
 from cvapipe_analysis.tools import general, cluster, shapespace
-from cvapipe_analysis.steps.shapemode.avgshape import digitize_shape_mode
 from .aggregation_tools import Aggregator
 
 log = logging.getLogger(__name__)
@@ -33,7 +37,7 @@ class Aggregation(Step):
         overwrite: Optional[bool]=False,
         **kwargs
     ):
-
+        
         # Load configuration file
         config = general.load_config_file()
         
