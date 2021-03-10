@@ -114,7 +114,7 @@ class ComputeFeatures(Step):
             dist_feats.set_rel_path_to_output(features_dir)
             dist_feats.distribute(config, log)
 
-            log.info(f"{nworkers} have been launched. Please come back when the calculation is complete.")
+            log.info("Please come back when the calculation is complete...")
             
             return None
             

@@ -107,6 +107,9 @@ class ShapeSpace:
             (self.df_results.shapemode==self.active_axis)&(self.df_results.bin==b)
         ].index
     
+        if len(index) == 0:
+            raise ValueError(f"No row found for {self.active_axis} and bin {b}.")
+    
         if len(index) > 1:
             warnings.warn(f"More than one index found for pc {self.pc_name} and\
             bin {self.map_point}. Something seems wrong with the dataframe of\

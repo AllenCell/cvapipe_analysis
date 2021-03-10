@@ -22,12 +22,14 @@ pca:
     plot_limits: [-150, 150, -80, 80]
 
 aggregation:
+    type: ['avg']
     # Shape space used to create aggregated images.
     # Choices are:
     # DNA_PC: shape space of nucleus alone
     # MEM_PC: shape space of cell alone
     # DNA_MEM_PC: shape space of nucleus and cell together
     aggregate_on: "DNA_MEM_PC"
+
 
 parameterization:
     # List of images and their channels that should be

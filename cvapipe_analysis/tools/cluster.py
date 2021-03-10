@@ -13,6 +13,7 @@ from cvapipe_analysis.steps.shapemode.avgshape import digitize_shape_mode
 
 class Distribute:
     
+    jobs = []
     rel_path_to_dataframe = None
     rel_path_to_input_images = None
     rel_path_to_output = None
@@ -27,6 +28,8 @@ class Distribute:
             self.chunk_size = self.nrows // self.nworkers
         self.root = Path().absolute()
         self.root_as_str = str(self.root)
+        self.abs_path_to_script_as_str = f"{self.root_as_str}/.distribute/scripts/jobs.sh"
+        self.abs_path_jobs_file_as_str = f"{self.root_as_str}/.distribute/scripts/jobs.txt"    
         
     def get_next_chunk(self):
         
@@ -80,29 +83,43 @@ class Distribute:
             except: pass
             path_subfolder.mkdir(parents=True, exist_ok=True)
         return
-        
-    def write_script_file(self, script_id, config):
 
+    def append_job(self, job):
+        self.jobs.append(job)
+    
+    def write_commands_file(self, config):
+        abs_path_python_env = config['resources']['path_python_env']
+        with open(self.abs_path_jobs_file_as_str, "w") as fs:
+            for job in self.jobs:
+                abs_path_config_file = f"{self.root_as_str}/.distribute/config/{job}.json"
+                print(f"{abs_path_python_env} {self.get_abs_path_to_python_file_as_str()} --config {abs_path_config_file}", file=fs)
+    
+    def write_script_file(self, config):
         mem = config['resources']['memory']
         cores = config['resources']['cores']
-    
-        abs_path_to_script = f"{self.root_as_str}/.distribute/scripts/{script_id}.script"
-        abs_path_to_script_output = f"{self.root_as_str}/.distribute/log/{script_id}.out"
-        abs_path_python_env = config['resources']['path_python_env']
-        abs_path_config_file = f"{self.root_as_str}/.distribute/config/{script_id}.json"
-
-        with open(abs_path_to_script, "w") as fs:
+        nworkers = config['resources']['nworkers']
+        abs_path_output_folder = f"{self.root_as_str}/.distribute/log"
+        
+        with open(self.abs_path_to_script_as_str, "w") as fs:
             print("#!/bin/bash", file=fs)
-            print(f"#SBATCH --job-name=cvapipe-{script_id}", file=fs)
             print("#SBATCH --partition aics_cpu_general", file=fs)
             print(f"#SBATCH --mem-per-cpu {mem}", file=fs)
             print(f"#SBATCH --cpus-per-task {cores}", file=fs)
-            print(f"#SBATCH --output {abs_path_to_script_output}", file=fs)
-            print(f"srun {abs_path_python_env} {self.get_abs_path_to_python_file_as_str()} --config {abs_path_config_file}", file=fs)
+            print(f"#SBATCH --output {abs_path_output_folder}/%A_%a.out", file=fs)
+            print(f"#SBATCH --error {abs_path_output_folder}/%A_%a.err", file=fs)
+            print(f"#SBATCH --array=1-{len(self.jobs)}%{nworkers}", file=fs)
+            print(f"srun $(head -n $SLURM_ARRAY_TASK_ID {self.abs_path_jobs_file_as_str} | tail -n 1)", file=fs)
 
-        return abs_path_to_script
+        return
 
-    
+    def execute(self, config, log):
+        self.write_commands_file(config)
+        self.write_script_file(config)
+        log.info(f"Submitting {len(self.jobs)} cvapipe_analysis jobs...")
+        submission = 'sbatch ' + self.abs_path_to_script_as_str
+        process = subprocess.Popen(submission, stdout=subprocess.PIPE, shell=True)
+        (out, err) = process.communicate()
+
     def distribute(self, config, log):
 
         log.info("Cleaning distribute directory.")
@@ -122,17 +139,12 @@ class Distribute:
             with open(rel_path_config_file, "w") as fj:
                 json.dump(script_config, fj, indent=4, sort_keys=True)
 
-            abs_path_script = self.write_script_file(chunk, config)
-
-            log.info(f"Submitting job cvapipe {chunk}...")
-
-            submission = 'sbatch ' + abs_path_script
-            process = subprocess.Popen(submission, stdout=subprocess.PIPE, shell=True)
-            (out, err) = process.communicate()
+            self.append_job(chunk)
+            
+        self.execute(config, log)
 
         return
 
-    
 class DistributeFeatures(Distribute):
     def __init__(self, df: pd.DataFrame, nworkers: int):
         super().__init__(df, nworkers)
@@ -159,7 +171,12 @@ class DistributeAggregation(Distribute):
         path = self.root / self.rel_path_to_shapemode_results
         return str(path)
 
+    
+    def check_output_file_exist(self, job):
+        path = Path(self.get_abs_path_to_output_as_str()) / f"{job}.tif"
+        return path.is_file()
 
+    
     def distribute(self, config, log):
         
         log.info("Cleaning distribute directory.")
@@ -169,43 +186,31 @@ class DistributeAggregation(Distribute):
         
         pc_names = [f for f in self.df.columns if PREFIX in f]
 
-        pc_names = pc_names[:1]
-
         space = shapespace.ShapeSpace(self.df[pc_names])
         
         for pc_name in tqdm(pc_names):
-
+            
             space.set_active_axis(pc_name)
             space.digitize_active_axis()
             space.link_results_folder(Path(self.get_abs_path_to_shapemode_results_as_str()))
             
-            for _, intensity in tqdm(config['parameterization']['intensities'], leave=False):
-                
-                for agg in tqdm([('avg', np.mean), ('std', np.std)], leave=False):
-                    
-                    # Find the indexes of cells in each bin
-                    df_filtered, bin_indexes, _ = digitize_shape_mode(
-                        df=self.df,
-                        feature=pc_name,
-                        nbins=config['pca']['number_map_points'],
-                        filter_based_on=pc_names
-                    )
-                    
-                    for b in tqdm(range(1, 1+config['pca']['number_map_points']), leave=False):
+            for _, intensity in tqdm(config['parameterization']['intensities'], leave=False):                
+                for agg in tqdm(config['aggregation']['type'], leave=False):
+                    for b, _ in space.iter_map_points():
+                        
+                        indexes = space.get_indexes_in_bin(b)
                         
                         for struct in tqdm(config['structures']['genes'], leave=False):
                             
-                            df_struct = df_filtered.loc[df_filtered.structure_name==struct]
+                            df_struct = self.df.loc[(self.df.index.isin(indexes))&(self.df.structure_name==struct)]
                             
-                            script_id = f"{agg[0]}-{intensity}-{struct}-{pc_name}-B{b}"
+                            script_id = f"{agg}-{intensity}-{struct}-{pc_name}-B{b}"
                             
-                            df_struct_bin = df_struct.loc[df_struct.index.isin(bin_indexes[b-1][1])]
-
-                            if len(df_struct_bin) > 0:
-
+                            if (len(df_struct)>0) & (not self.check_output_file_exist(script_id)):
+                                
                                 path_to_manifest = f".distribute/dataframes/{script_id}.csv"
                                 self.set_rel_path_to_dataframe(path_to_manifest)
-                                df_struct_bin.to_csv(path_to_manifest)
+                                df_struct.to_csv(path_to_manifest)
 
                                 script_config = {
                                     "csv": self.get_abs_path_to_dataframe_as_str(),
@@ -218,12 +223,8 @@ class DistributeAggregation(Distribute):
                                 with open(rel_path_config_file, "w") as fj:
                                     json.dump(script_config, fj, indent=4, sort_keys=True)
 
-                                abs_path_script = self.write_script_file(script_id, config)
+                                self.append_job(script_id)
 
-                                log.info(f"Submitting job cvapipe {script_id}...")
-
-                                submission = 'sbatch ' + abs_path_script
-                                process = subprocess.Popen(submission, stdout=subprocess.PIPE, shell=True)
-                                (out, err) = process.communicate()
+        self.execute(config, log)
         
         return

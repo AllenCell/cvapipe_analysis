@@ -1,8 +1,5 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-
-import pdb; pdb.set_trace()
-
 import os
 import errno
 import logging
@@ -14,11 +11,8 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 
-
-
-
 from cvapipe_analysis.tools import general, cluster, shapespace
-from .aggregation_tools import Aggregator
+from .aggregation_tools import Aggregator, AggHyperstack, create_dataframe_of_celids
 
 log = logging.getLogger(__name__)
 
@@ -35,6 +29,7 @@ class Aggregation(Step):
         self,
         distribute: Optional[bool]=False,
         overwrite: Optional[bool]=False,
+        skipagg: Optional[bool]=False,
         **kwargs
     ):
         
@@ -65,6 +60,11 @@ class Aggregation(Step):
         # Make necessary folders
         agg_dir = self.step_local_staging_dir / 'aggregations'
         agg_dir.mkdir(parents=True, exist_ok=True)
+        hyp_dir = self.step_local_staging_dir / 'hyperstacks'
+        hyp_dir.mkdir(parents=True, exist_ok=True)
+        
+        
+        df_agg = create_dataframe_of_celids(df, config)
         
         # Agg representations per cells and shape mode.
         # Here we use principal components gerated with cell
@@ -90,26 +90,38 @@ class Aggregation(Step):
             return None
         
         else:
-                        
-            space = shapespace.ShapeSpace(df[pc_names])            
-            for pc_name in tqdm(pc_names):
-                space.set_active_axis(pc_name)
-                space.digitize_active_axis()
-                space.link_results_folder(path_to_shapemode)
+
+            if not skipagg:
+            
+                space = shapespace.ShapeSpace(df[pc_names])            
+                for pc_name in tqdm(pc_names):
+                    space.set_active_axis(pc_name)
+                    space.digitize_active_axis()
+                    space.link_results_folder(path_to_shapemode)
+                    for _, intensity in config['parameterization']['intensities']:
+                        for agg in config['aggregation']['type']:
+                            for b, _ in space.iter_map_points():
+                                indexes = space.get_indexes_in_bin(b)
+                                for struct in tqdm(config['structures']['genes'], leave=False):
+                                    df_struct = df.loc[(df.index.isin(indexes))&(df.structure_name==struct)]
+                                    name = f"{agg}-{intensity}-{struct}-{pc_name}-B{b}.tif"
+                                    save_as = agg_dir / name
+                                    if overwrite or not save_as.is_file():
+                                        if len(df_struct) > 0:
+                                            Agg = Aggregator(pc_name, b, agg, intensity)
+                                            Agg.set_config(config)
+                                            Agg.set_shape_space(df_struct, space)
+                                            Agg.morph_parameterized_intensity_on_shape(save_as)
+
+            for pc_name in pc_names:
                 for _, intensity in config['parameterization']['intensities']:
-                    for agg in ['avg', 'std']:
-                        for b, _ in space.iter_map_points():
-                            indexes = space.get_indexes_in_bin(b)
-                            for struct in tqdm(config['structures']['genes'], leave=False):
-                                df_struct = df.loc[(df.index.isin(indexes))&(df.structure_name==struct)]
-                                name = f"{agg}-{intensity}-{struct}-{pc_name}-B{b}.tif"
-                                save_as = agg_dir / name
-                                if overwrite or not save_as.is_file():
-                                    if len(df_struct) > 0:
-                                        Agg = Aggregator(pc_name, b, agg, intensity)
-                                        Agg.set_config(config)
-                                        Agg.set_shape_space(df_struct, space)
-                                        Agg.morph_parameterized_intensity_on_shape(save_as)
+                    for agg in config['aggregation']['type']:                                            
+                        hyper = AggHyperstack(pc_name, agg, intensity)
+                        hyper.set_path_to_agg_and_shapemode_folders(agg_dir, path_to_shapemode)
+                        save_as = hyp_dir / f"{pc_name}_{intensity}_{agg}.tif"
+                        hyper.create(save_as, config)
+                        import pdb; pdb.set_trace()
+
         '''
         # Loop over shape modes
         df_hyperstacks_paths = pd.DataFrame([])

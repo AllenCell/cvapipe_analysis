@@ -43,13 +43,13 @@ def parameterize(data_folder, row, save_as):
     )
         
     # Rotate structure segmentation with same angle used to align the cell
-    seg_str = shtools.apply_image_alignment_2d(
+    seg_str_aligned = shtools.apply_image_alignment_2d(
         image = seg_str,
         angle = row.mem_shcoeffs_transform_angle_lcc
     ).squeeze()
 
     # Rotate FP structure with same angle used to align the cell
-    seg_str = shtools.apply_image_alignment_2d(
+    raw_str_aligned = shtools.apply_image_alignment_2d(
         image = struct,
         angle = row.mem_shcoeffs_transform_angle_lcc
     ).squeeze()
@@ -81,8 +81,8 @@ def parameterize(data_folder, row, save_as):
         centroid_nuc = centroid_dna,
         nisos = [32,32],
         images_to_probe = [
-            ('structure', struct),
-            ('structure_seg', seg_str)
+            ('structure', raw_str_aligned),
+            ('structure_seg', seg_str_aligned)
         ]
     )
     
