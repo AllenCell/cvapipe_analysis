@@ -13,6 +13,11 @@ def create_workflow_file_from_config():
     with open("workflow_config.json", "w") as fj:
         json.dump({"project_local_staging_dir": f"local_staging_{suffix}"}, fj)
 
+def get_local_staging_dir():
+    with open("workflow_config.json", "r") as fj:
+        workflow_config = json.load(fj)
+    return workflow_config['project_local_staging_dir']
+
 def read_chunk_of_dataframe(cfg):
         
     # Keep the header

@@ -19,6 +19,105 @@ import concurrent
 from cvapipe_analysis.tools import general, shapespace
 from cvapipe_analysis.steps.shapemode.avgshape import digitize_shape_mode
 
+class AggregatorNew:
+    
+    def __init__(self, df, space):
+        self.df = df.copy()
+        self.space = space
+        
+    def read_parameterized_intensity(self, index, return_intensity_names=False):
+        code = AICSImage(self.df.at[index,'PathToRepresentationFile'])
+        intensity_names = code.get_channel_names()
+        code = code.data.squeeze()
+        if return_intensity_names:
+            return code, intensity_names
+        return code
+
+    def set_output_folder(self, path):
+        self.output_folder = path
+
+    def get_structures_of_current_indexes(self):
+        return self.df.loc[self.row.CellIds,"structure_name"].unique()
+        
+    def get_output_file_name(self):
+        return f"{self.row.aggtype}-{self.row.intensity}-{self.struct}-{self.row.shapemode}-B{self.row.bin}.tif"
+    
+    def get_available_intensities(self):
+        _, channel_names = self.read_parameterized_intensity(self.df.index[0], True)
+        return channel_names
+    
+    def aggregate_parameterized_intensities(self):
+        
+        intensity_names = self.get_available_intensities()
+        
+        N_CORES = len(os.sched_getaffinity(0))
+        with concurrent.futures.ProcessPoolExecutor(N_CORES) as executor:
+            pints = list(
+                executor.map(self.read_parameterized_intensity, self.row.CellIds))
+        agg_pint = self.agg_func(np.array(pints), axis=0)
+        channel_id = intensity_names.index(self.row.intensity)
+        self.aggregated_parameterized_intensity = agg_pint[channel_id]
+    
+    def set_agg_function(self):
+        if self.row.aggtype == 'avg':
+            self.agg_func = np.mean
+        elif self.row.aggtype == 'std':
+            self.agg_func = np.std
+        else:
+            raise ValueError(f"Aggregation type {self.row.aggtype} is not implemented.")
+    
+    def aggregate(self, row):
+        self.row = row
+        struct = self.get_structures_of_current_indexes()
+        if len(struct) > 1:
+            raise ValueError(f"Multiple structures found in this aggregation: {struct}")
+        self.struct = struct[0]
+        self.set_agg_function()
+        self.aggregate_parameterized_intensities()
+        self.space.set_active_axis(row.shapemode)
+
+    def voxelize_and_parameterize_shapemode_shape(self):
+                
+        mesh_dna = self.space.get_dna_mesh_of_bin(self.row.bin)
+        mesh_mem = self.space.get_mem_mesh_of_bin(self.row.bin)
+        domain, origin = cytoparam.voxelize_meshes([mesh_mem, mesh_dna])
+        coords_param, _ = cytoparam.parameterize_image_coordinates(
+            seg_mem = (domain>0).astype(np.uint8),
+            seg_nuc = (domain>1).astype(np.uint8),
+            lmax = 16,
+            nisos = [32,32]
+        )
+        self.domain = domain
+        self.origin = origin
+        self.coords_param = coords_param
+    
+        return
+    
+    def morph_on_shapemode_shape(self):
+        
+        self.voxelize_and_parameterize_shapemode_shape()
+        
+        self.morphed = cytoparam.morph_representation_on_shape(
+            img=self.domain,
+            param_img_coords=self.coords_param,
+            representation=self.aggregated_parameterized_intensity
+        )
+
+        return
+    
+    def save(self):
+        n = len(self.row.CellIds)
+        save_as = self.output_folder / self.get_output_file_name()
+        with writers.ome_tiff_writer.OmeTiffWriter(save_as, overwrite_file=True) as writer:
+            writer.save(
+                self.morphed,
+                dimension_order='ZYX',
+                image_name=f"{save_as.stem}-N{n}"
+            )
+        
+        return save_as
+
+    
 class Aggregator:
 
     config = None
@@ -195,7 +294,7 @@ def create_dataframe_of_celids(df, config):
                         df_struct = df.loc[(df.index.isin(indexes))&(df.structure_name==struct)]
                         if len(df_struct) > 0:
                             df_agg.append({
-                                "agg": agg,
+                                "aggtype": agg,
                                 "intensity": intensity,
                                 "structure_name": struct,
                                 "shapemode": pc_name,
@@ -203,9 +302,7 @@ def create_dataframe_of_celids(df, config):
                                 "CellIds": df_struct.index.values.tolist()
                             })
                             
-    df_agg = pd.DataFrame(df_agg)
-    df_agg = df_agg.set_index(['agg','intensity','structure_name','shapemode','bin'])
-    return df_agg
+    return pd.DataFrame(df_agg)
 
     
 if __name__ == "__main__":
