@@ -12,7 +12,10 @@ import pandas as pd
 from tqdm import tqdm
 
 from cvapipe_analysis.tools import general, cluster, shapespace
-from .aggregation_tools import AggregatorNew, Aggregator, AggHyperstack, create_dataframe_of_celids
+from .aggregation_tools import Aggregator, create_dataframe_of_celids
+
+import pdb;
+tr = pdb.set_trace
 
 log = logging.getLogger(__name__)
 
@@ -52,79 +55,45 @@ class Aggregation(Step):
         # Merge the two dataframes (they do not have
         # necessarily the same size)
         df = df.merge(df_param[['PathToRepresentationFile']], left_index=True, right_index=True)
-
-        # Also read the manifest with paths to VTK files
-        path_to_shapemode = self.project_local_staging_dir / 'shapemode'
         
         # Make necessary folders
         agg_dir = self.step_local_staging_dir / 'aggregations'
         agg_dir.mkdir(parents=True, exist_ok=True)
-                
+
+        # Create all combinations of parameters
         df_agg = create_dataframe_of_celids(df, config)
-        
-        # Agg representations per cells and shape mode.
-        # Here we use principal components gerated with cell
-        # and nuclear SHE coefficients (DNA_MEM_PCx).
-        PREFIX = config['aggregation']['aggregate_on']
-        
-        pc_names = [f for f in df.columns if PREFIX in f]
+        df_agg['PathToOutputFolder'] = str(agg_dir)
                 
         if distribute:
             
-            # <<<<<<<<<<<<<<<, MODIFY THIS
-            
-            log.info(f"Saving dataframe for workers...")
-            path_manifest = Path(".distribute/manifest.csv")
-            df.to_csv(path_manifest)
-            
-            dist_agg = cluster.DistributeAggregation(df)
-            dist_agg.set_rel_path_to_dataframe(path_manifest)
-            dist_agg.set_rel_path_to_shapemode_results(path_to_shapemode)
-            dist_agg.set_rel_path_to_output(agg_dir)
-            dist_agg.distribute(config, log)
+            nworkers = config['resources']['nworkers']            
+            distributor = cluster.AggregationDistributor(df_agg, nworkers)
+            distributor.distribute(config, log)
 
-            log.info(f"Multiple jobs have been launched. Please come back when the calculation is complete.")
-            
+            log.info(f"Multiple jobs have been launched. Please come back when the calculation is complete.")            
             return None
         
         else:
 
             space = shapespace.ShapeSpaceBasic()
-            space.link_results_folder(path_to_shapemode)
+            space.set_path_to_local_staging_folder(config['project']['local_staging'])
+            space.load_shapemode_manifest()
 
-            ag = AggregatorNew(df, space)
-            ag.set_output_folder(agg_dir)
-
-            for index, row in tqdm(df_agg.iterrows(), total=len(df_agg)):
-                ag.aggregate(row)
-                ag.morph_on_shapemode_shape()
-                df_agg.loc[index,"FilePath"] = ag.save()
+            aggregator = Aggregator(space)
+            aggregator.set_path_to_local_staging_folder(config['project']['local_staging'])
+            aggregator.load_parameterization_manifest()
             
-
-        '''
-        # Loop over shape modes
-        df_hyperstacks_paths = pd.DataFrame([])
-        for pc_idx, pc_name in enumerate(pc_names):
-
-            log.info(f"Running PC: {pc_name}.")
-
-            df_paths = create_5d_hyperstacks(
-                df=df,
-                df_paths=df_shapemode_paths,
-                pc_names=pc_names,
-                pc_idx=pc_idx,
-                nbins=config['pca']['number_map_points'],
-                save_dir=hyper_dir
-            )
+        for index, row in tqdm(df_agg.iterrows(), total=len(df_agg)):
+            rel_path_to_output_file = aggregator.check_output_exist(row)
+            if rel_path_to_output_file is None:
+                aggregator.aggregate(row)
+                aggregator.morph_on_shapemode_shape()
+                df_agg.loc[index,"FilePath"] = aggregator.save()
+            else:
+                df_agg.loc[index,"FilePath"] = rel_path_to_output_file
             
-            df_hyperstacks_paths = df_hyperstacks_paths.append(df_paths, ignore_index=True)
-            
-        # Save manifest
-        self.manifest = df_hyperstacks_paths
+        self.manifest = df_agg
         manifest_path = self.step_local_staging_dir / 'manifest.csv'
         self.manifest.to_csv(manifest_path)
 
         return manifest_path
-        '''
-        
-        return None

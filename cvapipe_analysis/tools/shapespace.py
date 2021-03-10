@@ -18,6 +18,14 @@ class ShapeSpace:
     def __repr__(self):
         return f"<{self.__class__.__name__}>original:{self.axes_original.shape}{self.axes.shape}"
 
+    def set_path_to_local_staging_folder(self, path):
+        if not isinstance(path, Path):
+            path = Path(path)
+        self.local_staging = path
+        
+    def get_path_to_local_staging_folder(self):
+        return self.local_staging
+    
     def set_active_axis(self, axis_name):
         if axis_name not in self.axes.columns:
             raise ValueError(f"Axis {axis_name} not found.")
@@ -32,14 +40,13 @@ class ShapeSpace:
     def get_number_of_map_points():
         return len(self.map_points)
     
-    def link_results_folder(self, path):
-        if not isinstance(path, Path):
-            path = Path(path)
-        path_to_shape_space_manifest = path / 'shapemode.csv'
+    def load_shapemode_manifest(self):
+        path_to_shape_space_manifest = self.local_staging/"shapemode/shapemode.csv"
         if path_to_shape_space_manifest.is_file():
             self.df_results = pd.read_csv(path_to_shape_space_manifest, index_col=0)
         else:
-            raise ValueError("File shapemode.csv not found in the folder.")
+            raise ValueError("File shapemode.csv not found.")
+        print(f"Dataframe loaded: {self.df_results.shape}")
         
     def iter_map_points(self):
         for b, map_point in enumerate(self.map_points):

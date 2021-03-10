@@ -19,43 +19,53 @@ import concurrent
 from cvapipe_analysis.tools import general, shapespace
 from cvapipe_analysis.steps.shapemode.avgshape import digitize_shape_mode
 
-class AggregatorNew:
+
+class Aggregator:
+    """
+    The goal of this class is to have a combination of
+    parameters as input, including some CellIds. The
+    corresponding cells have their parameterized intensity
+    representation morphed into the appropriated shape
+    space shape according to the input parameters.
     
-    def __init__(self, df, space):
-        self.df = df.copy()
+    WARNING: All classes are assumed to know the whole
+    structure of directories inside the local_staging
+    folder and this is hard coded. Therefore, classes
+    may break if you move saved files from the places
+    their are saved.
+    """
+    def __init__(self, space):
         self.space = space
-        
+
+    def set_path_to_local_staging_folder(self, path):
+        if not isinstance(path, Path):
+            path = Path(path)
+        self.local_staging = path
+
+    def load_parameterization_manifest(self):
+        self.df = pd.read_csv(self.local_staging/"parameterization/manifest.csv", index_col='CellId')
+        print(f"Dataframe loaded: {self.df.shape}")
+    
     def read_parameterized_intensity(self, index, return_intensity_names=False):
+        path_to_seg = self.local_staging / f"crop_seg"
         code = AICSImage(self.df.at[index,'PathToRepresentationFile'])
         intensity_names = code.get_channel_names()
         code = code.data.squeeze()
         if return_intensity_names:
             return code, intensity_names
         return code
-
-    def set_output_folder(self, path):
-        self.output_folder = path
-
-    def get_structures_of_current_indexes(self):
-        return self.df.loc[self.row.CellIds,"structure_name"].unique()
-        
-    def get_output_file_name(self):
-        return f"{self.row.aggtype}-{self.row.intensity}-{self.struct}-{self.row.shapemode}-B{self.row.bin}.tif"
     
     def get_available_intensities(self):
         _, channel_names = self.read_parameterized_intensity(self.df.index[0], True)
         return channel_names
     
     def aggregate_parameterized_intensities(self):
-        
-        intensity_names = self.get_available_intensities()
-        
         N_CORES = len(os.sched_getaffinity(0))
         with concurrent.futures.ProcessPoolExecutor(N_CORES) as executor:
             pints = list(
-                executor.map(self.read_parameterized_intensity, self.row.CellIds))
+                executor.map(self.read_parameterized_intensity, self.CellIds))
         agg_pint = self.agg_func(np.array(pints), axis=0)
-        channel_id = intensity_names.index(self.row.intensity)
+        channel_id = self.get_available_intensities().index(self.row.intensity)
         self.aggregated_parameterized_intensity = agg_pint[channel_id]
     
     def set_agg_function(self):
@@ -66,18 +76,19 @@ class AggregatorNew:
         else:
             raise ValueError(f"Aggregation type {self.row.aggtype} is not implemented.")
     
-    def aggregate(self, row):
+    def digest_input_parameters(self, row):
         self.row = row
-        struct = self.get_structures_of_current_indexes()
-        if len(struct) > 1:
-            raise ValueError(f"Multiple structures found in this aggregation: {struct}")
-        self.struct = struct[0]
+        self.CellIds = self.row.CellIds
+        if isinstance(self.CellIds, str):
+            self.CellIds = eval(self.CellIds)
+    
+    def aggregate(self, row):
+        self.digest_input_parameters(row)
         self.set_agg_function()
         self.aggregate_parameterized_intensities()
         self.space.set_active_axis(row.shapemode)
-
-    def voxelize_and_parameterize_shapemode_shape(self):
-                
+        
+    def voxelize_and_parameterize_shapemode_shape(self):       
         mesh_dna = self.space.get_dna_mesh_of_bin(self.row.bin)
         mesh_mem = self.space.get_mem_mesh_of_bin(self.row.bin)
         domain, origin = cytoparam.voxelize_meshes([mesh_mem, mesh_dna])
@@ -92,122 +103,114 @@ class AggregatorNew:
         self.coords_param = coords_param
     
         return
-    
+        
     def morph_on_shapemode_shape(self):
-        
         self.voxelize_and_parameterize_shapemode_shape()
-        
         self.morphed = cytoparam.morph_representation_on_shape(
             img=self.domain,
             param_img_coords=self.coords_param,
             representation=self.aggregated_parameterized_intensity
         )
-
+        self.morphed = np.stack([self.domain, self.morphed])
+    
         return
     
+    @staticmethod
+    def get_output_file_name(row):
+        return f"{row.aggtype}-{row.intensity}-{row.structure_name}-{row.shapemode}-B{row.bin}.tif"
+    
+    def check_output_exist(self, row):
+        file_name = self.get_output_file_name(row)
+        rel_path_to_output_file = f"{self.local_staging.name}/aggregation/aggregations/{file_name}"
+        if Path(rel_path_to_output_file).is_file():
+            return rel_path_to_output_file
+        return None
+
     def save(self):
-        n = len(self.row.CellIds)
-        save_as = self.output_folder / self.get_output_file_name()
+        n = len(self.CellIds)
+        save_as = Path(self.row.PathToOutputFolder) / self.get_output_file_name(self.row)
         with writers.ome_tiff_writer.OmeTiffWriter(save_as, overwrite_file=True) as writer:
             writer.save(
                 self.morphed,
-                dimension_order='ZYX',
+                dimension_order='CZYX',
                 image_name=f"{save_as.stem}-N{n}"
             )
         
         return save_as
 
     
-class Aggregator:
+def create_dataframe_of_celids(df, config):
+    """
+    This function creates a dataframe with all combinations
+    of parameters we want to aggregate images for. Different
+    types of aggregations, different shape modes, etc. For
+    each combination is fins what are the cells that should
+    be aggregated together and sotre them in a columns
+    named CellIds.
 
-    config = None
+    Parameters
+    --------------------
+    df: pd.DataFrame
+        Merge of parameterization and shapemode manifests.
+    config: Dict
+        General config dictonary
+    Returns
+    --------------------
+    df_agg: pd.DataFrame
+        Dataframe as described above.
+    """
+    prefix = config['aggregation']['aggregate_on']
+    pc_names = [f for f in df.columns if prefix in f]
+    space = shapespace.ShapeSpace(df[pc_names])
+    df_agg = []
+    for pc_name in tqdm(pc_names):
+        space.set_active_axis(pc_name)
+        space.digitize_active_axis()
+        for _, intensity in config['parameterization']['intensities']:
+            for agg in config['aggregation']['type']:
+                for b, _ in space.iter_map_points():
+                    indexes = space.get_indexes_in_bin(b)
+                    for struct in tqdm(config['structures']['genes'], leave=False):
+                        df_struct = df.loc[(df.index.isin(indexes))&(df.structure_name==struct)]
+                        if len(df_struct) > 0:
+                            df_agg.append({
+                                "aggtype": agg,
+                                "intensity": intensity,
+                                "structure_name": struct,
+                                "shapemode": pc_name,
+                                "bin": b,
+                                "CellIds": df_struct.index.values.tolist()
+                            })
+                            
+    return pd.DataFrame(df_agg)
+
     
-    def __init__(self, pc_name, map_point, agg, intensity):
-        self.pc_name = pc_name
-        self.map_point = map_point
-        self.agg_name = agg
-        if agg=='avg':
-            self.agg_func = np.mean
-        elif agg=='std':
-            self.agg_func = np.std
-        else:
-            raise ValueError(f"Aggregation function {agg} not implemented.")
-        self.intensity = intensity
-
-    def __repr__(self):
-        return f"<{self.__class__.__name__}>{self.agg_name}.{self.intensity}.{self.pc_name}.BIN{self.map_point}"
-
-    def set_config(self, config):
-        self.config = config
+if __name__ == "__main__":
     
-    def set_shape_space(self, df, shapespace):
-        self.df = df
-        self.space = shapespace
-        self.find_available_parameterized_intensities()
-        self.load_meshes_and_parameterize()
-        
-    def find_available_parameterized_intensities(self):
-        # Assumes all images have same parameterized intensities
-        img_path = self.df.at[self.df.index[0],'PathToRepresentationFile']
-        channel_names = AICSImage(img_path).get_channel_names()
-        if self.intensity not in channel_names:
-            raise ValueError(f"Intensity name {self.intensity} not available in the data.")
-        self.intensity_names = channel_names
-        
-    def read_parameterized_intensity(self, index):
-        code = AICSImage(self.df.at[index,'PathToRepresentationFile'])
-        code = code.data.squeeze()
-        return code
+    parser = argparse.ArgumentParser(description='Batch aggregation.')
+    parser.add_argument('--csv', help='Path to the dataframe.', required=True)
+    args = vars(parser.parse_args())
     
-    def aggregate_parameterized_intensities(self):
-        
-        N_CORES = len(os.sched_getaffinity(0))
-        with concurrent.futures.ProcessPoolExecutor(N_CORES) as executor:
-            pints = list(
-                executor.map(self.read_parameterized_intensity, self.df.index))
-        pints = np.array(pints)
-        
-        agg_pint = self.agg_func(pints, axis=0)
-        
-        channel_id = self.intensity_names.index(self.intensity)
-        
-        return agg_pint[channel_id]
+    df = pd.read_csv(args['csv'], index_col=0)
+
+    config = general.load_config_file()
     
-    def load_meshes_and_parameterize(self):
-                
-        mesh_dna = self.space.get_dna_mesh_of_bin(self.map_point)
-        mesh_mem = self.space.get_mem_mesh_of_bin(self.map_point)
-
-        domain, origin = cytoparam.voxelize_meshes([mesh_mem, mesh_dna])
-
-        coords_param, _ = cytoparam.parameterize_image_coordinates(
-            seg_mem = (domain>0).astype(np.uint8),
-            seg_nuc = (domain>1).astype(np.uint8),
-            lmax = 16,
-            nisos = [32,32]
-        )
-
-        self.domain = domain
-        self.origin = origin
-        self.coords_param = coords_param
-        
-        return domain, coords_param
+    space = shapespace.ShapeSpaceBasic()
+    space.set_path_to_local_staging_folder(config['project']['local_staging'])
+    space.load_shapemode_manifest()
     
-    def morph_parameterized_intensity_on_shape(self, save_as):
+    aggregator = Aggregator(space)
+    aggregator.set_path_to_local_staging_folder(config['project']['local_staging'])
+    aggregator.load_parameterization_manifest()
         
-        agg_pint = self.aggregate_parameterized_intensities()
-        
-        img = cytoparam.morph_representation_on_shape(
-            img=self.domain,
-            param_img_coords=self.coords_param,
-            representation=agg_pint
-        )
+    for index, row in df.iterrows():
+        aggregator.aggregate(row)
+        aggregator.morph_on_shapemode_shape()
+        save_as = aggregator.save()
+        df.loc[index,"FilePath"] = save_as
+        print(save_as)
 
-        with writers.ome_tiff_writer.OmeTiffWriter(save_as, overwrite_file=True) as writer:
-            writer.save(img, dimension_order='ZYX', image_name=save_as.stem)
-        
-        return
-
+'''
 class AggHyperstack:
     
     def __init__(self, pc_name, agg, intensity):
@@ -277,56 +280,4 @@ class AggHyperstack:
             )
 
         return
-
-def create_dataframe_of_celids(df, config):
-    prefix = config['aggregation']['aggregate_on']
-    pc_names = [f for f in df.columns if prefix in f]
-    space = shapespace.ShapeSpace(df[pc_names])
-    df_agg = []
-    for pc_name in tqdm(pc_names):
-        space.set_active_axis(pc_name)
-        space.digitize_active_axis()
-        for _, intensity in config['parameterization']['intensities']:
-            for agg in config['aggregation']['type']:
-                for b, _ in space.iter_map_points():
-                    indexes = space.get_indexes_in_bin(b)
-                    for struct in tqdm(config['structures']['genes'], leave=False):
-                        df_struct = df.loc[(df.index.isin(indexes))&(df.structure_name==struct)]
-                        if len(df_struct) > 0:
-                            df_agg.append({
-                                "aggtype": agg,
-                                "intensity": intensity,
-                                "structure_name": struct,
-                                "shapemode": pc_name,
-                                "bin": b,
-                                "CellIds": df_struct.index.values.tolist()
-                            })
-                            
-    return pd.DataFrame(df_agg)
-
-    
-if __name__ == "__main__":
-    
-    parser = argparse.ArgumentParser(description='Batch aggregation.')
-    parser.add_argument('--config', help='Path to the JSON config file.', required=True)
-    args = vars(parser.parse_args())
-    
-    with open(args['config'], 'r') as f:
-        config = json.load(f)
-
-    df = pd.read_csv(config['csv'], index_col='CellId')
-        
-    def parse_filename(filename):
-        agg, intensity, struct, pc_name, map_point = filename.split('-')
-        map_point = int(map_point.split('.')[0].replace('B',''))
-        return agg, intensity, struct, pc_name, map_point
-    agg, intensity, struct, pc_name, map_point = parse_filename(config['filename'])
-    
-    space = shapespace.ShapeSpaceBasic()
-    space.link_results_folder(config['shapemode_results'])
-    space.set_active_axis(pc_name)
-
-    save_as = Path(config['output']) / config['filename']
-    Agg = Aggregator(pc_name, map_point, agg, intensity)
-    Agg.set_shape_space(df, space)
-    Agg.morph_parameterized_intensity_on_shape(save_as)
+'''

@@ -3,6 +3,7 @@ appName: cvapipe_analysis
 project:
     # Sufix to append to local_staging
     name: "test"
+    local_staging: "/allen/aics/assay-dev/MicroscopyOtherData/Viana/projects/cvapipe_analysis/local_staging_test"
 
 resources:
     # In case a (slurm) cluster is available
@@ -11,7 +12,7 @@ resources:
     memory: "8GB"
     queue: "aics_cpu_general"
     walltime: "9-24:00:00"
-    path_python_env: "/home/matheus.viana/anaconda3/envs/cvapipe/bin/python"
+    python_env: "/home/matheus.viana/anaconda3/envs/cvapipe/"
 
 pca:
     # Number of principal components to be calculated
