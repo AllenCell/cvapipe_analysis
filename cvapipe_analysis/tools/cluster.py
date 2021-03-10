@@ -14,7 +14,19 @@ from cvapipe_analysis.tools import shapespace
 from cvapipe_analysis.steps.shapemode.avgshape import digitize_shape_mode
 
 class Distributor:
+    """
+    The goal of this class is to provide an interface
+    to spawn many jobs in slurm using array of jobs.
+    A master dataframe is provided in which each row
+    corresponds to one job that will run. Each row
+    contains all information necessary for that job to
+    run. The class provides prvides a way of iterating
+    over chunks of the dataframe. The number of chunks
+    depends on the number of workers requested.
     
+    WARNING: This class should not depend on where
+    the local_staging folder is.
+    """
     jobs = []
     folders = ['log','dataframes']
     
@@ -57,7 +69,6 @@ class Distributor:
     
     def write_script_file(self, config):
         abs_path_output_folder = f"{self.root_as_str}/.distribute/log"
-        
         with open(self.abs_path_to_script_as_str, "w") as fs:
             print("#!/bin/bash", file=fs)
             print("#SBATCH --partition aics_cpu_general", file=fs)
