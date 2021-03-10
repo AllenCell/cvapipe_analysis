@@ -49,7 +49,7 @@ class Distributor:
         self.jobs.append(job)
     
     def write_commands_file(self, config):
-        python_path_as_str = str(Path(config['resources']['python_env'].lstrip('/'))/"bin/python")
+        python_path_as_str = "/"+config['resources']['python_env'].lstrip('/')+"/bin/python"
         with open(self.abs_path_jobs_file_as_str, "w") as fs:
             for job in self.jobs:
                 abs_path_to_dataframe = f"{self.root_as_str}/.distribute/dataframes/{job}.csv"
@@ -73,12 +73,11 @@ class Distributor:
     def execute(self, config, log):
         self.write_commands_file(config)
         self.write_script_file(config)
-        '''
+        
         log.info(f"Submitting {len(self.jobs)} cvapipe_analysis jobs...")
         submission = 'sbatch ' + self.abs_path_to_script_as_str
         process = subprocess.Popen(submission, stdout=subprocess.PIPE, shell=True)
         (out, err) = process.communicate()
-        '''
 
     def distribute(self, config, log):
         log.info("Cleaning distribute directory.")
