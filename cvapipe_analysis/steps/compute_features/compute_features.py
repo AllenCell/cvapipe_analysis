@@ -15,8 +15,7 @@ from tqdm import tqdm
 from datastep import Step, log_run_params
 from aics_dask_utils import DistributedHandler
 
-from cvapipe_analysis.tools import general
-from cvapipe_analysis.tools import cluster
+from cvapipe_analysis.tools import general, cluster
 from .compute_features_tools import load_images_and_calculate_features
 
 log = logging.getLogger(__name__)
@@ -106,16 +105,12 @@ class ComputeFeatures(Step):
         load_data_dir = self.project_local_staging_dir / "loaddata"
 
         if distribute:
-            
-            nworkers = config['resources']['nworkers']
-            dist_feats = cluster.DistributeFeatures(df, nworkers)
-            dist_feats.set_rel_path_to_dataframe(path_manifest)
-            dist_feats.set_rel_path_to_input_images(load_data_dir)
-            dist_feats.set_rel_path_to_output(features_dir)
-            dist_feats.distribute(config, log)
+                        
+            nworkers = config['resources']['nworkers']            
+            distributor = cluster.FeaturesDistributor(df, nworkers)
+            distributor.distribute(config, log)
 
-            log.info("Please come back when the calculation is complete...")
-            
+            log.info(f"Multiple jobs have been launched. Please come back when the calculation is complete.")            
             return None
             
         else:
