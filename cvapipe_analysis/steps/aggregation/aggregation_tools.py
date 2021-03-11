@@ -47,7 +47,6 @@ class Aggregator:
         print(f"Dataframe loaded: {self.df.shape}")
     
     def read_parameterized_intensity(self, index, return_intensity_names=False):
-        path_to_seg = self.local_staging / f"crop_seg"
         code = AICSImage(self.df.at[index,'PathToRepresentationFile'])
         intensity_names = code.get_channel_names()
         code = code.data.squeeze()
@@ -204,11 +203,14 @@ if __name__ == "__main__":
     aggregator.load_parameterization_manifest()
         
     for index, row in df.iterrows():
-        aggregator.aggregate(row)
-        aggregator.morph_on_shapemode_shape()
-        save_as = aggregator.save()
-        df.loc[index,"FilePath"] = save_as
-        print(save_as)
+        try:
+            aggregator.aggregate(row)
+            aggregator.morph_on_shapemode_shape()
+            save_as = aggregator.save()
+            df.loc[index,'FilePath'] = save_as
+            print(save_as, "complete.")
+        except:
+            print(save_as, "FAILED.")
 
 '''
 class AggHyperstack:

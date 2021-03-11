@@ -12,9 +12,8 @@ from tqdm import tqdm
 from datastep import Step, log_run_params
 from aics_dask_utils import DistributedHandler
 
-from cvapipe_analysis.tools import general
-from cvapipe_analysis.tools import cluster
-from .parameterization_tools import parameterize
+from cvapipe_analysis.tools import general, cluster
+from .parameterization_tools import Parameterizer
 
 log = logging.getLogger(__name__)
 
@@ -34,33 +33,6 @@ class Parameterization(Step):
         config: Optional[Union[str, Path, Dict[str, str]]] = None,
     ):
         super().__init__(direct_upstream_tasks=direct_upstream_tasks, config=config)
-
-    @staticmethod
-    def _single_cell_parameterization(
-        index: int,
-        row: pd.Series,
-        save_dir: Path,
-        load_data_dir: Path,
-        overwrite: bool,
-    ) -> Union[SingleCellParameterizationResult, SingleCellParameterizationError]:
-
-        # Get the ultimate end save path for this cell
-        save_path = save_dir / f"{index}.tif"
-
-        if not overwrite and save_path.is_file():
-            log.info(f"Skipping cell parameterization for Cell Id: {index}")
-            return SingleCellParameterizationResult(index, save_path)
-
-        log.info(f"Beginning cell parameterization for CellId: {index}")
-
-        try:
-            parameterize(load_data_dir, row, save_path)            
-            log.info(f"Completed cell parameterization for CellId: {index}")
-            return SingleCellParameterizationResult(index, save_path)
-
-        except Exception as e:
-            log.info(f"Failed cell parameterization for CellId: {index}. Error: {e}")
-            return SingleCellParameterizationError(index, str(e))
 
     @log_run_params
     def run(
@@ -94,57 +66,41 @@ class Parameterization(Step):
         # Folder for storing the parameterized intensity representations
         save_dir = self.step_local_staging_dir/'representations'
         save_dir.mkdir(parents=True, exist_ok=True)
-
+        df['PathToOutputFolder'] = str(save_dir)
+        
         # Data folder
         load_data_dir = self.project_local_staging_dir/'loaddata'
         
         if distribute:
             
-            log.info(f"Saving dataframe for workers...")
-            path_manifest = Path(".distribute/manifest.csv")
-            df.to_csv(path_manifest)
-            
-            nworkers = config['resources']['nworkers']
-            dist_param = cluster.DistributeParameterization(df, nworkers)
-            dist_param.set_rel_path_to_dataframe(path_manifest)
-            dist_param.set_rel_path_to_input_images(load_data_dir)
-            dist_param.set_rel_path_to_output(save_dir)
-            dist_param.distribute(config, log)
+            nworkers = config['resources']['nworkers']            
+            distributor = cluster.ParameterizationDistributor(df, nworkers)
+            distributor.distribute(config, log)
 
-            log.info("Please come back when the calculation is complete...")
-            
+            log.info(f"Multiple jobs have been launched. Please come back when the calculation is complete.")            
             return None
 
         else:
             
-            with DistributedHandler(distributed_executor_address) as handler:
-                results = handler.batched_map(
-                    self._single_cell_parameterization,
-                    *zip(*list(df.iterrows())),
-                    [save_dir for i in range(len(df))],
-                    [load_data_dir for i in range(len(df))],
-                    [overwrite for i in range(len(df))]
-                )
+            parameterizer = Parameterizer()
+            parameterizer.set_path_to_local_staging_folder(config['project']['local_staging'])
 
-        # Generate features paths rows
-        errors = []
-        df_param = []
-        for result in results:
-            if isinstance(result, SingleCellParameterizationResult):
-                df_param.append(result)
-            else:
-                errors.append(result)
-        # Convert to DataFrame
-        df_param = pd.DataFrame(df_param).set_index('CellId')
+            for index, row in tqdm(df.iterrows(), total=len(df)):
+                parameterizer.set_row(row)
+                rel_path_to_output_file = parameterizer.check_output_exist()
+                if rel_path_to_output_file is None:
+                    try:
+                        parameterizer.parameterize()
+                        df.loc[index,'PathToRepresentationFile'] = parameterizer.save()
+                        print(f"Index {row.name} complete.")
+                    except:
+                        print(f"Index {row.name} FAILED.")
+                else:
+                    df.loc[index,'PathToRepresentationFile'] = rel_path_to_output_file
 
-        # Display errors if any
-        if len(errors)>0:
-            warnings.warn("One or more errors found.")
-            print(errors)
-                
-        # Save manifest
-        self.manifest = df_param
+        self.manifest = df[['PathToRepresentationFile']]
         manifest_save_path = self.step_local_staging_dir / "manifest.csv"
         self.manifest.to_csv(manifest_save_path)
 
         return manifest_save_path
+

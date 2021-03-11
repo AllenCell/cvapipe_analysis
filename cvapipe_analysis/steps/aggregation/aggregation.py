@@ -86,9 +86,13 @@ class Aggregation(Step):
         for index, row in tqdm(df_agg.iterrows(), total=len(df_agg)):
             rel_path_to_output_file = aggregator.check_output_exist(row)
             if rel_path_to_output_file is None:
-                aggregator.aggregate(row)
-                aggregator.morph_on_shapemode_shape()
-                df_agg.loc[index,"FilePath"] = aggregator.save()
+                try:
+                    aggregator.aggregate(row)
+                    aggregator.morph_on_shapemode_shape()
+                    df_agg.loc[index,"FilePath"] = aggregator.save()
+                    print(f"Index {row.name} complete.")
+                except:
+                    print(f"Index {row.name} FAILED.")
             else:
                 df_agg.loc[index,"FilePath"] = rel_path_to_output_file
             

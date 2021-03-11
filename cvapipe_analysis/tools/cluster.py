@@ -102,6 +102,16 @@ class Distributor:
 
         return
 
+class FeaturesDistributor(Distributor):
+    def __init__(self, df, nworkers):
+        super().__init__(df, nworkers)
+        self.rel_path_to_python_file = "cvapipe_analysis/steps/compute_features/compute_features_tools.py"
+
+class ParameterizationDistributor(Distributor):
+    def __init__(self, df, nworkers):
+        super().__init__(df, nworkers)
+        self.rel_path_to_python_file = "cvapipe_analysis/steps/parameterization/parameterization_tools.py"
+    
 class AggregationDistributor(Distributor):
     def __init__(self, df, nworkers):
         super().__init__(df, nworkers)

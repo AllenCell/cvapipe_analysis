@@ -99,9 +99,9 @@ class ComputeFeatures(Step):
         df = df[columns_to_keep]
         
         # Create features directory
-        features_dir = self.step_local_staging_dir / "cell_features"
-        features_dir.mkdir(parents=True, exist_ok=True)
-
+        save_dir = self.step_local_staging_dir / "cell_features"
+        save_dir.mkdir(parents=True, exist_ok=True)
+        
         load_data_dir = self.project_local_staging_dir / "loaddata"
 
         if distribute:
