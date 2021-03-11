@@ -1,6 +1,7 @@
 import os
 import vtk
 import json
+import psutil
 import pickle
 import argparse
 import warnings
@@ -59,13 +60,15 @@ class Aggregator:
         return channel_names
     
     def aggregate_parameterized_intensities(self):
+        print(">>", len(self.CellIds), psutil.virtual_memory())
         N_CORES = len(os.sched_getaffinity(0))
         with concurrent.futures.ProcessPoolExecutor(N_CORES) as executor:
             pints = list(
                 executor.map(self.read_parameterized_intensity, self.CellIds))
         agg_pint = self.agg_func(np.array(pints), axis=0)
+        print(">> AGGREGATED")
         channel_id = self.get_available_intensities().index(self.row.intensity)
-        self.aggregated_parameterized_intensity = agg_pint[channel_id]
+        self.aggregated_parameterized_intensity = agg_pint[channel_id].copy()
     
     def set_agg_function(self):
         if self.row.aggtype == 'avg':
@@ -132,7 +135,7 @@ class Aggregator:
             writer.save(
                 self.morphed,
                 dimension_order='CZYX',
-                image_name=f"{save_as.stem}-N{n}"
+                image_name=f"N{n}"
             )
         
         return save_as
@@ -197,20 +200,24 @@ if __name__ == "__main__":
     space = shapespace.ShapeSpaceBasic()
     space.set_path_to_local_staging_folder(config['project']['local_staging'])
     space.load_shapemode_manifest()
-    
+
     aggregator = Aggregator(space)
     aggregator.set_path_to_local_staging_folder(config['project']['local_staging'])
     aggregator.load_parameterization_manifest()
-        
+    
     for index, row in df.iterrows():
-        try:
-            aggregator.aggregate(row)
-            aggregator.morph_on_shapemode_shape()
-            save_as = aggregator.save()
-            df.loc[index,'FilePath'] = save_as
-            print(save_as, "complete.")
-        except:
-            print(save_as, "FAILED.")
+        save_as = aggregator.check_output_exist(row)
+        if save_as is None:
+            try:
+                aggregator.aggregate(row)
+                aggregator.morph_on_shapemode_shape()
+                save_as = aggregator.save()
+                df.loc[index,'FilePath'] = save_as
+                print(save_as, "complete.")
+            except:
+                print(save_as, "FAILED.")
+        else:
+            print(save_as, "skipped.")
 
 '''
 class AggHyperstack:
