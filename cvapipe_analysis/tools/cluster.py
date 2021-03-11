@@ -34,7 +34,6 @@ class Distributor:
         self.df = df.copy().reset_index()
         self.nrows = len(df)
         self.nworkers = nworkers
-        self.chunk_size = round(0.5+self.nrows/self.nworkers)
         self.root = Path(os.path.abspath(cvapipe_analysis.__file__)).parents[1]
         self.root_as_str = str(self.root)
         self.abs_path_to_script_as_str = f"{self.root_as_str}/.distribute/jobs.sh"
@@ -105,14 +104,24 @@ class Distributor:
 class FeaturesDistributor(Distributor):
     def __init__(self, df, nworkers):
         super().__init__(df, nworkers)
+        self.chunk_size = round(0.5+self.nrows/self.nworkers)
         self.rel_path_to_python_file = "cvapipe_analysis/steps/compute_features/compute_features_tools.py"
 
 class ParameterizationDistributor(Distributor):
     def __init__(self, df, nworkers):
         super().__init__(df, nworkers)
+        self.chunk_size = round(0.5+self.nrows/self.nworkers)
         self.rel_path_to_python_file = "cvapipe_analysis/steps/parameterization/parameterization_tools.py"
     
 class AggregationDistributor(Distributor):
     def __init__(self, df, nworkers):
         super().__init__(df, nworkers)
+        """
+        Setting chunk size to 1 here so that each job has
+        to generate a single file. Otherwise Slurm crashes
+        for reasons that I don't yet know. It seems to me
+        that aggregation_tools.py is leaking memory. To be
+        investigated.
+        """
+        self.chunk_size = 1
         self.rel_path_to_python_file = "cvapipe_analysis/steps/aggregation/aggregation_tools.py"
