@@ -1,6 +1,7 @@
 import yaml
 import json
 import pandas as pd
+from pathlib import Path
 from aicsimageio import AICSImage
 
 def load_config_file():
@@ -85,3 +86,41 @@ def get_raws(path_raw, channels):
     raw = AICSImage(path_raw).data.squeeze()
 
     return raw[ch_dna], raw[ch_mem], raw[ch_str]
+
+class DataProducer:
+    """
+    Desc
+    
+    WARNING: All classes are assumed to know the whole
+    structure of directories inside the local_staging
+    folder and this is hard coded. Therefore, classes
+    may break if you move saved files from the places
+    their are saved.
+    """
+    def __init__(self, config):
+        self.config = config
+        self.set_abs_path_to_local_staging_folder(config['project']['local_staging'])
+        
+    def set_abs_path_to_local_staging_folder(self, path):
+        if not isinstance(path, Path):
+            path = Path(path)
+        self.abs_path_local_staging = path
+        
+    def get_rel_output_file_path_as_str(self, row):
+        file_name = self.get_output_file_name(row)
+        return f"{self.abs_path_local_staging.name}/{self.subfolder}/{file_name}"
+
+    def check_output_exist(self, row):
+        rel_path_to_output_file = self.get_rel_output_file_path_as_str(row)
+        if Path(rel_path_to_output_file).is_file():
+            return rel_path_to_output_file
+        return None
+
+    def load_parameterization_manifest(self):
+        self.df = pd.read_csv(self.abs_path_local_staging/"parameterization/manifest.csv", index_col='CellId')
+        print(f"Dataframe loaded: {self.df.shape}")
+    
+    @staticmethod
+    def status(idx, output):
+        msg = "FAILED" if output is None else "complete"
+        print(f"Index {idx} {msg}. Output: {output}")
