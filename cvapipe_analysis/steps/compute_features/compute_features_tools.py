@@ -31,7 +31,7 @@ def cast_features(features):
     for key, value in features.items():
         if isinstance(value, np.integer):
             features[key] = int(value)
-        elif isinstance(value, np.float):
+        elif isinstance(value, float):
             features[key] = float(value)
         elif isinstance(value, np.ndarray):
             features[key] = value.tolist()
@@ -270,32 +270,32 @@ def load_images_and_calculate_features(path_seg, channels, path_output):
 
 
 if __name__ == "__main__":
-        
+    
+    config = general.load_config_file()
+    path_to_local_staging_folder = config['project']['local_staging']
+    
     parser = argparse.ArgumentParser(description='Batch feature extraction.')
-    parser.add_argument('--config', help='Path to the JSON config file.', required=True)
+    parser.add_argument('--csv', help='Path to the dataframe.', required=True)
     args = vars(parser.parse_args())
-    
-    with open(args['config'], 'r') as f:
-        config = json.load(f)
-    
-    df = general.read_chunk_of_dataframe(config)
-    
+
+    df = pd.read_csv(args['csv'], index_col='CellId')
     print(f"Processing dataframe of shape {df.shape}")
         
-    def wrapper_for_feature_calculation(index):
+    def wrapper_for_feature_calculation(row):
         
-        row = df.loc[index]
-        path_seg = Path(config['data_folder']) / row.crop_seg
+        path_seg = f"{path_to_local_staging_folder}/loaddata/{row.crop_seg}"
         channels = eval(row.name_dict)["crop_seg"]
-        path_output = Path(config['output']) / f"{index}.json"
-
+        path_out = f"{path_to_local_staging_folder}/computefeatures/cell_features/{row.name}.json"
+        
         try:
-            load_images_and_calculate_features(path_seg, channels, path_output)
-            print(f"Index {index} complete.")
+            load_images_and_calculate_features(path_seg, channels, path_out)
+            print(f"Index {row.name} complete.")
         except:
-            print(f"Index {index} FAILED.")
-
+            print(f"Index {row.name} FAILED.")
+            
     N_CORES = len(os.sched_getaffinity(0))
     with concurrent.futures.ProcessPoolExecutor(N_CORES) as executor:
-        executor.map(wrapper_for_feature_calculation, df.index)
+        executor.map(
+            wrapper_for_feature_calculation, [row for _,row in df.iterrows()]
+        )
 

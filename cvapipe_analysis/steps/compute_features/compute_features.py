@@ -15,8 +15,7 @@ from tqdm import tqdm
 from datastep import Step, log_run_params
 from aics_dask_utils import DistributedHandler
 
-from cvapipe_analysis.tools import general
-from cvapipe_analysis.tools import cluster
+from cvapipe_analysis.tools import general, cluster
 from .compute_features_tools import load_images_and_calculate_features
 
 log = logging.getLogger(__name__)
@@ -100,23 +99,18 @@ class ComputeFeatures(Step):
         df = df[columns_to_keep]
         
         # Create features directory
-        features_dir = self.step_local_staging_dir / "cell_features"
-        features_dir.mkdir(parents=True, exist_ok=True)
-
+        save_dir = self.step_local_staging_dir / "cell_features"
+        save_dir.mkdir(parents=True, exist_ok=True)
+        
         load_data_dir = self.project_local_staging_dir / "loaddata"
 
         if distribute:
-            
-            nworkers = config['resources']['nworkers']
-            data = cluster.data_to_distribute(df, nworkers)
-            data.set_rel_path_to_dataframe(path_manifest)
-            data.set_rel_path_to_input_images(load_data_dir)
-            data.set_rel_path_to_output(features_dir)
-            python_file = "cvapipe_analysis/steps/compute_features/compute_features_tools.py"
-            cluster.distribute_python_code(data, config, log, python_file)
+                        
+            nworkers = config['resources']['nworkers']            
+            distributor = cluster.FeaturesDistributor(df, nworkers)
+            distributor.distribute(config, log)
 
-            log.info(f"{nworkers} have been launched. Please come back when the calculation is complete.")
-            
+            log.info(f"Multiple jobs have been launched. Please come back when the calculation is complete.")            
             return None
             
         else:
@@ -125,7 +119,7 @@ class ComputeFeatures(Step):
                 results = handler.batched_map(
                     self._run_feature_extraction,
                     *zip(*list(df.iterrows())),
-                    [features_dir for i in range(len(df))],
+                    [save_dir for i in range(len(df))],
                     [load_data_dir for i in range(len(df))],
                     [overwrite for i in range(len(df))],
                 )

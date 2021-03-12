@@ -1,120 +1,127 @@
+import os
 import json
 import dask
 import shutil
 import subprocess
 import numpy as np
 import pandas as pd
+from tqdm import tqdm
 from pathlib import Path
 from typing import NamedTuple, Optional, Union, List, Dict
 
+import cvapipe_analysis
+from cvapipe_analysis.tools import shapespace
+from cvapipe_analysis.steps.shapemode.avgshape import digitize_shape_mode
 
-class data_to_distribute:
+class Distributor:
+    """
+    The goal of this class is to provide an interface
+    to spawn many jobs in slurm using array of jobs.
+    A master dataframe is provided in which each row
+    corresponds to one job that will run. Each row
+    contains all information necessary for that job to
+    run. The class provides prvides a way of iterating
+    over chunks of the dataframe. The number of chunks
+    depends on the number of workers requested.
     
+    WARNING: This class should not depend on where
+    the local_staging folder is.
+    """
+    jobs = []
+    folders = ['log','dataframes']
     
-    def __init__(self, df: pd.DataFrame, nworkers: int):
+    def __init__(self, df, nworkers):
         self.df = df.copy().reset_index()
         self.nrows = len(df)
         self.nworkers = nworkers
-        self.chunk_size = self.nrows // self.nworkers
-
+        self.root = Path(os.path.abspath(cvapipe_analysis.__file__)).parents[1]
+        self.root_as_str = str(self.root)
+        self.abs_path_to_script_as_str = f"{self.root_as_str}/.distribute/jobs.sh"
+        self.abs_path_jobs_file_as_str = f"{self.root_as_str}/.distribute/jobs.txt"    
         
     def get_next_chunk(self):
         for chunk, df_chunk in self.df.groupby(np.arange(self.nrows)//self.chunk_size):
-            id_ini = int(df_chunk.index[0])
-            id_end = int(df_chunk.index[-1])
-            nrows = id_end - id_ini + 1
-            yield chunk, id_ini, nrows
+            yield chunk, df_chunk
 
-            
-    def set_rel_path_to_dataframe(self, path):
-        self.rel_path_dataframe = path
-
-        
-    def get_abs_path_to_dataframe_as_str(self):
-        path = Path().absolute() / self.rel_path_dataframe
+    def get_abs_path_to_python_file_as_str(self):
+        path = self.root / self.rel_path_to_python_file
         return str(path)
 
-    
-    def set_rel_path_to_input_images(self, path):
-        self.rel_path_to_input_images = path
+    def clean_distribute_folder(self):
+        for folder in self.folders:
+            path_subfolder = Path(".distribute") / folder
+            try:
+                shutil.rmtree(str(path_subfolder))
+            except: pass
+            path_subfolder.mkdir(parents=True, exist_ok=True)
+        return
 
+    def append_job(self, job):
+        self.jobs.append(job)
+    
+    def write_commands_file(self, config):
+        python_path_as_str = "/"+config['resources']['python_env'].lstrip('/')+"/bin/python"
+        with open(self.abs_path_jobs_file_as_str, "w") as fs:
+            for job in self.jobs:
+                abs_path_to_dataframe = f"{self.root_as_str}/.distribute/dataframes/{job}.csv"
+                print(f"{python_path_as_str} {self.get_abs_path_to_python_file_as_str()} --csv {abs_path_to_dataframe}", file=fs)
+    
+    def write_script_file(self, config):
+        abs_path_output_folder = f"{self.root_as_str}/.distribute/log"
+        with open(self.abs_path_to_script_as_str, "w") as fs:
+            print("#!/bin/bash", file=fs)
+            print("#SBATCH --partition aics_cpu_general", file=fs)
+            print(f"#SBATCH --mem-per-cpu {config['resources']['memory']}", file=fs)
+            print(f"#SBATCH --cpus-per-task {config['resources']['cores']}", file=fs)
+            print(f"#SBATCH --output {abs_path_output_folder}/%A_%a.out", file=fs)
+            print(f"#SBATCH --error {abs_path_output_folder}/%A_%a.err", file=fs)
+            print(f"#SBATCH --array=1-{len(self.jobs)}", file=fs)
+            print(f"srun $(head -n $SLURM_ARRAY_TASK_ID {self.abs_path_jobs_file_as_str} | tail -n 1)", file=fs)
+
+        return
+
+    def execute(self, config, log):
+        self.write_commands_file(config)
+        self.write_script_file(config)
         
-    def get_abs_path_to_input_images_as_str(self):
-        path = Path().absolute() / self.rel_path_to_input_images
-        return str(path)
-        
-        
-    def set_rel_path_to_output(self, path):
-        self.rel_path_to_output = path
-
-        
-    def get_abs_path_to_output_as_str(self):
-        path = Path().absolute() / self.rel_path_to_output
-        return str(path)
-
-    
-def clean_distribute_folder():
-    
-    folders = ['log','scripts','config']
-        
-    for folder in folders:
-        path_subfolder = Path(".distribute") / folder
-        try:
-            shutil.rmtree(str(path_subfolder))
-        except: pass
-        path_subfolder.mkdir(parents=True, exist_ok=True)
-
-    return
-
-def write_script_file(chunk, config, rel_path_python_file):
-
-    mem = config['resources']['memory']
-    cores = config['resources']['cores']
-    
-    root = str(Path().absolute())
-    abs_path_script = f"{root}/.distribute/scripts/{chunk}.script"
-    abs_path_script_output = f"{root}/.distribute/log/{chunk}.out"
-    abs_path_python_env = config['resources']['path_python_env']
-    abs_path_python_file = f"{root}/{rel_path_python_file}"
-    abs_path_config_file = f"{root}/.distribute/config/{chunk}.json"
-
-    with open(abs_path_script, "w") as fs:
-        print("#!/bin/bash", file=fs)
-        print(f"#SBATCH --job-name=cvapipe-{chunk}", file=fs)
-        print("#SBATCH --partition aics_cpu_general", file=fs)
-        print(f"#SBATCH --mem-per-cpu {mem}", file=fs)
-        print(f"#SBATCH --cpus-per-task {cores}", file=fs)
-        print(f"#SBATCH --output {abs_path_script_output}", file=fs)
-        print(f"srun {abs_path_python_env} {abs_path_python_file} --config {abs_path_config_file}", file=fs)
-
-    return abs_path_script
-
-
-def distribute_python_code(data, config, log, rel_path_python_file):
-    
-    log.info("Cleaning distribute directory.")
-    clean_distribute_folder()
-    
-    for chunk, id_ini, nrows in data.get_next_chunk():
-        
-        script_config = {
-            "csv": data.get_abs_path_to_dataframe_as_str(),
-            "output": data.get_abs_path_to_output_as_str(),
-            "data_folder": data.get_abs_path_to_input_images_as_str(),
-            "skip": id_ini,
-            "nrows": nrows
-        }
-
-        rel_path_config_file = f".distribute/config/{chunk}.json"
-        with open(rel_path_config_file, "w") as fj:
-            json.dump(script_config, fj, indent=4, sort_keys=True)
-
-        abs_path_script = write_script_file(chunk, config, rel_path_python_file)
-    
-        log.info(f"Submitting job cvapipe {chunk}...")
-
-        submission = 'sbatch ' + abs_path_script
+        log.info(f"Submitting {len(self.jobs)} cvapipe_analysis jobs...")
+        submission = 'sbatch ' + self.abs_path_to_script_as_str
         process = subprocess.Popen(submission, stdout=subprocess.PIPE, shell=True)
         (out, err) = process.communicate()
-        
-    return
+
+    def distribute(self, config, log):
+        log.info("Cleaning distribute directory.")
+        self.clean_distribute_folder()
+
+        for chunk, df_chunk in self.get_next_chunk():
+            rel_path_to_dataframe = f".distribute/dataframes/{chunk}.csv"
+            df_chunk.to_csv(rel_path_to_dataframe)
+            self.append_job(chunk)
+        self.execute(config, log)
+
+        return
+
+class FeaturesDistributor(Distributor):
+    def __init__(self, df, nworkers):
+        super().__init__(df, nworkers)
+        self.chunk_size = round(0.5+self.nrows/self.nworkers)
+        self.rel_path_to_python_file = "cvapipe_analysis/steps/compute_features/compute_features_tools.py"
+
+class ParameterizationDistributor(Distributor):
+    def __init__(self, df, nworkers):
+        super().__init__(df, nworkers)
+        self.chunk_size = round(0.5+self.nrows/self.nworkers)
+        self.rel_path_to_python_file = "cvapipe_analysis/steps/parameterization/parameterization_tools.py"
+    
+class AggregationDistributor(Distributor):
+    def __init__(self, df, nworkers):
+        super().__init__(df, nworkers)
+        """
+        Setting chunk size to 1 here so that each job has
+        to generate a single file. Otherwise Slurm crashes
+        for reasons that I don't yet know. It seems to me
+        that aggregation_tools.py is leaking memory. To be
+        investigated.
+        """
+        self.chunk_size = 1
+        self.rel_path_to_python_file = "cvapipe_analysis/steps/aggregation/aggregation_tools.py"
