@@ -97,7 +97,8 @@ def digitize_shape_mode(
         Path to a file where we save the number of data points
         that fall in each bin
     return_freqs_per_structs: bool
-        ??
+        Wheter or not to return a dataframe with the number of
+        data points in each bin stratifyied by structure_name.
     Returns
     -------
         df: pandas dataframe
@@ -114,6 +115,10 @@ def digitize_shape_mode(
             bin
         pc_std: float
             Standard deviation used to z-score the feature.
+        df_freq: pd.DataFrame
+            dataframe with the number of data points in each
+            bin stratifyied by structure_name (returned only
+            when return_freqs_per_structs is set to True).
 
     """
     

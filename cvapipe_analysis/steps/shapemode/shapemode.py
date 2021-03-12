@@ -7,6 +7,8 @@ from typing import Dict, List, Optional, Union
 from datastep import Step, log_run_params
 
 import pandas as pd
+
+from ...tools import general
 from .outliers import outliers_removal
 from .dim_reduction import pca_analysis
 from .avgshape import digitize_shape_mode
@@ -38,6 +40,9 @@ class Shapemode(Step):
         no_structural_outliers: bool = False,
         **kwargs
     ):
+        
+        # Load configuration file
+        config = general.load_config_file()
         
         # Load feature dataframe
         path_to_metadata_manifest = self.project_local_staging_dir / 'loaddata/manifest.csv'
@@ -169,7 +174,7 @@ class Shapemode(Step):
                 df = df,
                 feature_names = features,
                 prefix = prefix,
-                npcs_to_calc = 8,
+                npcs_to_calc = config['pca']['number_of_pcs'],
                 save = dir_pca / f'pca_{prefix}'
             )
 
@@ -193,7 +198,7 @@ class Shapemode(Step):
                 df_filtered, bin_indexes, (bin_centers, pc_std) = digitize_shape_mode(
                     df = df,
                     feature = pc_name,
-                    nbins = 9,
+                    nbins = config['pca']['number_map_points'],
                     filter_based_on = pc_names,
                     save = dir_avgshape / pc_name,
                 )
@@ -231,12 +236,10 @@ class Shapemode(Step):
                     mode = pc_name,
                     save = dir_avgshape,
                     fix_nuclear_position = None if prefix != 'DNA_MEM' else (df_filtered,bin_indexes),
-                    plot_limits = [-150, 150, -80, 80],
+                    plot_limits = config['pca']['plot_limits'],
                 )
 
                 df_shapemode_paths = df_shapemode_paths.append(df_paths, ignore_index=True)
-
-                import pdb; pdb.set_trace()
 
         # Save datafrme with path for meshes and gifs
         dataframe_path = self.step_local_staging_dir / 'shapemode.csv'

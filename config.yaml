@@ -1,18 +1,20 @@
 appName: cvapipe_analysis
 
-resources:
-    # In case a (slurm) cluster is available
-    cores: 30
-    nworkers: 10
-    memory: "4GB"
-    queue: "aics_cpu_general"
-    walltime: "48:00:00"    
+project:
+    # Sufix to append to local_staging
+    local_staging: "/allen/aics/assay-dev/MicroscopyOtherData/Viana/projects/cvapipe_analysis/local_staging_test"
+    overwrite: True
 
-mappoints:
+pca:
+    # Number of principal components to be calculated
+    number_of_pcs: 8
     # Number of map points along each principal component
-    nbins: 9
-    
+    number_map_points: 9
+    # limits of x and y axies in the animated GIFs
+    plot_limits: [-150, 150, -80, 80]
+
 aggregation:
+    type: ['avg']
     # Shape space used to create aggregated images.
     # Choices are:
     # DNA_PC: shape space of nucleus alone
@@ -20,11 +22,25 @@ aggregation:
     # DNA_MEM_PC: shape space of nucleus and cell together
     aggregate_on: "DNA_MEM_PC"
 
+parameterization:
+    # List of images and their channels that should be
+    # parameterized
+    intensities:
+        'GFP': ['crop_raw', 'structure']
+        'SEG': ['crop_seg', 'structure_seg']
+    # Number of SHE coefficients used to describe cell
+    # and nuclear shape
+    lmax: 16
+    # Number of interplation points between nuclear
+    # centroid and nuclear shell, and from nuclear
+    # shell to cell membrane.
+    nisos: [32, 32]
+
 structures:
-    # Gene names of each tagged structure. These match
-    # the column structure_name in the manifest.
+
     # >> Results are going to be ordered according to
-    # this sequence.
+    # this sequence. These match the column structure_name
+    # in the manifest.
     genes: ["FBL", "NPM1", "SON", "SMC1A", "HIST1H2BJ", "LMNB1", "NUP153", "SEC61B", "ATP2A2", "TOMM20", "SLC25A17", "RAB5A", "LAMP1",  "ST6GAL1", "CETN2", "TUBA1B", "AAVS1", "ACTB", "ACTN1", "MYH10", "GJA1", "TJP1", "DSP", "CTNNB1", "PXN"]
     # Mapping between gene name and description
     desc:
@@ -53,3 +69,12 @@ structures:
         "TJP1": "tight junctions"
         "DSP": "desmosomes"
         "PXN": "matrix adhesions"
+
+resources:
+    # In case a (slurm) cluster is available
+    cores: 30
+    nworkers: 32
+    memory: "8GB"
+    queue: "aics_cpu_general"
+    walltime: "9-24:00:00"
+    python_env: "/home/matheus.viana/anaconda3/envs/cvapipe/"
