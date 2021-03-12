@@ -8,7 +8,7 @@ from aicsimageio import writers
 from aicsshparam import shtools
 from aicscytoparam import cytoparam
 
-from cvapipe_analysis.tools import general
+from cvapipe_analysis.tools import general, cluster
 
 class Parameterizer(general.DataProducer):
     """
@@ -111,7 +111,7 @@ class Parameterizer(general.DataProducer):
                 self.parameterize()
                 self.save()
             except:
-                rel_path_to_output_file = None
+                rel_path_to_output_file = rel_path_to_output_file = None
         self.status(row.name, rel_path_to_output_file)
         return rel_path_to_output_file
     
@@ -127,8 +127,5 @@ if __name__ == "__main__":
     print(f"Processing dataframe of shape {df.shape}")
 
     parameterizer = Parameterizer(config)
-    N_CORES = len(os.sched_getaffinity(0))
-    with concurrent.futures.ProcessPoolExecutor(N_CORES) as executor:
-        executor.map(
-            parameterizer.workflow, [row for _,row in df.iterrows()]
-        )
+    with concurrent.futures.ProcessPoolExecutor(cluster.get_ncores()) as executor:
+        executor.map(parameterizer.workflow, [row for _,row in df.iterrows()])
