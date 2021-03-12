@@ -13,6 +13,9 @@ import cvapipe_analysis
 from cvapipe_analysis.tools import shapespace
 from cvapipe_analysis.steps.shapemode.avgshape import digitize_shape_mode
 
+def get_ncores():
+    return len(os.sched_getaffinity(0))
+
 class Distributor:
     """
     The goal of this class is to provide an interface
@@ -125,3 +128,9 @@ class AggregationDistributor(Distributor):
         """
         self.chunk_size = 1
         self.rel_path_to_python_file = "cvapipe_analysis/steps/aggregation/aggregation_tools.py"
+
+class StereotypyDistributor(Distributor):
+    def __init__(self, df, nworkers):
+        super().__init__(df, nworkers)
+        self.chunk_size = round(0.5+self.nrows/self.nworkers)
+        self.rel_path_to_python_file = "cvapipe_analysis/steps/stereotypy/stereotypy_tools.py"
