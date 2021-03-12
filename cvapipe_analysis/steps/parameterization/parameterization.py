@@ -82,21 +82,9 @@ class Parameterization(Step):
 
         else:
             
-            parameterizer = Parameterizer()
-            parameterizer.set_path_to_local_staging_folder(config['project']['local_staging'])
-
+            parameterizer = Parameterizer(config)
             for index, row in tqdm(df.iterrows(), total=len(df)):
-                parameterizer.set_row(row)
-                rel_path_to_output_file = parameterizer.check_output_exist()
-                if rel_path_to_output_file is None:
-                    try:
-                        parameterizer.parameterize()
-                        df.loc[index,'PathToRepresentationFile'] = parameterizer.save()
-                        print(f"Index {row.name} complete.")
-                    except:
-                        print(f"Index {row.name} FAILED.")
-                else:
-                    df.loc[index,'PathToRepresentationFile'] = rel_path_to_output_file
+                df.loc[index,'PathToRepresentationFile'] = parameterizer.workflow(row)
 
         self.manifest = df[['PathToRepresentationFile']]
         manifest_save_path = self.step_local_staging_dir / "manifest.csv"

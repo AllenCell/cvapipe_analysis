@@ -20,8 +20,7 @@ import concurrent
 from cvapipe_analysis.tools import general, shapespace
 from cvapipe_analysis.steps.shapemode.avgshape import digitize_shape_mode
 
-
-class Aggregator:
+class Aggregator(general.DataProducer):
     """
     The goal of this class is to have a combination of
     parameters as input, including some CellIds. The
@@ -35,17 +34,15 @@ class Aggregator:
     may break if you move saved files from the places
     their are saved.
     """
-    def __init__(self, space):
+    
+    subfolder = 'aggregation/aggmorph'
+    
+    def __init__(self, config):
+        super().__init__(config)
+    
+    def set_shape_space(self, space):
         self.space = space
-
-    def set_path_to_local_staging_folder(self, path):
-        if not isinstance(path, Path):
-            path = Path(path)
-        self.local_staging = path
-
-    def load_parameterization_manifest(self):
-        self.df = pd.read_csv(self.local_staging/"parameterization/manifest.csv", index_col='CellId')
-        print(f"Dataframe loaded: {self.df.shape}")
+        self.load_parameterization_manifest()
     
     def read_parameterized_intensity(self, index, return_intensity_names=False):
         code = AICSImage(self.df.at[index,'PathToRepresentationFile'])
@@ -60,13 +57,11 @@ class Aggregator:
         return channel_names
     
     def aggregate_parameterized_intensities(self):
-        print(">>", len(self.CellIds), psutil.virtual_memory())
         N_CORES = len(os.sched_getaffinity(0))
         with concurrent.futures.ProcessPoolExecutor(N_CORES) as executor:
             pints = list(
                 executor.map(self.read_parameterized_intensity, self.CellIds))
         agg_pint = self.agg_func(np.array(pints), axis=0)
-        print(">> AGGREGATED")
         channel_id = self.get_available_intensities().index(self.row.intensity)
         self.aggregated_parameterized_intensity = agg_pint[channel_id].copy()
     
@@ -120,27 +115,49 @@ class Aggregator:
     @staticmethod
     def get_output_file_name(row):
         return f"{row.aggtype}-{row.intensity}-{row.structure_name}-{row.shapemode}-B{row.bin}.tif"
-    
-    def check_output_exist(self, row):
-        file_name = self.get_output_file_name(row)
-        rel_path_to_output_file = f"{self.local_staging.name}/aggregation/aggregations/{file_name}"
-        if Path(rel_path_to_output_file).is_file():
-            return rel_path_to_output_file
-        return None
 
+    @staticmethod
+    def get_aggrep_file_name(row):
+        return f"{row.aggtype}-{row.intensity}-{row.structure_name}-{row.shapemode}-B{row.bin}-CODE.tif"
+    
+    def get_rel_aggrep_file_path_as_str(self, row):
+        file_name = self.get_aggrep_file_name(row)
+        return f"{self.abs_path_local_staging.name}/aggregation/repsagg/{file_name}"
+    
     def save(self):
         n = len(self.CellIds)
-        save_as = Path(self.row.PathToOutputFolder) / self.get_output_file_name(self.row)
+        save_as = self.get_rel_output_file_path_as_str(self.row)
         with writers.ome_tiff_writer.OmeTiffWriter(save_as, overwrite_file=True) as writer:
             writer.save(
                 self.morphed,
                 dimension_order='CZYX',
+                image_name=f"N{n}",
+                channel_names = ['domain', Path(save_as).stem]
+            )
+        aggrep = self.aggregated_parameterized_intensity
+        save_as = self.get_rel_aggrep_file_path_as_str(self.row)
+        with writers.ome_tiff_writer.OmeTiffWriter(save_as, overwrite_file=True) as writer:
+            writer.save(
+                aggrep.reshape(1,*aggrep.shape),
+                dimension_order='ZYX',
                 image_name=f"N{n}"
             )
         
         return save_as
 
-    
+    def workflow(self, row):
+        rel_path_to_output_file = self.check_output_exist(row)
+        if (rel_path_to_output_file is None) or self.config['project']['overwrite']:
+            self.set_row(row)
+            try:
+                self.aggregate(row)
+                self.morph_on_shapemode_shape()
+                self.save()
+            except:
+                rel_path_to_output_file = None
+        self.status(row.name, rel_path_to_output_file)
+        return rel_path_to_output_file
+
 def create_dataframe_of_celids(df, config):
     """
     This function creates a dataframe with all combinations
@@ -163,12 +180,13 @@ def create_dataframe_of_celids(df, config):
     """
     prefix = config['aggregation']['aggregate_on']
     pc_names = [f for f in df.columns if prefix in f]
-    space = shapespace.ShapeSpace(df[pc_names])
+    config = general.load_config_file()
+    space = shapespace.ShapeSpace(df[pc_names], config)
     df_agg = []
     for pc_name in tqdm(pc_names):
         space.set_active_axis(pc_name)
         space.digitize_active_axis()
-        for _, intensity in config['parameterization']['intensities']:
+        for intensity in config['parameterization']['intensities'].keys():
             for agg in config['aggregation']['type']:
                 for b, _ in space.iter_map_points():
                     indexes = space.get_indexes_in_bin(b)
@@ -196,14 +214,9 @@ if __name__ == "__main__":
     df = pd.read_csv(args['csv'], index_col=0)
 
     config = general.load_config_file()
-    
-    space = shapespace.ShapeSpaceBasic()
-    space.set_path_to_local_staging_folder(config['project']['local_staging'])
-    space.load_shapemode_manifest()
-
-    aggregator = Aggregator(space)
-    aggregator.set_path_to_local_staging_folder(config['project']['local_staging'])
-    aggregator.load_parameterization_manifest()
+    space = shapespace.ShapeSpaceBasic(config)
+    aggregator = Aggregator(config)
+    aggregator.set_shape_space(space)
     
     for index, row in df.iterrows():
         save_as = aggregator.check_output_exist(row)

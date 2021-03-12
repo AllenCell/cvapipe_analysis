@@ -57,12 +57,12 @@ class Aggregation(Step):
         df = df.merge(df_param[['PathToRepresentationFile']], left_index=True, right_index=True)
         
         # Make necessary folders
-        agg_dir = self.step_local_staging_dir / 'aggregations'
-        agg_dir.mkdir(parents=True, exist_ok=True)
+        for folder in ['repsagg','aggmorph']:
+            save_dir = self.step_local_staging_dir / folder
+            save_dir.mkdir(parents=True, exist_ok=True)
 
         # Create all combinations of parameters
         df_agg = create_dataframe_of_celids(df, config)
-        df_agg['PathToOutputFolder'] = str(agg_dir)
                 
         if distribute:
             
@@ -75,26 +75,12 @@ class Aggregation(Step):
         
         else:
 
-            space = shapespace.ShapeSpaceBasic()
-            space.set_path_to_local_staging_folder(config['project']['local_staging'])
-            space.load_shapemode_manifest()
-
-            aggregator = Aggregator(space)
-            aggregator.set_path_to_local_staging_folder(config['project']['local_staging'])
-            aggregator.load_parameterization_manifest()
+            space = shapespace.ShapeSpaceBasic(config)
+            aggregator = Aggregator(config)
+            aggregator.set_shape_space(space)
             
         for index, row in tqdm(df_agg.iterrows(), total=len(df_agg)):
-            rel_path_to_output_file = aggregator.check_output_exist(row)
-            if rel_path_to_output_file is None:
-                try:
-                    aggregator.aggregate(row)
-                    aggregator.morph_on_shapemode_shape()
-                    df_agg.loc[index,"FilePath"] = aggregator.save()
-                    print(f"Index {row.name} complete.")
-                except:
-                    print(f"Index {row.name} FAILED.")
-            else:
-                df_agg.loc[index,"FilePath"] = rel_path_to_output_file
+            df_agg.loc[index,'PathToAggFile'] = aggregator.workflow(row)
             
         self.manifest = df_agg
         manifest_path = self.step_local_staging_dir / 'manifest.csv'
