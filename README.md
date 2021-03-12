@@ -127,15 +127,25 @@ This step generates aggregation of multiple cells representations and morph them
 
 - `avg-SEG-TUBA1B-DNA_MEM_PC4-B5-CODE.tif`: Example of file generated. This represents the average parameterized intensity representation generated from segmented images of all TUBA1B cells that fall into bin number 5 from shape mode 4.
 
+**Folder: `local_staging/aggregation/aggmorph/`**
+
 - `avg-SEG-TUBA1B-DNA_MEM_PC4-B5.tif`: Same as above but the representation has been morphed into the cell shape corresponding to bin number 5 of shape mode 4.
+
+### 6. Stereotypy analysis
+
+In progress...
+
+### 7. Concordance analysis
+
+In progress...
 
 ## Running the pipeline on your own data
 
+In progress...
+
 ## Running the pipeline on a cluster with `sbatch` capabilities
 
-If you are running `cvapipe_analysis` on a Slurm cluster or any other cluster with `sbatch` capabilities, each step can be called with a flag `--distribute`. This will spawn many jobs to run in parallel in the cluster. Specific parameter can be set in the `resources` section of the YAML config file.
-
-**TBD**
+If you are running `cvapipe_analysis` on a Slurm cluster or any other cluster with `sbatch` capabilities, each step can be called with a flag `--distribute`. This will spawn many jobs to run in parallel in the cluster. Specific parameters can be set in the `resources` section of the YAML config file.
 
 ***Free software: Allen Institute Software License***
 
