@@ -12,7 +12,7 @@ import pandas as pd
 from tqdm import tqdm
 
 from cvapipe_analysis.tools import general, cluster, shapespace
-from .aggregation_tools import Aggregator, create_dataframe_of_celids
+from .aggregation_tools import Aggregator
 
 import pdb;
 tr = pdb.set_trace
@@ -62,7 +62,7 @@ class Aggregation(Step):
             save_dir.mkdir(parents=True, exist_ok=True)
 
         # Create all combinations of parameters
-        df_agg = create_dataframe_of_celids(df, config)
+        df_agg = general.create_agg_dataframe_of_celids(df, config)
                 
         if distribute:
             

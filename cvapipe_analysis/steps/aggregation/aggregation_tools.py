@@ -17,8 +17,7 @@ from aics_dask_utils import DistributedHandler
 from vtk.util.numpy_support import vtk_to_numpy, numpy_to_vtk
 import concurrent
 
-from cvapipe_analysis.tools import general, shapespace
-from cvapipe_analysis.steps.shapemode.avgshape import digitize_shape_mode
+from cvapipe_analysis.tools import general, cluster, shapespace
 
 class Aggregator(general.DataProducer):
     """
@@ -44,25 +43,12 @@ class Aggregator(general.DataProducer):
         self.space = space
         self.load_parameterization_manifest()
     
-    def read_parameterized_intensity(self, index, return_intensity_names=False):
-        code = AICSImage(self.df.at[index,'PathToRepresentationFile'])
-        intensity_names = code.get_channel_names()
-        code = code.data.squeeze()
-        if return_intensity_names:
-            return code, intensity_names
-        return code
-    
-    def get_available_intensities(self):
-        _, channel_names = self.read_parameterized_intensity(self.df.index[0], True)
-        return channel_names
-    
     def aggregate_parameterized_intensities(self):
-        N_CORES = len(os.sched_getaffinity(0))
-        with concurrent.futures.ProcessPoolExecutor(N_CORES) as executor:
+        with concurrent.futures.ProcessPoolExecutor(cluster.get_ncores()) as executor:
             pints = list(
                 executor.map(self.read_parameterized_intensity, self.CellIds))
         agg_pint = self.agg_func(np.array(pints), axis=0)
-        channel_id = self.get_available_intensities().index(self.row.intensity)
+        channel_id = self.get_available_parameterized_intensities().index(self.row.intensity)
         self.aggregated_parameterized_intensity = agg_pint[channel_id].copy()
     
     def set_agg_function(self):
@@ -73,14 +59,8 @@ class Aggregator(general.DataProducer):
         else:
             raise ValueError(f"Aggregation type {self.row.aggtype} is not implemented.")
     
-    def digest_input_parameters(self, row):
-        self.row = row
-        self.CellIds = self.row.CellIds
-        if isinstance(self.CellIds, str):
-            self.CellIds = eval(self.CellIds)
-    
     def aggregate(self, row):
-        self.digest_input_parameters(row)
+        self.digest_row_with_cellids(row)
         self.set_agg_function()
         self.aggregate_parameterized_intensities()
         self.space.set_active_axis(row.shapemode)
@@ -115,10 +95,6 @@ class Aggregator(general.DataProducer):
     @staticmethod
     def get_output_file_name(row):
         return f"{row.aggtype}-{row.intensity}-{row.structure_name}-{row.shapemode}-B{row.bin}.tif"
-
-    @staticmethod
-    def get_aggrep_file_name(row):
-        return f"{row.aggtype}-{row.intensity}-{row.structure_name}-{row.shapemode}-B{row.bin}-CODE.tif"
     
     def get_rel_aggrep_file_path_as_str(self, row):
         file_name = self.get_aggrep_file_name(row)
@@ -152,57 +128,11 @@ class Aggregator(general.DataProducer):
             try:
                 self.aggregate(row)
                 self.morph_on_shapemode_shape()
-                self.save()
+                rel_path_to_output_file = self.save()
             except:
                 rel_path_to_output_file = None
         self.status(row.name, rel_path_to_output_file)
         return rel_path_to_output_file
-
-def create_dataframe_of_celids(df, config):
-    """
-    This function creates a dataframe with all combinations
-    of parameters we want to aggregate images for. Different
-    types of aggregations, different shape modes, etc. For
-    each combination is fins what are the cells that should
-    be aggregated together and sotre them in a columns
-    named CellIds.
-
-    Parameters
-    --------------------
-    df: pd.DataFrame
-        Merge of parameterization and shapemode manifests.
-    config: Dict
-        General config dictonary
-    Returns
-    --------------------
-    df_agg: pd.DataFrame
-        Dataframe as described above.
-    """
-    prefix = config['aggregation']['aggregate_on']
-    pc_names = [f for f in df.columns if prefix in f]
-    config = general.load_config_file()
-    space = shapespace.ShapeSpace(df[pc_names], config)
-    df_agg = []
-    for pc_name in tqdm(pc_names):
-        space.set_active_axis(pc_name)
-        space.digitize_active_axis()
-        for intensity in config['parameterization']['intensities'].keys():
-            for agg in config['aggregation']['type']:
-                for b, _ in space.iter_map_points():
-                    indexes = space.get_indexes_in_bin(b)
-                    for struct in tqdm(config['structures']['genes'], leave=False):
-                        df_struct = df.loc[(df.index.isin(indexes))&(df.structure_name==struct)]
-                        if len(df_struct) > 0:
-                            df_agg.append({
-                                "aggtype": agg,
-                                "intensity": intensity,
-                                "structure_name": struct,
-                                "shapemode": pc_name,
-                                "bin": b,
-                                "CellIds": df_struct.index.values.tolist()
-                            })
-                            
-    return pd.DataFrame(df_agg)
 
     
 if __name__ == "__main__":
@@ -214,24 +144,15 @@ if __name__ == "__main__":
     df = pd.read_csv(args['csv'], index_col=0)
 
     config = general.load_config_file()
+    
     space = shapespace.ShapeSpaceBasic(config)
     aggregator = Aggregator(config)
     aggregator.set_shape_space(space)
-    
-    for index, row in df.iterrows():
-        save_as = aggregator.check_output_exist(row)
-        if save_as is None:
-            try:
-                aggregator.aggregate(row)
-                aggregator.morph_on_shapemode_shape()
-                save_as = aggregator.save()
-                df.loc[index,'FilePath'] = save_as
-                print(save_as, "complete.")
-            except:
-                print(save_as, "FAILED.")
-        else:
-            print(save_as, "skipped.")
+    for _, row in df.iterrows():
+        '''Concurrent processes inside. Do not use concurrent here.'''
+        aggregator.workflow(row)
 
+            
 '''
 class AggHyperstack:
     
