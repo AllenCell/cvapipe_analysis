@@ -112,7 +112,7 @@ Here we use `aics-cytoparam` [(link)](https://github.com/AllenCell/aics-cytopara
 
 - `xx.tif`: Multichannels TIFF image with the cell representation.
 
-### 5. Create 5D hypterstacks
+### 5. Create aggregated parameterized intensity representations
 ```
 cvapipe_analysis aggregation run
 ```
@@ -121,13 +121,19 @@ This step generates aggregation of multiple cells representations and morph them
 
 **Folder: `local_staging/aggregation/`**
 
-- `manifest.csv`: Manifest with path to hyperstack created in this step.
+- `manifest.csv`: Manifest with combinations of parameters used for aggregation and path to TIF file generated.
 
-**Folder: `local_staging/aggregation/hyperstacks/`**
+**Folder: `local_staging/aggregation/repsagg/`**
 
-- `xx.tif`: 5D-hyperstacks. One file per shape mode, per image type (raw vs. segmentation) and per aggregation type (avg. vs. std.)
+- `avg-SEG-TUBA1B-DNA_MEM_PC4-B5-CODE.tif`: Example of file generated. This represents the average parameterized intensity representation generated from segmented images of all TUBA1B cells that fall into bin number 5 from shape mode 4.
+
+- `avg-SEG-TUBA1B-DNA_MEM_PC4-B5.tif`: Same as above but the representation has been morphed into the cell shape corresponding to bin number 5 of shape mode 4.
 
 ## Running the pipeline on your own data
+
+## Running the pipeline on a cluster with `sbatch` capabilities
+
+If you are running `cvapipe_analysis` on a Slurm cluster or any other cluster with `sbatch` capabilities, each step can be called with a flag `--distribute`. This will spawn many jobs to run in parallel in the cluster. Specific parameter can be set in the `resources` section of the YAML config file.
 
 **TBD**
 
