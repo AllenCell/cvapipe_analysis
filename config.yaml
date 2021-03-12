@@ -2,17 +2,8 @@ appName: cvapipe_analysis
 
 project:
     # Sufix to append to local_staging
-    name: "test"
     local_staging: "/allen/aics/assay-dev/MicroscopyOtherData/Viana/projects/cvapipe_analysis/local_staging_test"
-
-resources:
-    # In case a (slurm) cluster is available
-    cores: 30
-    nworkers: 32
-    memory: "8GB"
-    queue: "aics_cpu_general"
-    walltime: "9-24:00:00"
-    python_env: "/home/matheus.viana/anaconda3/envs/cvapipe/"
+    overwrite: True
 
 pca:
     # Number of principal components to be calculated
@@ -31,11 +22,12 @@ aggregation:
     # DNA_MEM_PC: shape space of nucleus and cell together
     aggregate_on: "DNA_MEM_PC"
 
-
 parameterization:
     # List of images and their channels that should be
     # parameterized
-    intensities: [['crop_raw', 'structure'], ['crop_seg', 'structure_seg']]
+    intensities:
+        'GFP': ['crop_raw', 'structure']
+        'SEG': ['crop_seg', 'structure_seg']
     # Number of SHE coefficients used to describe cell
     # and nuclear shape
     lmax: 16
@@ -77,3 +69,12 @@ structures:
         "TJP1": "tight junctions"
         "DSP": "desmosomes"
         "PXN": "matrix adhesions"
+
+resources:
+    # In case a (slurm) cluster is available
+    cores: 30
+    nworkers: 32
+    memory: "8GB"
+    queue: "aics_cpu_general"
+    walltime: "9-24:00:00"
+    python_env: "/home/matheus.viana/anaconda3/envs/cvapipe/"

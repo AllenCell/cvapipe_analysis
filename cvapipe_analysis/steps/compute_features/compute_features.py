@@ -119,7 +119,7 @@ class ComputeFeatures(Step):
                 results = handler.batched_map(
                     self._run_feature_extraction,
                     *zip(*list(df.iterrows())),
-                    [features_dir for i in range(len(df))],
+                    [save_dir for i in range(len(df))],
                     [load_data_dir for i in range(len(df))],
                     [overwrite for i in range(len(df))],
                 )
