@@ -9,11 +9,13 @@ class ShapeSpace:
     active_axis=None
     map_points=[-2,-1.5,-1.0,-0.5,0.0,0.5,1.0,1.5,2.0]
     
-    def __init__(self, axes, removal_pct=1):
+    def __init__(self, axes, config, removal_pct=1):
 
         if axes is not None:
             self.axes_original = axes.copy()
             self.axes = self.remove_extreme_points(axes, removal_pct)
+        self.set_path_to_local_staging_folder(config['project']['local_staging'])
+        self.load_shapemode_manifest()
 
     def __repr__(self):
         return f"<{self.__class__.__name__}>original:{self.axes_original.shape}{self.axes.shape}"
@@ -133,7 +135,7 @@ class ShapeSpace:
         return self.read_mesh(self.df_results.at[index, 'memMeshPath'])
 
 class ShapeSpaceBasic(ShapeSpace):
-    def __init__(self):
-        super().__init__(None)
+    def __init__(self, config):
+        super().__init__(None, config)
     def set_active_axis(self, axis_name):
         self.active_axis = axis_name
