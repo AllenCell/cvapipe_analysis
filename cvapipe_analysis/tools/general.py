@@ -149,6 +149,15 @@ class DataProducer:
     def __init__(self, config):
         self.config = config
         self.set_abs_path_to_local_staging_folder(config['project']['local_staging'])
+
+    def set_row(self, row):
+        self.row = row
+
+    def set_row_with_cellids(self, row):
+        self.row = row
+        self.CellIds = self.row.CellIds
+        if isinstance(self.CellIds, str):
+            self.CellIds = eval(self.CellIds)
         
     def set_abs_path_to_local_staging_folder(self, path):
         if not isinstance(path, Path):
@@ -170,12 +179,6 @@ class DataProducer:
         self.df = pd.read_csv(self.abs_path_local_staging/"parameterization/manifest.csv", index_col='CellId')
         print(f"Dataframe loaded: {self.df.shape}")
     
-    def digest_row_with_cellids(self, row):
-        self.row = row
-        self.CellIds = self.row.CellIds
-        if isinstance(self.CellIds, str):
-            self.CellIds = eval(self.CellIds)
-
     def get_available_parameterized_intensities(self):
         return [k for k in self.config['parameterization']['intensities'].keys()]
 
@@ -188,6 +191,17 @@ class DataProducer:
             return code, intensity_names
         return code
     
+    def execute(self, row):
+        rel_path_to_output_file = self.check_output_exist(row)
+        if (rel_path_to_output_file is None) or self.config['project']['overwrite']:
+            try:
+                self.workflow(row)
+                rel_path_to_output_file = self.save()
+            except:
+                rel_path_to_output_file = None
+        self.status(row.name, rel_path_to_output_file)
+        return rel_path_to_output_file
+
     @staticmethod
     def status(idx, output):
         msg = "FAILED" if output is None else "complete"

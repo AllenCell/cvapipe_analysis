@@ -80,7 +80,7 @@ class Aggregation(Step):
             aggregator.set_shape_space(space)
             
         for index, row in tqdm(df_agg.iterrows(), total=len(df_agg)):
-            df_agg.loc[index,'PathToAggFile'] = aggregator.workflow(row)
+            df_agg.loc[index,'PathToAggFile'] = aggregator.execute(row)
             
         self.manifest = df_agg
         manifest_path = self.step_local_staging_dir / 'manifest.csv'

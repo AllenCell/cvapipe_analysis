@@ -59,12 +59,13 @@ class Aggregator(general.DataProducer):
         else:
             raise ValueError(f"Aggregation type {self.row.aggtype} is not implemented.")
     
-    def aggregate(self, row):
-        self.digest_row_with_cellids(row)
+    def workflow(self, row):
+        self.set_row_with_cellids(row)
         self.set_agg_function()
         self.aggregate_parameterized_intensities()
         self.space.set_active_axis(row.shapemode)
-        
+        self.morph_on_shapemode_shape()
+
     def voxelize_and_parameterize_shapemode_shape(self):       
         mesh_dna = self.space.get_dna_mesh_of_bin(self.row.bin)
         mesh_mem = self.space.get_mem_mesh_of_bin(self.row.bin)
@@ -118,22 +119,7 @@ class Aggregator(general.DataProducer):
                 dimension_order='ZYX',
                 image_name=f"N{n}"
             )
-        
         return save_as
-
-    def workflow(self, row):
-        rel_path_to_output_file = self.check_output_exist(row)
-        if (rel_path_to_output_file is None) or self.config['project']['overwrite']:
-            self.set_row(row)
-            try:
-                self.aggregate(row)
-                self.morph_on_shapemode_shape()
-                rel_path_to_output_file = self.save()
-            except:
-                rel_path_to_output_file = None
-        self.status(row.name, rel_path_to_output_file)
-        return rel_path_to_output_file
-
     
 if __name__ == "__main__":
     
@@ -150,7 +136,7 @@ if __name__ == "__main__":
     aggregator.set_shape_space(space)
     for _, row in df.iterrows():
         '''Concurrent processes inside. Do not use concurrent here.'''
-        aggregator.workflow(row)
+        aggregator.execute(row)
 
             
 '''

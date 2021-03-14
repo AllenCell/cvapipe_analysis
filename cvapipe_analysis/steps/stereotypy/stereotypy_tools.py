@@ -77,26 +77,15 @@ class StereotypyCalculator(general.DataProducer):
         # Returns Nan if rep1 or rep2 is empty.
         return pcor[0,1]        
     
-    def calculate(self, row):
-        self.digest_row_with_cellids(row)
+    def workflow(self, row):
+        self.set_row_with_cellids(row)
         self.shuffle_target_cellids()
         with concurrent.futures.ProcessPoolExecutor(cluster.get_ncores()) as executor:
             self.pcorrs = list(
                 executor.map(self.correlate, self.iter_over_pairs()))
         return
     
-    def workflow(self, row):
-        rel_path_to_output_file = self.check_output_exist(row)
-        if (rel_path_to_output_file is None) or self.config['project']['overwrite']:
-            try:
-                self.calculate(row)
-                rel_path_to_output_file = self.save()
-            except:
-                rel_path_to_output_file = None
-        self.status(row.name, rel_path_to_output_file)
-        return rel_path_to_output_file
 
-    
 if __name__ == "__main__":
     
     parser = argparse.ArgumentParser(description='Batch stereotypy calculation.')
@@ -110,4 +99,4 @@ if __name__ == "__main__":
     calculator = StereotypyCalculator(config)
     for _, row in df.iterrows():
         '''Concurrent processes inside. Do not use concurrent here.'''
-        calculator.workflow(row)
+        calculator.execute(row)

@@ -67,7 +67,7 @@ class Stereotypy(Step):
             calculator = StereotypyCalculator(config)
             
         for index, row in tqdm(df_agg.iterrows(), total=len(df_agg)):
-            df_agg.loc[index,'PathToStereotypyFile'] = calculator.workflow(row)
+            df_agg.loc[index,'PathToStereotypyFile'] = calculator.execute(row)
             
         self.manifest = df_agg
         manifest_path = self.step_local_staging_dir / 'manifest.csv'

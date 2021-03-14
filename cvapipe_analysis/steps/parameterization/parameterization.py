@@ -84,7 +84,7 @@ class Parameterization(Step):
             
             parameterizer = Parameterizer(config)
             for index, row in tqdm(df.iterrows(), total=len(df)):
-                df.loc[index,'PathToRepresentationFile'] = parameterizer.workflow(row)
+                df.loc[index,'PathToRepresentationFile'] = parameterizer.execute(row)
 
         self.manifest = df[['PathToRepresentationFile']]
         manifest_save_path = self.step_local_staging_dir / "manifest.csv"
