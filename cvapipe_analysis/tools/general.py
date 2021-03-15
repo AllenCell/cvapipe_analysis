@@ -4,6 +4,7 @@ import pandas as pd
 from tqdm import tqdm
 from pathlib import Path
 from aicsimageio import AICSImage
+import matplotlib.pyplot as plt
 
 from .shapespace import ShapeSpace
 
@@ -136,7 +137,7 @@ def create_agg_dataframe_of_celids(df, config):
                             
     return pd.DataFrame(df_agg)
 
-class DataProducer:
+class LocalStagingWriter:
     """
     Desc
     
@@ -149,6 +150,31 @@ class DataProducer:
     def __init__(self, config):
         self.config = config
         self.set_abs_path_to_local_staging_folder(config['project']['local_staging'])
+        
+    def set_abs_path_to_local_staging_folder(self, path):
+        if not isinstance(path, Path):
+            path = Path(path)
+        self.abs_path_local_staging = path
+
+    def save(self, fig, save_as):
+        if save_as is None:
+            fig.show()
+        else:
+            fig.savefig(self.abs_path_local_staging/f"{self.subfolder}/{save_as}.png")
+            plt.close(fig)
+        
+class DataProducer(LocalStagingWriter):
+    """
+    Desc
+    
+    WARNING: All classes are assumed to know the whole
+    structure of directories inside the local_staging
+    folder and this is hard coded. Therefore, classes
+    may break if you move saved files from the places
+    their are saved.
+    """
+    def __init__(self, config):
+        super().__init__(config)
 
     def set_row(self, row):
         self.row = row
@@ -158,11 +184,6 @@ class DataProducer:
         self.CellIds = self.row.CellIds
         if isinstance(self.CellIds, str):
             self.CellIds = eval(self.CellIds)
-        
-    def set_abs_path_to_local_staging_folder(self, path):
-        if not isinstance(path, Path):
-            path = Path(path)
-        self.abs_path_local_staging = path
         
     def get_rel_output_file_path_as_str(self, row):
         file_name = self.get_output_file_name(row)
@@ -210,3 +231,16 @@ class DataProducer:
     @staticmethod
     def get_aggrep_file_name(row):
         return f"{row.aggtype}-{row.intensity}-{row.structure_name}-{row.shapemode}-B{row.bin}-CODE.tif"
+
+class PlotMaker(LocalStagingWriter):
+    """
+    Desc
+    
+    WARNING: All classes are assumed to know the whole
+    structure of directories inside the local_staging
+    folder and this is hard coded. Therefore, classes
+    may break if you move saved files from the places
+    their are saved.
+    """
+    def __init__(self, config):
+        super().__init__(config)
