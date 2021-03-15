@@ -39,10 +39,6 @@ class StereotypyCalculator(general.DataProducer):
     
     def __init__(self, config):
         super().__init__(config)
-        
-    @staticmethod
-    def get_output_file_name(row):
-        return f"{row.intensity}-{row.structure_name}-{row.shapemode}-B{row.bin}.csv"
     
     def save(self):
         df = pd.DataFrame(
@@ -84,6 +80,28 @@ class StereotypyCalculator(general.DataProducer):
             self.pcorrs = list(
                 executor.map(self.correlate, self.iter_over_pairs()))
         return
+
+    def load_stereotypy_results(self):
+        df = pd.DataFrame()
+        abs_path_to_output_folder = self.abs_path_local_staging / self.subfolder
+        for f in tqdm(os.listdir(abs_path_to_output_folder)):
+            if 
+            df_tmp = pd.read_csv(abs_path_to_output_folder/f, index_col=0)
+            df_tmp = self.append_configs_from_stereotypy_result_file_name(df_tmp, f)
+            df = df.append(df_tmp, ignore_index=True)
+        return df
+    
+    @staticmethod
+    def get_output_file_name(row):
+        return f"{row.intensity}-{row.structure_name}-{row.shapemode}-B{row.bin}.csv"
+
+    @staticmethod
+    def append_configs_from_stereotypy_result_file_name(df, filename):
+        for name, value in zip(
+            ['intensity','structure_name','shapemode','bin'], filename.split('-')
+        ):
+            df[name] = value if name != 'bin' else int(value[1])
+        return df
     
 
 if __name__ == "__main__":

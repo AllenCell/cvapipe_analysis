@@ -68,6 +68,18 @@ class Stereotypy(Step):
             
         for index, row in tqdm(df_agg.iterrows(), total=len(df_agg)):
             df_agg.loc[index,'PathToStereotypyFile'] = calculator.execute(row)
+
+        df_results = calculator.load_stereotypy_results()
+        
+        # Filter results for mean cell only
+        df_meancell = df.loc[(df.shapemode=='DNA_MEM_PC1')&(df.bin==5)&(df.intensity=='SEG')]
+        df_meancell = df_meancell.dropna(subset=['Pearson'])
+        df_meancell.shape
+        
+        pmaker = plotting.StereotypyPlotMaker(config)
+        pmaker.execute(df_meancell, save_as=f"MeanCell")
+        pmaker.set_max_number_of_pairs(300)
+        pmaker.execute(df_meancell, save_as=f"MeanCell-N300")
             
         self.manifest = df_agg
         manifest_path = self.step_local_staging_dir / 'manifest.csv'
