@@ -10,6 +10,8 @@ pca:
     number_of_pcs: 8
     # Number of map points along each principal component
     number_map_points: 9
+    # Map points
+    map_points: [-2, -1.5, -1.0, -0.5, 0.0, 0.5, 1.0, 1.5, 2.0]
     # limits of x and y axies in the animated GIFs
     plot_limits: [-150, 150, -80, 80]
 

@@ -1,12 +1,15 @@
+import os
+import sys
 import yaml
 import json
+import numpy as np
 import pandas as pd
 from tqdm import tqdm
 from pathlib import Path
 from aicsimageio import AICSImage
 import matplotlib.pyplot as plt
 
-from .shapespace import ShapeSpace
+from .shapespace import ShapeSpace, ShapeSpaceBasic
 
 def load_config_file():
     config = yaml.load(open("config.yaml", "r"), Loader=yaml.FullLoader)
@@ -91,55 +94,9 @@ def get_raws(path_raw, channels):
 
     return raw[ch_dna], raw[ch_mem], raw[ch_str]
 
-def create_agg_dataframe_of_celids(df, config):
-    """
-    This function creates a dataframe with all combinations
-    of parameters we want to aggregate images for. Different
-    types of aggregations, different shape modes, etc. For
-    each combination is fins what are the cells that should
-    be aggregated together and sotre them in a columns
-    named CellIds.
-
-    Parameters
-    --------------------
-    df: pd.DataFrame
-        Merge of parameterization and shapemode manifests.
-    config: Dict
-        General config dictonary
-    Returns
-    --------------------
-    df_agg: pd.DataFrame
-        Dataframe as described above.
-    """
-    prefix = config['aggregation']['aggregate_on']
-    pc_names = [f for f in df.columns if prefix in f]
-    config = load_config_file()
-    space = ShapeSpace(df[pc_names], config)
-    df_agg = []
-    for pc_name in tqdm(pc_names):
-        space.set_active_axis(pc_name)
-        space.digitize_active_axis()
-        for intensity in config['parameterization']['intensities'].keys():
-            for agg in config['aggregation']['type']:
-                for b, _ in space.iter_map_points():
-                    indexes = space.get_indexes_in_bin(b)
-                    for struct in tqdm(config['structures']['genes'], leave=False):
-                        df_struct = df.loc[(df.index.isin(indexes))&(df.structure_name==struct)]
-                        if len(df_struct) > 0:
-                            df_agg.append({
-                                "aggtype": agg,
-                                "intensity": intensity,
-                                "structure_name": struct,
-                                "shapemode": pc_name,
-                                "bin": b,
-                                "CellIds": df_struct.index.values.tolist()
-                            })
-                            
-    return pd.DataFrame(df_agg)
-
 class LocalStagingWriter:
     """
-    Desc
+    Support class. Should not be instantiated directly.
     
     WARNING: All classes are assumed to know the whole
     structure of directories inside the local_staging
@@ -155,17 +112,10 @@ class LocalStagingWriter:
         if not isinstance(path, Path):
             path = Path(path)
         self.abs_path_local_staging = path
-
-    def save(self, fig, save_as):
-        if save_as is None:
-            fig.show()
-        else:
-            fig.savefig(self.abs_path_local_staging/f"{self.subfolder}/{save_as}.png")
-            plt.close(fig)
         
 class DataProducer(LocalStagingWriter):
     """
-    Desc
+    DESC
     
     WARNING: All classes are assumed to know the whole
     structure of directories inside the local_staging
@@ -202,7 +152,7 @@ class DataProducer(LocalStagingWriter):
     
     def get_available_parameterized_intensities(self):
         return [k for k in self.config['parameterization']['intensities'].keys()]
-
+    
     def read_parameterized_intensity(self, index, return_intensity_names=False):
         abs_path_to_rep_file = self.abs_path_local_staging/f"parameterization/representations/{index}.tif"
         code = AICSImage(abs_path_to_rep_file)
@@ -211,6 +161,11 @@ class DataProducer(LocalStagingWriter):
         if return_intensity_names:
             return code, intensity_names
         return code
+
+    def read_agg_parameterized_intensity(self, row):
+        abs_path_to_rep_file = self.abs_path_local_staging/f"aggregation/repsagg/{self.get_aggrep_file_name(row)}"
+        agg_code = AICSImage(abs_path_to_rep_file).data.squeeze()
+        return agg_code
     
     def execute(self, row):
         rel_path_to_output_file = self.check_output_exist(row)
@@ -218,11 +173,24 @@ class DataProducer(LocalStagingWriter):
             try:
                 self.workflow(row)
                 rel_path_to_output_file = self.save()
-            except:
+            except Exception as ex:
                 rel_path_to_output_file = None
+            except KeyboardInterrupt:
+                sys.exit()
         self.status(row.name, rel_path_to_output_file)
         return rel_path_to_output_file
-
+    
+    def load_results_in_single_dataframe(self):
+        df = pd.DataFrame()
+        abs_path_to_output_folder = self.abs_path_local_staging / self.subfolder
+        for f in tqdm(os.listdir(abs_path_to_output_folder)):
+            try:
+                df_tmp = pd.read_csv(abs_path_to_output_folder/f)
+                df = df.append(df_tmp, ignore_index=True)
+            except Exception as e:
+                print(f"ERROR {e}, file: {f}")
+        return df
+    
     @staticmethod
     def status(idx, output):
         msg = "FAILED" if output is None else "complete"
@@ -232,15 +200,16 @@ class DataProducer(LocalStagingWriter):
     def get_aggrep_file_name(row):
         return f"{row.aggtype}-{row.intensity}-{row.structure_name}-{row.shapemode}-B{row.bin}-CODE.tif"
 
-class PlotMaker(LocalStagingWriter):
-    """
-    Desc
+    @staticmethod
+    def get_output_file_name(row):
+        values = []
+        for f in ['aggtype', 'intensity', 'structure_name', 'shapemode', 'bin']:
+            if f in row:
+                values.append(str(row[f]))
+        return "-".join(values)
     
-    WARNING: All classes are assumed to know the whole
-    structure of directories inside the local_staging
-    folder and this is hard coded. Therefore, classes
-    may break if you move saved files from the places
-    their are saved.
-    """
-    def __init__(self, config):
-        super().__init__(config)
+    @staticmethod
+    def correlate_representations(rep1, rep2):
+        pcor = np.corrcoef(rep1.flatten(), rep2.flatten())
+        # Returns Nan if rep1 or rep2 is empty.
+        return pcor[0,1]        

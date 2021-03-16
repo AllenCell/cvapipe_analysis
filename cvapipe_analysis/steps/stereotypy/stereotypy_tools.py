@@ -19,14 +19,12 @@ from vtk.util.numpy_support import vtk_to_numpy, numpy_to_vtk
 import concurrent
 
 from cvapipe_analysis.tools import general, cluster
-from cvapipe_analysis.steps.shapemode.avgshape import digitize_shape_mode
 
 class StereotypyCalculator(general.DataProducer):
     """
     Provides the functionalities necessary for
     calculating the stereotypy of cells using their
     parameterized intensity representation.
-    >> Plotting: TBD
     
     WARNING: All classes are assumed to know the whole
     structure of directories inside the local_staging
@@ -45,8 +43,11 @@ class StereotypyCalculator(general.DataProducer):
             list(zip(self.CellIds,self.CellIdsTarget,self.pcorrs)),
             columns=['CellId1', 'CellId2', 'Pearson']
         )
+        self.row.pop('CellIds')
+        for k in self.row.keys():
+            df[k] = self.row[k]
         save_as = self.get_rel_output_file_path_as_str(self.row)
-        df.to_csv(save_as)
+        df.to_csv(save_as, index=False)
         return save_as
 
     def shuffle_target_cellids(self):
@@ -69,9 +70,7 @@ class StereotypyCalculator(general.DataProducer):
         rep2 = self.read_parameterized_intensity(indexes[1])
         rep1 = rep1[names.index(self.row.intensity)]
         rep2 = rep2[names.index(self.row.intensity)]
-        pcor = np.corrcoef(rep1.flatten(), rep2.flatten())
-        # Returns Nan if rep1 or rep2 is empty.
-        return pcor[0,1]        
+        return self.correlate_representations(rep1, rep2)
     
     def workflow(self, row):
         self.set_row_with_cellids(row)
@@ -80,20 +79,6 @@ class StereotypyCalculator(general.DataProducer):
             self.pcorrs = list(
                 executor.map(self.correlate, self.iter_over_pairs()))
         return
-
-    def load_stereotypy_results(self):
-        df = pd.DataFrame()
-        abs_path_to_output_folder = self.abs_path_local_staging / self.subfolder
-        for f in tqdm(os.listdir(abs_path_to_output_folder)):
-            if 
-            df_tmp = pd.read_csv(abs_path_to_output_folder/f, index_col=0)
-            df_tmp = self.append_configs_from_stereotypy_result_file_name(df_tmp, f)
-            df = df.append(df_tmp, ignore_index=True)
-        return df
-    
-    @staticmethod
-    def get_output_file_name(row):
-        return f"{row.intensity}-{row.structure_name}-{row.shapemode}-B{row.bin}.csv"
 
     @staticmethod
     def append_configs_from_stereotypy_result_file_name(df, filename):

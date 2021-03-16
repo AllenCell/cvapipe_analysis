@@ -11,7 +11,7 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 
-from cvapipe_analysis.tools import general, cluster
+from cvapipe_analysis.tools import general, cluster, shapespace
 from .stereotypy_tools import StereotypyCalculator
 
 import pdb;
@@ -37,22 +37,33 @@ class Stereotypy(Step):
         # Load configuration file
         config = general.load_config_file()
         
-        # Load shape modes dataframe
-        path_to_shapemode_manifest = self.project_local_staging_dir / 'shapemode/manifest.csv'
-        if not path_to_shapemode_manifest.exists():
-            raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), path_to_shapemode_manifest)
-        df = pd.read_csv(path_to_shapemode_manifest, index_col='CellId', low_memory=False)
-        log.info(f"Shape of shape mode manifest: {df.shape}")
-        
         # Make necessary folders
-        for folder in ['values','plots']:
+        for folder in ['values', 'plots']:
             save_dir = self.step_local_staging_dir / folder
             save_dir.mkdir(parents=True, exist_ok=True)
 
         # Create all combinations of parameters
-        df_agg = general.create_agg_dataframe_of_celids(df, config)
-        df_agg = df_agg.loc[df_agg.aggtype=='avg']
-        
+        space = shapespace.ShapeSpace(config)
+        space.load_shape_space_axes()
+        df_agg = pd.DataFrame()
+        for shapemode in space.iter_shapemodes(config):
+            space.set_active_axis(shapemode, digitize=True)
+            for b in space.iter_bins(config):
+                space.set_active_bin(b)
+                for struct in space.iter_structures(config):
+                    space.set_active_structure(struct)
+                    df_tmp = space.iter_param_values_as_dataframe(
+                        config, [
+                            ('aggtype', ['avg']),
+                            ('intensity', space.iter_intensities),
+                            ('structure_name', [struct]),
+                            ('shapemode', [shapemode]),
+                            ('bin', [b]),
+                            ('CellIds', [space.get_active_cellids()])
+                        ]
+                    )
+                    df_agg = df_agg.append(df_tmp, ignore_index=True)
+
         if distribute:
             
             nworkers = config['resources']['nworkers']            
@@ -61,25 +72,25 @@ class Stereotypy(Step):
 
             log.info(f"Multiple jobs have been launched. Please come back when the calculation is complete.")            
             return None
-        
-        else:
 
-            calculator = StereotypyCalculator(config)
-            
+        calculator = StereotypyCalculator(config)    
         for index, row in tqdm(df_agg.iterrows(), total=len(df_agg)):
+            '''Concurrent processes inside. Do not use concurrent here.'''
             df_agg.loc[index,'PathToStereotypyFile'] = calculator.execute(row)
 
-        df_results = calculator.load_stereotypy_results()
+        df_results = calculator.load_results_in_single_dataframe()
         
-        # Filter results for mean cell only
-        df_meancell = df.loc[(df.shapemode=='DNA_MEM_PC1')&(df.bin==5)&(df.intensity=='SEG')]
-        df_meancell = df_meancell.dropna(subset=['Pearson'])
-        df_meancell.shape
-        
-        pmaker = plotting.StereotypyPlotMaker(config)
-        pmaker.execute(df_meancell, save_as=f"MeanCell")
-        pmaker.set_max_number_of_pairs(300)
-        pmaker.execute(df_meancell, save_as=f"MeanCell-N300")
+        for intensity in config['parameterization']['intensities']:
+            pmaker = plotting.StereotypyPlotMaker(config)
+            pmaker.set_dataframe(df_results)
+            pmaker.filter_dataframe({
+                'intensity': intensity,
+                'shapemode': 'DNA_MEM_PC1',
+                'bin': 5
+            })
+            pmaker.execute(save_as=f"MeanCell-{intensity}")
+            pmaker.set_max_number_of_pairs(300)
+            pmaker.execute(save_as=f"MeanCell-{intensity}-N300")
             
         self.manifest = df_agg
         manifest_path = self.step_local_staging_dir / 'manifest.csv'

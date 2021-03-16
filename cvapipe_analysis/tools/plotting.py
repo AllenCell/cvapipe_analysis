@@ -11,15 +11,62 @@ import matplotlib.pyplot as plt
 
 from cvapipe_analysis.tools import general
 
-class StereotypyPlotMaker(general.PlotMaker):
+class PlotMaker(general.LocalStagingWriter):
     """
-    DESC
+    Support class. Should not be instantiated directly.
+    
+    WARNING: All classes are assumed to know the whole
+    structure of directories inside the local_staging
+    folder and this is hard coded. Therefore, classes
+    may break if you move saved files from the places
+    their are saved.
+    """
+    
+    figs = []
+    df = None
+    dpi = 72
+    
+    def __init__(self, config):
+        super().__init__(config)
+        
+    def set_dataframe(self, df, dropna=[]):
+        self.df_original = df.copy()
+        if dropna:
+            self.df_original = self.df_original.dropna(subset=dropna)
+        self.df = self.df_original
+        
+    def check_dataframe_exists(self):
+        if self.df is None:
+            raise ValueError("Please set a dataframe first.")
+        return True
+
+    def filter_dataframe(self, filters):
+        self.check_dataframe_exists()
+        for k in filters.keys():
+            self.df = self.df.loc[self.df[k]==filters[k]]
+
+    def execute(self, save_as=None, **kwargs):
+        if 'dpi' in kwargs: self.dpi = kwargs['dpi']
+        self.workflow()
+        self.save(save_as)
+            
+    def save(self, save_as):
+        for (fig, signature) in self.figs:
+            if save_as is None:
+                fig.show()
+            else:
+                fig.savefig(self.abs_path_local_staging/f"{self.subfolder}/{save_as}_{signature}.png")
+                plt.close(fig)
+            
+class StereotypyPlotMaker(PlotMaker):
+    """
+    Class for ranking and plotting structures according
+    to their stereotypy value.
     
     WARNING: This class should not depend on where
     the local_staging folder is.
     """
 
-    dpi = 300
     subfolder = 'stereotypy/plots'
     max_number_of_pairs = 0
 
@@ -29,12 +76,13 @@ class StereotypyPlotMaker(general.PlotMaker):
 
     def set_max_number_of_pairs(self, n):
         self.max_number_of_pairs = n if n > 0 else 0
-
-    def make_plot(self, df):
+    
+    def make_boxplot(self):
+        self.check_dataframe_exists()
         labels = []
         fig, ax = plt.subplots(1,1, figsize=(7,8), dpi=self.dpi)
         for sid, sname in enumerate(reversed(self.structures.keys())):
-            df_s = df.loc[df.structure_name==sname]
+            df_s = self.df.loc[self.df.structure_name==sname]
             if self.max_number_of_pairs > 0:
                 df_s = df_s.sample(n=np.min([len(df_s), self.max_number_of_pairs]))
             npairs = len(df_s)
@@ -62,14 +110,32 @@ class StereotypyPlotMaker(general.PlotMaker):
         ax.set_yticklabels(labels)
         ax.set_xlim(-0.2,1.0)
         ax.set_xlabel("Pearson correlation coefficient", fontsize=14)
-        ax.set_title("-".join([str(df[f].unique()[0])
+        ax.set_title("-".join([str(self.df[f].unique())
                                for f in ['intensity','shapemode','bin']])
                     )
         ax.grid(True)
         plt.tight_layout()
-        return fig
+        self.figs.append((fig, 'boxplot'))
+        return
+
+    def workflow(self):
+        self.make_boxplot()
+    
+class ConcordancePlotMaker(PlotMaker):
+    """
+    Class for creating concordance heatmap.
+    
+    WARNING: This class should not depend on where
+    the local_staging folder is.
+    """
+
+    subfolder = 'concordance/plots'
+
+    def __init__(self, config):
+        super().__init__(config)
+        self.structures = config['structures']['desc']
+
+    def make_plot(self):
+        fig, ax = plt.subplots(1,1, figsize=(7,8), dpi=self.dpi)
+        self.figs.append((fig, 'heatmap'))
             
-    def execute(self, df, save_as=None, **kwargs):
-        if 'dpi' in kwargs: self.dpi = kwargs['dpi']
-        fig = self.make_plot(df)
-        self.save(fig, save_as)

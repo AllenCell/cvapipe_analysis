@@ -84,6 +84,7 @@ class Parameterization(Step):
             
             parameterizer = Parameterizer(config)
             for index, row in tqdm(df.iterrows(), total=len(df)):
+                ## <<<<<<<<<<<<<< This can run in parallel
                 df.loc[index,'PathToRepresentationFile'] = parameterizer.execute(row)
 
         self.manifest = df[['PathToRepresentationFile']]
