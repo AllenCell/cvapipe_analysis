@@ -2,6 +2,7 @@ import os
 import sys
 import yaml
 import json
+import concurrent
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
@@ -9,7 +10,8 @@ from pathlib import Path
 from aicsimageio import AICSImage
 import matplotlib.pyplot as plt
 
-from .shapespace import ShapeSpace, ShapeSpaceBasic
+from cvapipe_analysis.tools import cluster
+from .shapespace import ShapeSpaceBasic, ShapeSpace
 
 def load_config_file():
     config = yaml.load(open("config.yaml", "r"), Loader=yaml.FullLoader)
@@ -179,17 +181,21 @@ class DataProducer(LocalStagingWriter):
                 sys.exit()
         self.status(row.name, rel_path_to_output_file)
         return rel_path_to_output_file
-    
+        
     def load_results_in_single_dataframe(self):
-        df = pd.DataFrame()
         abs_path_to_output_folder = self.abs_path_local_staging / self.subfolder
-        for f in tqdm(os.listdir(abs_path_to_output_folder)):
-            try:
-                df_tmp = pd.read_csv(abs_path_to_output_folder/f)
-                df = df.append(df_tmp, ignore_index=True)
-            except Exception as e:
-                print(f"ERROR {e}, file: {f}")
+        files = [abs_path_to_output_folder/f for f in os.listdir(abs_path_to_output_folder)]
+        with concurrent.futures.ProcessPoolExecutor(cluster.get_ncores()) as executor:
+            df = pd.concat(tqdm(executor.map(self.load_csv_file_as_dataframe, files), total=len(files)), axis=0)
         return df
+
+    @staticmethod
+    def load_csv_file_as_dataframe(fpath):
+        df = []
+        try:
+            df = pd.read_csv(fpath)
+        except: pass
+        return []
     
     @staticmethod
     def status(idx, output):
