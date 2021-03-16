@@ -11,7 +11,6 @@ from typing import NamedTuple, Optional, Union, List, Dict
 
 import cvapipe_analysis
 from cvapipe_analysis.tools import shapespace
-from cvapipe_analysis.steps.shapemode.avgshape import digitize_shape_mode
 
 def get_ncores():
     return len(os.sched_getaffinity(0))
