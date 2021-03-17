@@ -71,8 +71,19 @@ class Concordance(Step):
             paths = list(executor.map(calculator.execute, [row for _,row in df_agg.iterrows()]))
         df_agg['PathToConcordanceFile'] = paths
         
+        df_results = calculator.load_results_in_single_dataframe()
+        
+        space  = shapespace.ShapeSpaceBasic(config)
+        pmaker = plotting.ConcordancePlotMaker(config)
+        pmaker.set_dataframe(df)
+        for intensity in tqdm(space.iter_intensities(config)):
+            for shapemode in space.iter_shapemodes(config):
+                pmaker.filter_dataframe({'intensity':intensity, 'shapemode':shapemode, 'bin':[5]})
+                pmaker.execute(display=False)
+                pmaker.filter_dataframe({'intensity':intensity, 'shapemode':shapemode, 'bin':[1,9]})
+                pmaker.execute(display=False)
+        
         self.manifest = df_agg
         manifest_path = self.step_local_staging_dir / 'manifest.csv'
         self.manifest.to_csv(manifest_path)
-
         return manifest_path
