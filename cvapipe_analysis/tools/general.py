@@ -186,16 +186,18 @@ class DataProducer(LocalStagingWriter):
         abs_path_to_output_folder = self.abs_path_local_staging / self.subfolder
         files = [abs_path_to_output_folder/f for f in os.listdir(abs_path_to_output_folder)]
         with concurrent.futures.ProcessPoolExecutor(cluster.get_ncores()) as executor:
-            df = pd.concat(tqdm(executor.map(self.load_csv_file_as_dataframe, files), total=len(files)), axis=0)
+            df = pd.concat(
+                tqdm(executor.map(self.load_csv_file_as_dataframe, files), total=len(files)),
+                axis=0, ignore_index=True)
         return df
 
     @staticmethod
     def load_csv_file_as_dataframe(fpath):
-        df = []
+        df = None
         try:
             df = pd.read_csv(fpath)
         except: pass
-        return []
+        return df
     
     @staticmethod
     def status(idx, output):

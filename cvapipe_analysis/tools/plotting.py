@@ -8,6 +8,7 @@ import pandas as pd
 from tqdm import tqdm
 from pathlib import Path
 import matplotlib.pyplot as plt
+from scipy import cluster as spcluster
 
 from cvapipe_analysis.tools import general
 
@@ -135,7 +136,42 @@ class ConcordancePlotMaker(PlotMaker):
         super().__init__(config)
         self.structures = config['structures']['desc']
 
-    def make_plot(self):
-        fig, ax = plt.subplots(1,1, figsize=(7,8), dpi=self.dpi)
+    def build_correlation_matrix(self):
+        self.df_corr = self.df.groupby(['structure_name1', 'structure_name2']).agg(['mean']).reset_index()
+        self.df_corr = self.df_corr.pivot(index='structure_name1', columns='structure_name2', values=('Pearson', 'mean'))
+        self.df_corr = self.df_corr[self.structures]
+        self.df_corr = self.df_corr.loc[self.structures]
+        self.matrix = self.df_corr.values
+        np.fill_diagonal(self.matrix, 1.0)
+        return
+
+    def make_heatmap(self):
+        fig, ax = plt.subplots(1,1, figsize=(8,8), dpi=self.dpi)
+        cmap = 'RdBu'
+        ax.imshow(-self.matrix, cmap=cmap, vmin=-1.0,vmax=1.0)
+        for edge, spine in ax.spines.items():
+                spine.set_visible(False)
+        ax.set_xticks(np.arange(self.matrix.shape[1]+1)-.5, minor=True)
+        ax.set_yticks(np.arange(self.matrix.shape[0]+1)-.5, minor=True)
+        ax.grid(which="minor", color="w", linestyle='-', linewidth=1)
+        ax.tick_params(which="minor", bottom=False, left=False)
         self.figs.append((fig, 'heatmap'))
-            
+        return
+
+    def make_dendrogram(self):
+        Z = spcluster.hierarchy.linkage(self.matrix, 'average')
+        Z = spcluster.hierarchy.optimal_leaf_ordering(Z, self.matrix)
+        fig, ax = plt.subplots(1,1, figsize=(8,3))
+
+        dn = spcluster.hierarchy.dendrogram(
+            Z,
+            labels = [v[0] for k, v in self.structures.items()],
+            leaf_rotation = 90
+        )
+        self.figs.append((fig, 'dendrogram'))
+    
+    def workflow(self):
+        self.build_correlation_matrix()
+        self.make_dendrogram()
+        self.make_heatmap()
+        return
