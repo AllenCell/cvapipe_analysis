@@ -30,8 +30,8 @@ class Aggregator(general.DataProducer):
     WARNING: All classes are assumed to know the whole
     structure of directories inside the local_staging
     folder and this is hard coded. Therefore, classes
-    may break if you move saved files from the places
-    their are saved.
+    may break if you move saved files away from the
+    places their are saved.
     """
     
     subfolder = 'aggregation/aggmorph'
@@ -137,76 +137,3 @@ if __name__ == "__main__":
     for _, row in df.iterrows():
         '''Concurrent processes inside. Do not use concurrent here.'''
         aggregator.execute(row)
-
-            
-'''
-class AggHyperstack:
-    
-    def __init__(self, pc_name, agg, intensity):
-        self. pc_name = pc_name
-        self.agg = agg
-        self.intensity = intensity
-        
-    def set_path_to_agg_and_shapemode_folders(self, agg_path, smode_path):
-        self.agg_folder = agg_path
-        self.smode_folder = smode_path
-        
-        self.space = shapespace.ShapeSpaceBasic()
-        self.space.link_results_folder(smode_path)
-        self.space.set_active_axis(self.pc_name)
-
-    def get_path_to_agg_file(self, b, struct):
-        path = self.agg_folder / f"{self.agg}-{self.intensity}-{struct}-{self.pc_name}-B{b}.tif"
-        return path
-        
-    def create(self, save_as, config):
-        nbins = config['pca']['number_map_points']
-        nstrs = len(config['structures']['genes'])
-        hyperstack = []
-        for b in tqdm(range(1,1+nbins)):
-            imgs = []
-            for struct in config['structures']['genes']:
-                path = self.get_path_to_agg_file(b, struct)
-                if path.is_file():
-                    img = AICSImage(path).data.squeeze()
-                else:
-                    img = None
-                imgs.append(img)
-
-            mesh_dna = self.space.get_dna_mesh_of_bin(b)
-            mesh_mem = self.space.get_mem_mesh_of_bin(b)
-            domain, _ = cytoparam.voxelize_meshes([mesh_mem, mesh_dna])
-
-            stack = np.zeros((nstrs,*domain.shape), dtype=np.float32)
-            for sid, struct in enumerate(config['structures']['genes']):
-                if imgs[sid] is not None:
-                    stack[sid] = imgs[sid].copy()
-            stack = np.vstack([stack, domain.reshape(1, *domain.shape)])
-            hyperstack.append(stack)
-            
-        # Calculate largest czyx bounding box across bins
-        shapes = np.array([stack.shape for stack in hyperstack])
-        lbb = shapes.max(axis=0)
-
-        # Pad all stacks so they end up with similar shapes
-        for b in range(nbins):
-            stack_shape = np.array(hyperstack[b].shape)
-            pinf = (0.5 * (lbb - stack_shape)).astype(np.int)
-            psup = lbb - (stack_shape + pinf)
-            pad = [(i,s) for i,s in zip(pinf, psup)]
-            hyperstack[b] = np.pad(hyperstack[b], list(pad))
-        # Final hyperstack. This variable has ~4Gb for the
-        # full hiPS single-cell images dataset.
-        hyperstack = np.array(hyperstack)
-
-        # Save hyperstack
-        with writers.ome_tiff_writer.OmeTiffWriter(save_as, overwrite_file=True) as writer:
-            writer.save(
-                hyperstack,
-                dimension_order = 'TCZYX',
-                image_name = f"{self.pc_name}_{self.intensity}_{self.agg}",
-                channel_names = config['structures']['genes'] + ['domain']
-            )
-
-        return
-'''

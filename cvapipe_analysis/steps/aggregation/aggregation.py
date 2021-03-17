@@ -72,13 +72,10 @@ class Aggregation(Step):
 
             log.info(f"Multiple jobs have been launched. Please come back when the calculation is complete.")            
             return None
-        
-        else:
 
-            space = shapespace.ShapeSpaceBasic(config)
-            aggregator = Aggregator(config)
-            aggregator.set_shape_space(space)
-            
+        space = shapespace.ShapeSpaceBasic(config)
+        aggregator = Aggregator(config)
+        aggregator.set_shape_space(space)
         for index, row in tqdm(df_agg.iterrows(), total=len(df_agg)):
             '''Concurrent processes inside. Do not use concurrent here.'''
             df_agg.loc[index,'PathToAggFile'] = aggregator.execute(row)

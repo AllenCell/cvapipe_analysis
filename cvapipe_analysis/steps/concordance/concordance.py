@@ -13,7 +13,7 @@ import pandas as pd
 
 from tqdm import tqdm
 
-from cvapipe_analysis.tools import general, cluster, shapespace
+from cvapipe_analysis.tools import general, cluster, shapespace, plotting
 from .concordance_tools import ConcordanceCalculator
 
 import pdb;
@@ -79,7 +79,7 @@ class Concordance(Step):
         
         space  = shapespace.ShapeSpaceBasic(config)
         pmaker = plotting.ConcordancePlotMaker(config)
-        pmaker.set_dataframe(df)
+        pmaker.set_dataframe(df_results)
         for intensity in tqdm(space.iter_intensities(config)):
             for shapemode in space.iter_shapemodes(config):
                 pmaker.filter_dataframe({'intensity':intensity, 'shapemode':shapemode, 'bin':[5]})
