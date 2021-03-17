@@ -11,7 +11,9 @@ from typing import NamedTuple, Optional, Union, List, Dict
 
 import cvapipe_analysis
 from cvapipe_analysis.tools import shapespace
-from cvapipe_analysis.steps.shapemode.avgshape import digitize_shape_mode
+
+def get_ncores():
+    return len(os.sched_getaffinity(0))
 
 class Distributor:
     """
@@ -31,7 +33,7 @@ class Distributor:
     folders = ['log','dataframes']
     
     def __init__(self, df, nworkers):
-        self.df = df.copy().reset_index()
+        self.df = df#.copy().reset_index()
         self.nrows = len(df)
         self.nworkers = nworkers
         self.root = Path(os.path.abspath(cvapipe_analysis.__file__)).parents[1]
@@ -77,7 +79,6 @@ class Distributor:
             print(f"#SBATCH --error {abs_path_output_folder}/%A_%a.err", file=fs)
             print(f"#SBATCH --array=1-{len(self.jobs)}", file=fs)
             print(f"srun $(head -n $SLURM_ARRAY_TASK_ID {self.abs_path_jobs_file_as_str} | tail -n 1)", file=fs)
-
         return
 
     def execute(self, config, log):
@@ -88,6 +89,7 @@ class Distributor:
         submission = 'sbatch ' + self.abs_path_to_script_as_str
         process = subprocess.Popen(submission, stdout=subprocess.PIPE, shell=True)
         (out, err) = process.communicate()
+        return
 
     def distribute(self, config, log):
         log.info("Cleaning distribute directory.")
@@ -98,9 +100,8 @@ class Distributor:
             df_chunk.to_csv(rel_path_to_dataframe)
             self.append_job(chunk)
         self.execute(config, log)
-
         return
-
+    
 class FeaturesDistributor(Distributor):
     def __init__(self, df, nworkers):
         super().__init__(df, nworkers)
@@ -125,3 +126,15 @@ class AggregationDistributor(Distributor):
         """
         self.chunk_size = 1
         self.rel_path_to_python_file = "cvapipe_analysis/steps/aggregation/aggregation_tools.py"
+
+class StereotypyDistributor(Distributor):
+    def __init__(self, df, nworkers):
+        super().__init__(df, nworkers)
+        self.chunk_size = round(0.5+self.nrows/self.nworkers)
+        self.rel_path_to_python_file = "cvapipe_analysis/steps/stereotypy/stereotypy_tools.py"
+
+class ConcordanceDistributor(Distributor):
+    def __init__(self, df, nworkers):
+        super().__init__(df, nworkers)
+        self.chunk_size = round(0.5+self.nrows/self.nworkers)
+        self.rel_path_to_python_file = "cvapipe_analysis/steps/concordance/concordance_tools.py"

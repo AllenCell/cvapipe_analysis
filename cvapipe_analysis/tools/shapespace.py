@@ -1,63 +1,158 @@
 import vtk
+import itertools
 import numpy as np
 import pandas as pd
 from pathlib import Path
 
-class ShapeSpace:
-
-    bins = None
-    active_axis=None
-    map_points=[-2,-1.5,-1.0,-0.5,0.0,0.5,1.0,1.5,2.0]
+class ShapeSpaceBasic():
+    """
+    Basic functionalities of shape space that does
+    not require loading the manifest from mshapemode
+    step.
     
-    def __init__(self, axes, config, removal_pct=1):
-
-        if axes is not None:
-            self.axes_original = axes.copy()
-            self.axes = self.remove_extreme_points(axes, removal_pct)
+    WARNING: All classes are assumed to know the whole
+    structure of directories inside the local_staging
+    folder and this is hard coded. Therefore, classes
+    may break if you move saved files from the places
+    their are saved.
+    """
+    bins=None
+    active_axis=None
+    map_points=[-2, -1.5, -1.0, -0.5, 0.0, 0.5, 1.0, 1.5, 2.0]
+    
+    def __init__(self, config):
+        self.config = config
         self.set_path_to_local_staging_folder(config['project']['local_staging'])
         self.load_shapemode_manifest()
-
-    def __repr__(self):
-        return f"<{self.__class__.__name__}>original:{self.axes_original.shape}{self.axes.shape}"
 
     def set_path_to_local_staging_folder(self, path):
         if not isinstance(path, Path):
             path = Path(path)
         self.local_staging = path
-        
+
     def get_path_to_local_staging_folder(self):
         return self.local_staging
-    
+        
     def set_active_axis(self, axis_name):
+        self.active_axis = axis_name
+
+    def load_shapemode_manifest(self):
+        path_to_shape_space_manifest = self.local_staging/"shapemode/shapemode.csv"
+        self.df_results = pd.read_csv(path_to_shape_space_manifest, index_col=0)
+
+    @staticmethod
+    def get_number_of_map_points(config):
+        return len(config['pca']['map_points'])
+        
+    @staticmethod
+    def iter_shapemodes(config):
+        npcs=config['pca']['number_of_pcs']
+        prefix=config['aggregation']['aggregate_on']
+        for pc_name in [f"{prefix}{pc}" for pc in range(1, npcs+1)]:
+            yield pc_name
+
+    @staticmethod
+    def iter_intensities(config):
+        for intensity in config['parameterization']['intensities'].keys():
+            yield intensity
+
+    @staticmethod
+    def iter_aggtype(config):
+        for agg in config['aggregation']['type']:
+            yield agg
+
+    @staticmethod
+    def iter_map_points(config):
+        for map_point in config['pca']['map_points']:
+            yield map_point
+
+    @staticmethod
+    def iter_bins(config):
+        for b in range(1,1+len(config['pca']['map_points'])):
+            yield b
+            
+    @staticmethod
+    def iter_structures(config):
+        for s in config['structures']['desc'].keys():
+            yield s
+
+    @staticmethod
+    def iter_param_values_as_dataframe(config, iters, no_equals=None):
+        df = []
+        combinations = []
+        for _, it in iters:
+            # accepts either a list or an iterator function
+            iterator = it if isinstance(it, list) else it(config)
+            combinations.append([v for v in iterator])
+        for combination in itertools.product(*combinations):
+            row = {}
+            for (itname, _), value in zip(iters, combination):
+                row[itname] = value
+            df.append(row)
+        df = pd.DataFrame(df)
+        if no_equals is not None:
+            for itname1, itname2 in no_equals:
+                df = df.loc[df[itname1]!=df[itname2]]
+        return df.reset_index(drop=True)
+        
+class ShapeSpace(ShapeSpaceBasic):
+    """
+    Implements functionalities to navigate the shape
+    space.
+    
+    WARNING: All classes are assumed to know the whole
+    structure of directories inside the local_staging
+    folder and this is hard coded. Therefore, classes
+    may break if you move saved files from the places
+    their are saved.
+    """
+    active_bin = None
+    active_structure = None
+    
+    def __init__(self, config):
+        super().__init__(config)
+
+    def load_shape_space_axes(self, removal_pct=1):
+        path_to_shapemode_manifest = self.local_staging/"shapemode/manifest.csv"
+        df_tmp = pd.read_csv(path_to_shapemode_manifest, index_col=0, low_memory=False)
+        self.axes_original = df_tmp[[pc for pc in self.iter_shapemodes(self.config)]].copy()
+        self.axes = self.remove_extreme_points(self.axes_original, removal_pct)
+        self.meta = df_tmp.loc[self.axes.index, ['structure_name']].copy()
+        
+    def __repr__(self):
+        return f"<{self.__class__.__name__}>original:{self.axes_original.shape}-filtered:{self.axes.shape}"
+    
+    def set_active_axis(self, axis_name, digitize):
         if axis_name not in self.axes.columns:
             raise ValueError(f"Axis {axis_name} not found.")
         self.active_axis = axis_name
+        if digitize:
+            self.digitize_active_axis()
+        return
 
-    def get_active_axis(self):
-        return self.active_axis
-    
-    def set_map_points(map_points):
-        self.map_points = map_points
-    
-    def get_number_of_map_points():
-        return len(self.map_points)
-    
-    def load_shapemode_manifest(self):
-        path_to_shape_space_manifest = self.local_staging/"shapemode/shapemode.csv"
-        if path_to_shape_space_manifest.is_file():
-            self.df_results = pd.read_csv(path_to_shape_space_manifest, index_col=0)
-        else:
-            raise ValueError("File shapemode.csv not found.")
-        print(f"Dataframe loaded: {self.df_results.shape}")
+    def set_active_bin(self, b):
+        self.active_bin = b
+
+    def deactive_bin(self):
+        self.active_bin = None
         
-    def iter_map_points(self):
-        for b, map_point in enumerate(self.map_points):
-            yield b+1, map_point
+    def set_active_structure(self, structure):
+        self.active_structure=structure
+
+    def deactive_structure(self):
+        self.active_structure = None
+
+    def get_active_cellids(self):
+        df_tmp = self.meta
+        if self.active_bin is not None:
+            df_tmp = df_tmp.loc[df_tmp.bin==self.active_bin]
+        if self.active_structure is not None:
+            df_tmp = df_tmp.loc[df_tmp.structure_name==self.active_structure]
+        return df_tmp.index.values.tolist()
     
-    def get_indexes_in_bin(self, b):
-        if self.bins is None:
-            raise ValueError("No digitized axis found.")
-        return self.bins.loc[self.bins.bin==b].index
+    def iter_active_cellids(self, config):
+        for b in self.iter_bins(config):
+            yield self.get_active_cellids()
 
     @staticmethod
     def remove_extreme_points(axes, pct):
@@ -79,14 +174,14 @@ class ShapeSpace:
         if self.active_axis is None:
             raise ValueError("No active axis.")
         
-        values = self.axes[self.get_active_axis()].values.astype(np.float32)
+        values = self.axes[self.active_axis].values.astype(np.float32)
         values -= values.mean()
         pc_std = values.std()
         values /= pc_std
 
         LINF = -2.0 # inferior limit = -2 std
         LSUP = 2.0 # superior limit = 2 std
-        nbins = len(self.map_points)
+        nbins = self.get_number_of_map_points(self.config)
         binw = (LSUP-LINF)/(2*(nbins-1))
 
         bin_centers = np.linspace(LINF, LSUP, nbins)
@@ -95,10 +190,7 @@ class ShapeSpace:
         bin_edges[-1] = np.inf
 
         # Aplly digitization
-        bins = self.axes.copy()
-        bins['bin'] = np.digitize(values, bin_edges)
-        self.bins = bins[['bin']]
-        
+        self.meta['bin'] = np.digitize(values, bin_edges)
         return
 
     @staticmethod
@@ -112,8 +204,8 @@ class ShapeSpace:
         if self.active_axis is None:
             raise ValueError("No active axis.")
 
-        index = self.df_results.loc[
-            (self.df_results.shapemode==self.active_axis)&(self.df_results.bin==b)
+        index = self.df_shapemode.loc[
+            (self.df_shapemode.shapemode==self.active_axis)&(self.df_shapemode.bin==b)
         ].index
     
         if len(index) == 0:
@@ -128,14 +220,9 @@ class ShapeSpace:
 
     def get_dna_mesh_of_bin(self, b):
         index = self.get_index_of_bin(b)
-        return self.read_mesh(self.df_results.at[index, 'dnaMeshPath'])
+        return self.read_mesh(self.df_shapemode.at[index, 'dnaMeshPath'])
     
     def get_mem_mesh_of_bin(self, b):
         index = self.get_index_of_bin(b)
-        return self.read_mesh(self.df_results.at[index, 'memMeshPath'])
+        return self.read_mesh(self.df_shapemode.at[index, 'memMeshPath'])
 
-class ShapeSpaceBasic(ShapeSpace):
-    def __init__(self, config):
-        super().__init__(None, config)
-    def set_active_axis(self, axis_name):
-        self.active_axis = axis_name

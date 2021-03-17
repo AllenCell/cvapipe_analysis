@@ -12,7 +12,7 @@ import pandas as pd
 from tqdm import tqdm
 
 from cvapipe_analysis.tools import general, cluster, shapespace
-from .aggregation_tools import Aggregator, create_dataframe_of_celids
+from .aggregation_tools import Aggregator
 
 import pdb;
 tr = pdb.set_trace
@@ -62,7 +62,7 @@ class Aggregation(Step):
             save_dir.mkdir(parents=True, exist_ok=True)
 
         # Create all combinations of parameters
-        df_agg = create_dataframe_of_celids(df, config)
+        df_agg = general.create_agg_dataframe_of_celids(df, config)
                 
         if distribute:
             
@@ -72,15 +72,13 @@ class Aggregation(Step):
 
             log.info(f"Multiple jobs have been launched. Please come back when the calculation is complete.")            
             return None
-        
-        else:
 
-            space = shapespace.ShapeSpaceBasic(config)
-            aggregator = Aggregator(config)
-            aggregator.set_shape_space(space)
-            
+        space = shapespace.ShapeSpaceBasic(config)
+        aggregator = Aggregator(config)
+        aggregator.set_shape_space(space)
         for index, row in tqdm(df_agg.iterrows(), total=len(df_agg)):
-            df_agg.loc[index,'PathToAggFile'] = aggregator.workflow(row)
+            '''Concurrent processes inside. Do not use concurrent here.'''
+            df_agg.loc[index,'PathToAggFile'] = aggregator.execute(row)
             
         self.manifest = df_agg
         manifest_path = self.step_local_staging_dir / 'manifest.csv'

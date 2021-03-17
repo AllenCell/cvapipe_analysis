@@ -8,7 +8,7 @@ from aicsimageio import writers
 from aicsshparam import shtools
 from aicscytoparam import cytoparam
 
-from cvapipe_analysis.tools import general
+from cvapipe_analysis.tools import general, cluster
 
 class Parameterizer(general.DataProducer):
     """
@@ -25,11 +25,9 @@ class Parameterizer(general.DataProducer):
     
     def __init__(self, config):
         super().__init__(config)
-            
-    def set_row(self, row):
-        self.row = row
         
-    def parameterize(self):
+    def workflow(self, row):
+        self.set_row(row)
         channels = eval(self.row.name_dict)
         path_seg = self.abs_path_local_staging/f"loaddata/{self.row.crop_seg}"
         _, _, seg_str = general.get_segmentations(
@@ -103,17 +101,6 @@ class Parameterizer(general.DataProducer):
             )
         return save_as
 
-    def workflow(self, row):
-        rel_path_to_output_file = self.check_output_exist(row)
-        if (rel_path_to_output_file is None) or self.config['project']['overwrite']:
-            self.set_row(row)
-            try:
-                self.parameterize()
-                self.save()
-            except:
-                rel_path_to_output_file = None
-        self.status(row.name, rel_path_to_output_file)
-        return rel_path_to_output_file
     
 if __name__ == "__main__":
 
@@ -127,8 +114,5 @@ if __name__ == "__main__":
     print(f"Processing dataframe of shape {df.shape}")
 
     parameterizer = Parameterizer(config)
-    N_CORES = len(os.sched_getaffinity(0))
-    with concurrent.futures.ProcessPoolExecutor(N_CORES) as executor:
-        executor.map(
-            parameterizer.workflow, [row for _,row in df.iterrows()]
-        )
+    with concurrent.futures.ProcessPoolExecutor(cluster.get_ncores()) as executor:
+        executor.map(parameterizer.execute, [row for _,row in df.iterrows()])

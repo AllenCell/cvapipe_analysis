@@ -5,6 +5,7 @@ from .compute_features import ComputeFeatures
 from .shapemode import Shapemode
 from .parameterization import Parameterization
 from .aggregation import Aggregation
+from .stereotypy import Stereotypy
 from .concordance import Concordance
 
 __all__ = [
@@ -14,5 +15,6 @@ __all__ = [
     "ComputeFeatures",
     "Parameterization",
     "Aggregation",
+    "Stereotypy",
     "Concordance"
 ]

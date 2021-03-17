@@ -79,12 +79,11 @@ class Parameterization(Step):
 
             log.info(f"Multiple jobs have been launched. Please come back when the calculation is complete.")            
             return None
-
-        else:
             
-            parameterizer = Parameterizer(config)
-            for index, row in tqdm(df.iterrows(), total=len(df)):
-                df.loc[index,'PathToRepresentationFile'] = parameterizer.workflow(row)
+        parameterizer = Parameterizer(config)
+        with concurrent.futures.ProcessPoolExecutor(cluster.get_ncores()) as executor:
+            paths=list(executor.map(parameterizer.execute, [row for _,row in df.iterrows()]))
+        df.loc[index,'PathToRepresentationFile'] = paths
 
         self.manifest = df[['PathToRepresentationFile']]
         manifest_save_path = self.step_local_staging_dir / "manifest.csv"
