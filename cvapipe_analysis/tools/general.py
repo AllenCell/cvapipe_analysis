@@ -183,6 +183,9 @@ class DataProducer(LocalStagingWriter):
         return rel_path_to_output_file
         
     def load_results_in_single_dataframe(self):
+        ''' Not sure this function is producing a column named index when
+        the concordance results are loaded. Further investigation is needed
+        here'''
         abs_path_to_output_folder = self.abs_path_local_staging / self.subfolder
         files = [abs_path_to_output_folder/f for f in os.listdir(abs_path_to_output_folder)]
         with concurrent.futures.ProcessPoolExecutor(cluster.get_ncores()) as executor:
