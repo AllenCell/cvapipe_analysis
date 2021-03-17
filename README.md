@@ -13,20 +13,17 @@ Here you will find all the code necessary to i) reproduce the results shown in o
 ## Installation
 
 First, create a conda environment for this project:
-
 ```
 conda create --name cvapipe python=3.8
 conda activate cvapipe
 ```
 
 then clone this repo
-
 ```
 git clone https://github.com/AllenCell/cvapipe_analysis.git
 ```
 
 and install it with
-
 ```
 cd cvapipe_analysis
 pip install -e .
@@ -44,7 +41,6 @@ cvapipe_analysis loaddata run
 This command downloads the whole dataset of ~7Tb. For each cell in the dataset, we provide a raw 3-channels image containing fiducial markers for cell membrane and nucleus, toghether with a FP marker for one intracellular structure. We also provide segmentations for each cell in the format of 5-channels binary images. The extra two channels corresponds to roof-augmented versions of cell and intracellular structures segmentations. For more information about this, please refer to our paper [1]. Metadata about each cell can be found in the file `manifest.csv`. This is a table where each row corresponds to a cell.
 
 **Importantly**, you can download a *small test dataset composed by 300 cells chosen at random* from the main dataset. To do so, please run
-
 ```
 cvapipe_analysis loaddata run --test
 ```
@@ -132,12 +128,43 @@ This step generates aggregation of multiple cells representations and morph them
 - `avg-SEG-TUBA1B-DNA_MEM_PC4-B5.tif`: Same as above but the representation has been morphed into the cell shape corresponding to bin number 5 of shape mode 4.
 
 ### 6. Stereotypy analysis
+```
+cvapipe_analysis stereotypy run
+```
 
-In progress...
+This calculates the extent to which a structure’s individual location varied. This step depends on step 4.
+
+**Folder: `local_staging/stereotypy/`**
+
+- `manifest.csv`: Manifest with combinations of parameters used for stereotypy calculation and path to CSVs resultsing for the calculation.
+
+
+**Folder: `local_staging/stereotypy/values/`**
+
+- `avg-GFP-FBL-DNA_MEM_PC1-1`: Example of resulting file. Dataframe with the Pearson correlation values between parameterized intensity representation of all FBL tagged cells in the first bin of shape mode 1.
+
+**Folder: `local_staging/stereotypy/plots/`**
+
+- Resulting plots.
 
 ### 7. Concordance analysis
+```
+cvapipe_analysis concordance run
+```
 
-In progress...
+This calculates the extent to which the structure localized relative to all the other cellular structures. This step depends on step 5.
+
+**Folder: `local_staging/concordance/`**
+
+- `manifest.csv`: Manifest with combinations of parameters used for concordance calculation and path to CSVs resultsing for the calculation.
+
+**Folder: `local_staging/concordance/values/`**
+
+- `avg-GFP-FBL-NPM1-DNA_MEM_PC1-1`: Example of resulting file. Dataframe with the Pearson correlation values between aggregated parameterized intensity representations of first bin of shape mode 1.
+
+**Folder: `local_staging/concordance/plots/`**
+
+- Resulting plots.
 
 ## Running the pipeline on your own data
 
