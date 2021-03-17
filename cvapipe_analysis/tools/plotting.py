@@ -131,7 +131,7 @@ class StereotypyPlotMaker(PlotMaker):
         ax.set_title(self.get_dataframe_desc(self.df))
         ax.grid(True)
         plt.tight_layout()
-        self.figs.append((fig, 'boxplot'))
+        self.figs.append((fig, self.get_dataframe_desc(self.df)))
         return
 
     def workflow(self):
@@ -139,7 +139,7 @@ class StereotypyPlotMaker(PlotMaker):
     
 class ConcordancePlotMaker(PlotMaker):
     """
-    Class for creating concordance heatmap.
+    Class for creating concordance heatmaps.
     
     WARNING: This class should not depend on where
     the local_staging folder is.
