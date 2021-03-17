@@ -79,10 +79,8 @@ class Parameterization(Step):
 
             log.info(f"Multiple jobs have been launched. Please come back when the calculation is complete.")            
             return None
-
-        else:
             
-
+        parameterizer = Parameterizer(config)
         with concurrent.futures.ProcessPoolExecutor(cluster.get_ncores()) as executor:
             PathToRepresentationFiles=list(
                 executor.map(parameterizer.execute, [row for _,row in df.iterrows()])
