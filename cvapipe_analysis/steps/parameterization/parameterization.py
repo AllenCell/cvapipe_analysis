@@ -82,10 +82,12 @@ class Parameterization(Step):
 
         else:
             
-            parameterizer = Parameterizer(config)
-            for index, row in tqdm(df.iterrows(), total=len(df)):
-                ## <<<<<<<<<<<<<< This can run in parallel
-                df.loc[index,'PathToRepresentationFile'] = parameterizer.execute(row)
+
+        with concurrent.futures.ProcessPoolExecutor(cluster.get_ncores()) as executor:
+            PathToRepresentationFiles=list(
+                executor.map(parameterizer.execute, [row for _,row in df.iterrows()])
+            )
+        df.loc[index,'PathToRepresentationFile'] = PathToRepresentationFiles
 
         self.manifest = df[['PathToRepresentationFile']]
         manifest_save_path = self.step_local_staging_dir / "manifest.csv"
