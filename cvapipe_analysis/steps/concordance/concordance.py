@@ -63,7 +63,7 @@ class Concordance(Step):
             distributor = cluster.ConcordanceDistributor(df_agg, nworkers)
             distributor.distribute(config, log)
 
-            log.info(f"Multiple jobs have been launched. Please come back when the calculation is complete.")            
+            log.info(f"Multiple jobs have been launched. Please come back when the calculation is complete.")
             return None
                         
         calculator = ConcordanceCalculator(config)            
@@ -71,7 +71,11 @@ class Concordance(Step):
             paths = list(executor.map(calculator.execute, [row for _,row in df_agg.iterrows()]))
         df_agg['PathToConcordanceFile'] = paths
         
+        log.info(f"Loading results...")
+        
         df_results = calculator.load_results_in_single_dataframe()
+
+        log.info(f"Generating plots...")
         
         space  = shapespace.ShapeSpaceBasic(config)
         pmaker = plotting.ConcordancePlotMaker(config)

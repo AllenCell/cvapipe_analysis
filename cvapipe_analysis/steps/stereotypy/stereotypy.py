@@ -11,7 +11,7 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 
-from cvapipe_analysis.tools import general, cluster, shapespace
+from cvapipe_analysis.tools import general, cluster, shapespace, plotting
 from .stereotypy_tools import StereotypyCalculator
 
 import pdb;
@@ -42,7 +42,7 @@ class Stereotypy(Step):
             save_dir = self.step_local_staging_dir / folder
             save_dir.mkdir(parents=True, exist_ok=True)
 
-        # Create all combinations of parameters
+        # Create all combinations of parameters to calculate stereotypy
         space = shapespace.ShapeSpace(config)
         space.load_shape_space_axes()
         df_agg = pd.DataFrame()
@@ -78,19 +78,20 @@ class Stereotypy(Step):
             '''Concurrent processes inside. Do not use concurrent here.'''
             df_agg.loc[index,'PathToStereotypyFile'] = calculator.execute(row)
 
-        df_results = calculator.load_results_in_single_dataframe()
+        log.info(f"Loading results...")
         
-        for intensity in config['parameterization']['intensities']:
+        df_results = calculator.load_results_in_single_dataframe()
+
+        log.info(f"Generating plots...")
+        
+        space  = shapespace.ShapeSpaceBasic(config)
+        for intensity in space.iter_intensities(config):
             pmaker = plotting.StereotypyPlotMaker(config)
             pmaker.set_dataframe(df_results)
-            pmaker.filter_dataframe({
-                'intensity': intensity,
-                'shapemode': 'DNA_MEM_PC1',
-                'bin': 5
-            })
-            pmaker.execute(save_as=f"MeanCell-{intensity}")
+            pmaker.filter_dataframe({'intensity': intensity, 'shapemode': 'DNA_MEM_PC1', 'bin': 5})
+            pmaker.execute(display=False)
             pmaker.set_max_number_of_pairs(300)
-            pmaker.execute(save_as=f"MeanCell-{intensity}-N300")
+            pmaker.execute(display=False, prefix='N300')
             
         self.manifest = df_agg
         manifest_path = self.step_local_staging_dir / 'manifest.csv'
