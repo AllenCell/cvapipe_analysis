@@ -5,6 +5,35 @@ project:
     local_staging: "/allen/aics/assay-dev/MicroscopyOtherData/Viana/projects/cvapipe_analysis/local_staging_temp"
     overwrite: False
 
+data:
+    segmentation:
+        nucleus:
+            name: "dna_segmentation"
+            alias: "NUC"
+        cell:
+            name: "membrane_segmentation"
+            alias: "MEM"
+        structure: False
+    # False here to prevent image alignment
+    align_on: "cell"
+
+parameterization:
+    # List of images and their channels that should be
+    # parameterized
+    intensities:
+        'GFP': ['crop_raw', 'structure']
+        'SEG': ['crop_seg', 'structure_seg']
+    # Size of Gaussian kernal used to smooth the
+    # images before SHE coefficients calculation
+    sigma: 2
+    # Number of SHE coefficients used to describe cell
+    # and nuclear shape
+    lmax: 16
+    # Number of interplation points between nuclear
+    # centroid and nuclear shell, and from nuclear
+    # shell to cell membrane.
+    nisos: [32, 32]
+
 pca:
     # Number of principal components to be calculated
     number_of_pcs: 8
@@ -23,20 +52,6 @@ aggregation:
     # MEM_PC: shape space of cell alone
     # DNA_MEM_PC: shape space of nucleus and cell together
     aggregate_on: "DNA_MEM_PC"
-
-parameterization:
-    # List of images and their channels that should be
-    # parameterized
-    intensities:
-        'GFP': ['crop_raw', 'structure']
-        'SEG': ['crop_seg', 'structure_seg']
-    # Number of SHE coefficients used to describe cell
-    # and nuclear shape
-    lmax: 16
-    # Number of interplation points between nuclear
-    # centroid and nuclear shell, and from nuclear
-    # shell to cell membrane.
-    nisos: [32, 32]
 
 structures:
 

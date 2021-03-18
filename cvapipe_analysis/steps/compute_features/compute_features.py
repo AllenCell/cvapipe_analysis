@@ -1,34 +1,24 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-
 import os
-import json
+import errno
 import logging
 from pathlib import Path
-from datetime import datetime
-from typing import NamedTuple, Optional, Union, List, Dict
+from typing import Dict, List, Optional, Union
+from datastep import Step, log_run_params
 
 import concurrent
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
-from datastep import Step, log_run_params
-from aics_dask_utils import DistributedHandler
 
-from cvapipe_analysis.tools import general, cluster
-from .compute_features_tools import load_images_and_calculate_features
+from cvapipe_analysis.tools import general, cluster, shapespace
+from .compute_features_tools import FeatureCalculator
+
+import pdb;
+tr = pdb.set_trace
 
 log = logging.getLogger(__name__)
-
-class SingleCellFeaturesResult(NamedTuple):
-    CellId: Union[int, str]
-    PathToFeatureJSON: Path
-
-
-class SingleCellFeaturesError(NamedTuple):
-    CellId: int
-    error: str
-
 
 class ComputeFeatures(Step):
     def __init__(
@@ -38,122 +28,40 @@ class ComputeFeatures(Step):
     ):
         super().__init__(direct_upstream_tasks=direct_upstream_tasks, config=config)
 
-    @staticmethod
-    def _run_feature_extraction(
-        row_index: int,
-        row: pd.Series,
-        save_dir: Path,
-        load_data_dir: Path,
-        overwrite: bool
-    ) -> Union[SingleCellFeaturesResult, SingleCellFeaturesError]:
-
-        # Get the ultimate end save path for this cell
-        save_path = save_dir / f"{row_index}.json"
-
-        if not overwrite and save_path.is_file():
-            log.info(f"Skipping cell feature generation for Cell Id: {row_index}")
-            return SingleCellFeaturesResult(row_index, save_path)
-
-        log.info(f"Beginning cell feature generation for CellId: {row_index}")
-
-        channels = eval(row.name_dict)["crop_seg"]
-        seg_path = load_data_dir / row.crop_seg
-
-        try:
-            load_images_and_calculate_features(seg_path, channels, save_path)
-            log.info(f"Completed cell feature generation for CellId: {row_index}")
-            return SingleCellFeaturesResult(row_index, save_path)
-
-        except Exception as e:
-            log.info(f"Failed cell feature generation for CellId: {row_index}. Error: {e}")
-            return SingleCellFeaturesError(row_index, str(e))
-
-    @staticmethod
-    def _load_features_from_json(cell_feature_result):
-        if cell_feature_result.PathToFeatureJSON.exists():
-            with open(cell_feature_result.PathToFeatureJSON, "r") as fjson:
-                features = json.load(fjson)
-            return pd.Series(features, name=cell_feature_result.CellId)
-        else:
-            log.info(f"File not found: {str(cell_feature_result.PathToFeatureJSON)}.json")
-
     @log_run_params
     def run(
         self,
-        debug=False,
-        distributed_executor_address: Optional[str] = None,
-        distribute: Optional[bool] = False,
-        overwrite: bool = False,
-        **kwargs,
+        distribute: Optional[bool]=False,
+        overwrite: Optional[bool]=False,
+        **kwargs
     ):
-
+        
         # Load configuration file
         config = general.load_config_file()
         
-        # Load manifest from previous step
-        path_manifest = self.project_local_staging_dir / "loaddata/manifest.csv"
-        df = pd.read_csv(path_manifest, index_col="CellId", low_memory=False)
+        # Load parameterization dataframe
+        path_to_loaddata_manifest = self.project_local_staging_dir / 'loaddata/manifest.csv'
+        df = pd.read_csv(path_to_loaddata_manifest, index_col='CellId')
+        log.info(f"Manifest: {df.shape}")
         
-        # Keep only the columns that will be used from now on
-        columns_to_keep = ["crop_raw", "crop_seg", "name_dict"]
-        df = df[columns_to_keep]
-        
-        # Create features directory
-        save_dir = self.step_local_staging_dir / "cell_features"
+        # Make necessary folders
+        save_dir = self.step_local_staging_dir / 'cell_features'
         save_dir.mkdir(parents=True, exist_ok=True)
-        
-        load_data_dir = self.project_local_staging_dir / "loaddata"
-
+                
         if distribute:
-                        
             nworkers = config['resources']['nworkers']            
             distributor = cluster.FeaturesDistributor(df, nworkers)
             distributor.distribute(config, log)
-
             log.info(f"Multiple jobs have been launched. Please come back when the calculation is complete.")            
             return None
-            
-        else:
-
-            with DistributedHandler(distributed_executor_address) as handler:
-                results = handler.batched_map(
-                    self._run_feature_extraction,
-                    *zip(*list(df.iterrows())),
-                    [save_dir for i in range(len(df))],
-                    [load_data_dir for i in range(len(df))],
-                    [overwrite for i in range(len(df))],
-                )
-
-        # Generate features paths rows
-        cell_features_dataset = []
-        errors = []
-        for result in results:
-            if isinstance(result, SingleCellFeaturesResult):
-                cell_features_dataset.append(result)
-            else:
-                errors.append(error)
-
-        for error in errors:
-            log.info(error)
-
-        log.info("Reading features from JSON files. This might take a while.")
-
-        N_CORES = len(os.sched_getaffinity(0))
-        with concurrent.futures.ProcessPoolExecutor(N_CORES) as executor:
-            df_features = list(tqdm(
-                executor.map(self._load_features_from_json, cell_features_dataset),
-                     total=len(cell_features_dataset)))
-            
-        df_features = pd.DataFrame(df_features)
-        df_features.index = df_features.index.rename("CellId")
+                
+        calculator = FeatureCalculator(config)
+        with concurrent.futures.ProcessPoolExecutor(cluster.get_ncores()) as executor:
+            paths=list(executor.map(calculator.execute, [row for _,row in df.iterrows()]))
+        df.loc[index,'PathToFeaturesFile'] = paths
         
-        log.info(f"Saving manifest of shape {df_features.shape}.")
-        
-        # Save manifest
-        self.manifest = df_features
-        manifest_save_path = self.step_local_staging_dir / "manifest.csv"
-        self.manifest.to_csv(manifest_save_path)
+        self.manifest = df
+        manifest_path = self.step_local_staging_dir / 'manifest.csv'
+        self.manifest.to_csv(manifest_path)
 
-        log.info("Manifest saved.")
-        
-        return manifest_save_path
+        return manifest_path

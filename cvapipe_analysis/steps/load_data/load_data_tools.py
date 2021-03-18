@@ -1,5 +1,9 @@
+import os
+import uuid
 import quilt3
 import pandas as pd
+from tqdm import tqdm
+from pathlib import Path
 
 from cvapipe_analysis.tools import general, cluster
 
@@ -25,10 +29,6 @@ class DataLoader(general.DataProducer):
         'crop_seg',
         'crop_raw',
         'name_dict'
-    ]
-    extra_columns = [
-        'roi',
-        'fov_path'
     ]
 
     def __init__(self, config):
@@ -57,13 +57,24 @@ class DataLoader(general.DataProducer):
                 raise ValueError(f"Input CSV is missing column: {col}.")
         return
 
+    def create_symlinks(self, df):
+        for col in ['crop_raw', 'crop_seg']:
+            abs_path_data_folder = self.abs_path_local_staging/f"{self.subfolder}"
+            (abs_path_data_folder/col).mkdir(parents=True, exist_ok=True)
+        for index, row in tqdm(df.iterrows(), total=len(df)):
+            idx = str(uuid.uuid4())[:8]
+            for col in ['crop_raw', 'crop_seg']:
+                src = Path(row[col])
+                dst = abs_path_data_folder/f"{col}/{src.stem}_{idx}{src.suffix}"
+                os.symlink(src, dst)
+                df.loc[index, col] = dst
+        return df
+
     def load_data_from_csv(self, parameters):
         df = pd.read_csv(parameters['csv'])
         self.is_dataframe_valid(df)
-        df = df[self.required_df_columns+
-                [f for f in self.extra_columns if f in df.columns]
-               ]
-        df = df.set_index('CellId', drop=True)
+        df = df[self.required_df_columns].set_index('CellId', drop=True)
+        self.create_symlinks(df)
         return df
     
     @staticmethod
