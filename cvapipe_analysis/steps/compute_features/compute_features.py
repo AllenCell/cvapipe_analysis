@@ -54,13 +54,19 @@ class ComputeFeatures(Step):
             distributor.distribute(config, log)
             log.info(f"Multiple jobs have been launched. Please come back when the calculation is complete.")            
             return None
-                
+        
         calculator = FeatureCalculator(config)
         with concurrent.futures.ProcessPoolExecutor(cluster.get_ncores()) as executor:
-            paths=list(executor.map(calculator.execute, [row for _,row in df.iterrows()]))
-        df.loc[index,'PathToFeaturesFile'] = paths
+            executor.map(calculator.execute, [row for _,row in df.iterrows()])
+
+        log.info(f"Loading results...")
         
-        self.manifest = df
+        df_results = calculator.load_results_in_single_dataframe()
+        df_results = df_results.set_index('CellId')
+        
+        log.info(f"Saving manifest...")
+
+        self.manifest = df.merge(df_results, left_index=True, right_index=True)
         manifest_path = self.step_local_staging_dir / 'manifest.csv'
         self.manifest.to_csv(manifest_path)
 

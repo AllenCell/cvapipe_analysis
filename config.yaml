@@ -15,7 +15,9 @@ data:
             alias: "MEM"
         structure: False
     # False here to prevent image alignment
-    align_on: "cell"
+    align: 
+        on: "cell"
+        unique: False
 
 parameterization:
     # List of images and their channels that should be
