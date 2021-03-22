@@ -60,6 +60,7 @@ class PlotMaker(general.LocalStagingWriter):
                 fname = signature
                 if prefix is not None:
                     fname = f"{prefix}_{signature}"
+                print(fname)
                 fig.savefig(self.abs_path_local_staging/f"{self.subfolder}/{fname}.png")
                 plt.close(fig)
 
@@ -249,4 +250,37 @@ class ConcordancePlotMaker(PlotMaker):
             self.make_relative_heatmap()
         else:
             self.make_dendrogram()
+        return
+    
+class ShapeModePlotMaker(PlotMaker):
+    """
+    Class for creating plots for shape mode step.
+    
+    WARNING: This class should not depend on where
+    the local_staging folder is.
+    """
+
+    subfolder = 'shapemode/avgshape'
+
+    def __init__(self, config):
+        super().__init__(config)
+        
+    def plot_explained_variance(self, pca):
+        npcs_to_calc = self.config['pca']['number_of_pcs']
+        fig, ax = plt.subplots(1,1, figsize=(8,5), dpi=self.dpi)
+        ax.plot(100 * pca.explained_variance_ratio_[:npcs_to_calc], "-o")
+        title = "Cum. variance: (1+2) = {0}%, Total = {1}%".format(
+            int(100 * pca.explained_variance_ratio_[:2].sum()),
+            int(100 * pca.explained_variance_ratio_[:].sum()),
+        )
+        ax.set_xlabel("Component", fontsize=18)
+        ax.set_ylabel("Explained variance (%)", fontsize=18)
+        ax.set_xticks(np.arange(npcs_to_calc))
+        ax.set_xticklabels(np.arange(1, 1 + npcs_to_calc))
+        ax.set_title(title, fontsize=18)
+        plt.tight_layout()
+        self.figs.append((fig, 'explained_variance'))
+        return
+        
+    def workflow(self):
         return

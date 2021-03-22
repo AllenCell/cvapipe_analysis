@@ -117,7 +117,7 @@ class FeatureCalculator(general.DataProducer):
     
     def get_reference_image_for_alignment(self, segs):
         '''Returns None if no alignment reference is specified.'''
-        align_reference=self.config['data']['align']['on']
+        align_reference = self.config['data']['align']['reference']
         if isinstance(align_reference, str):
             return segs[self.config['data']['segmentation'][align_reference]['name']]
         return None
