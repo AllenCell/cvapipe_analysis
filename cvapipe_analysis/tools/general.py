@@ -135,9 +135,8 @@ class DataProducer(LocalStagingWriter):
                 self.workflow(row)
                 rel_path_to_output_file = self.save()
             except Exception as ex:
+                print(f"\n>>>{ex}\n")
                 rel_path_to_output_file = None
-            except KeyboardInterrupt:
-                sys.exit()
         self.status(row.name, rel_path_to_output_file)
         return rel_path_to_output_file
         
