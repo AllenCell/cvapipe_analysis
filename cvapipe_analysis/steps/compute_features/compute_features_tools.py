@@ -74,7 +74,7 @@ class FeatureCalculator(general.DataProducer):
             # paper uses make_unique = False
             input_ref_image_aligned, angle = shtools.align_image_2d(
                 image=input_reference_image,
-                make_unique=self.config['data']['align']['unique']
+                make_unique=self.config['features']['align']['unique']
             )
             # Rotate input image according the reference alignment angle
             input_image_lcc_aligned = shtools.apply_image_alignment_2d(
@@ -86,8 +86,8 @@ class FeatureCalculator(general.DataProducer):
 
         (coeffs, _), (_, _, _, transform) = shparam.get_shcoeffs(
             image=input_image_lcc_aligned,
-            lmax=self.config['parameterization']['lmax'],
-            sigma=self.config['parameterization']['sigma'],
+            lmax=self.config['features']['SHE']['lmax'],
+            sigma=self.config['features']['SHE']['sigma'],
             alignment_2d=False
         )
 
@@ -117,9 +117,9 @@ class FeatureCalculator(general.DataProducer):
     
     def get_reference_image_for_alignment(self, segs):
         '''Returns None if no alignment reference is specified.'''
-        align_reference = self.config['data']['align']['reference']
+        align_reference = self.config['features']['align']['reference']
         if isinstance(align_reference, str):
-            return segs[self.config['data']['segmentation'][align_reference]['name']]
+            return segs[self.config['data']['segmentation'][align_reference]['channel']]
         return None
 
     def workflow(self, row):
@@ -130,17 +130,18 @@ class FeatureCalculator(general.DataProducer):
         
         features={}
         align_reference_img = self.get_reference_image_for_alignment(segs)
-        for obj, channel in self.config['data']['segmentation'].items():
-            if isinstance(channel, dict):
-                features_obj = self.get_features_from_binary_image(
-                    input_image=segs[channel['name']],
-                    input_reference_image=align_reference_img,
-                    compute_shcoeffs=not(obj=='structure')
-                )
-                features_obj = dict(
-                    (f"{channel['alias']}_{key}", value) for (key, value) in features_obj.items()
-                )
-                features.update(features_obj)
+        for obj, value in self.config['data']['segmentation'].items():
+            shcoeffs = value['alias'] in self.config['features']['SHE']['aliases']
+            features_obj = self.get_features_from_binary_image(
+                input_image=segs[value['channel']],
+                input_reference_image=align_reference_img,
+                compute_shcoeffs=shcoeffs
+            )
+            
+            features_obj = dict(
+                (f"{value['alias']}_{k}", v) for (k, v) in features_obj.items()
+            )
+            features.update(features_obj)
         self.features=pd.Series(features, name=self.row.name)
         return
     
