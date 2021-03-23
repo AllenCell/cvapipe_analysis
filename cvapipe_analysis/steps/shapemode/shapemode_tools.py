@@ -1,3 +1,4 @@
+import vtk
 import concurrent
 import numpy as np
 import pandas as pd
@@ -7,6 +8,8 @@ from aicsshparam import shtools
 import matplotlib.pyplot as plt
 from sklearn.decomposition import PCA
 from typing import Dict, List, Optional, Union
+from vtk.util.numpy_support import numpy_to_vtk as np2vtk
+from vtk.util.numpy_support import vtk_to_numpy as vtk2np
 
 from cvapipe_analysis.tools import general, cluster, shapespace, plotting, viz
 
@@ -26,7 +29,7 @@ class ShapeModeCalculator(general.DataProducer):
     def __init__(self, config):
         super().__init__(config)
         self.plot_maker = plotting.ShapeModePlotMaker(config)
-        
+
     def save(self):
         save_as = self.get_rel_output_file_path_as_str(self.row)
         return save_as
@@ -35,7 +38,7 @@ class ShapeModeCalculator(general.DataProducer):
         self.df = df
         self.aliases_with_coeffs_available = []
         for obj, value in self.config['data']['segmentation'].items():
-            if isinstance(value, dict):
+            if value['alias'] in self.config['features']['SHE']['aliases']:
                 self.aliases_with_coeffs_available.append(value['alias'])
         # Aliases used for PCA is a subset of aliases_with_coeffs_available
         self.aliases = self.config['pca']['aliases']
@@ -137,99 +140,95 @@ class ShapeModeCalculator(general.DataProducer):
         with concurrent.futures.ProcessPoolExecutor(cluster.get_ncores()) as executor:
             df_coeffs = pd.concat(executor.map(
                 self.get_shcoeffs_for_map_point_shapes, [s for s in self.space.iter_shapemodes(self.config)]
-            ))
-        return df_coeffs
-
-    def recontruct_meshes(self):
-        self.meshes = {}
-        nrec = len(self.df_coeffs)
-        lrec = 2*self.config['features']['SHE']['lmax']
-        for alias in tqdm(self.aliases_with_coeffs_available):
-                self.meshes[alias] = []
-                for index, row in tqdm(self.df_coeffs.iterrows(), total=nrec):
-                    mesh = self.get_mesh_from_series(row, alias, lrec)
-                    self.meshes[alias].append(mesh)
+            ), ignore_index=True)
+        self.df_coeffs = df_coeffs
         return
-        
-    '''
-    <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
-    def <<<<<<<< reconstruct the meshes here and correct nuclear location.
-    <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 
-            df, bin_indexes = fix_nuclear_position
-
-            def process_this_index(index_row):
-
-                #Change the coordinate system of nuclear centroid
-                #from nuclear to the aligned cell.
-
-                index, row = index_row
-
-                dxc, dyc, dzc = transform_coords_to_mem_space(
-                    xo = row["dna_position_x_centroid_lcc"],
-                    yo = row["dna_position_y_centroid_lcc"],
-                    zo = row["dna_position_z_centroid_lcc"],
-                    # Cell alignment angle
-                    angle = row["mem_shcoeffs_transform_angle_lcc"],
-                    # Cell centroid
-                    cm = [row[f"mem_position_{k}_centroid_lcc"] for k in ["x", "y", "z"]],
-                )
-
-                return (dxc, dyc, dzc)
-
-            # Change the reference system of the vector that
-            # defines the nuclear location relative to the cell
-            # of all cells that fall into the same bin.
-            for (b, indexes) in bin_indexes:
-                # Subset with cells from the same bin.
-                df_tmp = df.loc[df.index.isin(indexes)]            
-                # Change reference system for all cells in parallel.
-                nuclei_cm_fix = []
-                with DistributedHandler(distributed_executor_address) as handler:
-                    future = handler.batched_map(
-                        process_this_index,
-                        [index_row for index_row in df_tmp.iterrows()],
-                    )
-                    nuclei_cm_fix.append(future)
-                # Average changed nuclear centroid over all cells
-                mean_nuclei_cm_fix = np.array(nuclei_cm_fix[0]).mean(axis=0)
-                # Store
-                df_agg.loc[b, "dna_dxc"] = mean_nuclei_cm_fix[0]
-                df_agg.loc[b, "dna_dyc"] = mean_nuclei_cm_fix[1]
-                df_agg.loc[b, "dna_dzc"] = mean_nuclei_cm_fix[2]
-
+    def get_reference_and_moving_aliases(self):
+        ref_obj = self.config['features']['align']['reference']
+        ref_alias = self.config['data']['segmentation'][ref_obj]['alias']
+        mov_aliases = [a for a in self.aliases_with_coeffs_available if a!= ref_alias]
+        return ref_alias, mov_aliases
     
-    <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
-    '''
+    def compute_displacement_vector_relative_to_reference(self):
+        '''Objects with SHE coefficients available can have their position
+        adjusted relative to the object specified as reference for alignment.'''
+        ref_alias, mov_aliases = self.get_reference_and_moving_aliases()
+        for mov_alias in mov_aliases:
+            for shapemode, df_shapemode in self.df_coeffs.groupby('shapemode'):
+                disp_vector = []
+                self.space.set_active_axis(shapemode, digitize=True)
+                for b, df_bin in df_shapemode.groupby('bin'):
+                    self.space.set_active_bin(b)
+                    for CellId in self.space.iter_active_cellids(self.config):
+                        suffixes = [f'position_{u}_centroid_lcc' for u in ['x', 'y', 'z']]
+                        ro = [self.df.at[CellId, f'{mov_alias}_{s}'] for s in suffixes]
+                        cm = [self.df.at[CellId, f'{ref_alias}_{s}'] for s in suffixes]
+                        angle = self.df.at[CellId, f'{ref_alias}_shcoeffs_transform_angle_lcc']
+                        disp_vector.append(self.rotate_vector_relative_to_point(ro, cm, angle))
+                    dr_mean = np.array(disp_vector).mean(axis=0).tolist()
+                    for du, suffix in zip(dr_mean, ['dx', 'dy', 'dz']):
+                        self.df_coeffs.loc[df_bin.index, f'{mov_alias}_{suffix}'] = du
+        return
+
+    def recontruct_meshes(self, save_meshes=True):
+        self.meshes = {}
+        # Reconstruct mesh with twice more detail than original parameterization
+        lrec = 2*self.config['features']['SHE']['lmax']
+        abs_path_avgshape = self.abs_path_local_staging/f"shapemode/avgshape"
+        ############################################################################
+        self.df_coeffs = self.df_coeffs.loc[self.df_coeffs.shapemode=='NUC_MEM_PC1']
+        ############################################################################
+        for shapemode, df_sm in self.df_coeffs.groupby('shapemode'):
+            self.meshes[shapemode] = {}
+            for alias in self.aliases_with_coeffs_available:
+                self.meshes[shapemode][alias] = []
+                for _, row in df_sm.iterrows():
+                    mesh = self.get_mesh_from_series(row, alias, lrec)
+                    if f'{alias}_dx' in self.df_coeffs.columns:
+                        dr_mean = row[[f'{alias}_d{u}' for u in ['x', 'y', 'z']]]
+                        mesh = self.translate_mesh_points(mesh, dr_mean.values)
+                    if save_meshes:
+                        fname = abs_path_avgshape/f"{alias}_{shapemode}_{row.bin}.vtk"
+                        shtools.save_polydata(mesh, str(fname))
+                    self.meshes[shapemode][alias].append(mesh)
+        return
+    
+    def generate_and_save_animated_2d_contours(self):
+        for shapemode, meshes in tqdm(self.meshes.items(), total=len(self.meshes)):
+            projections = self.plot_maker.get_2d_contours(meshes)
+            for proj, contours in projections.items():
+                self.plot_maker.animate_contours(contours, f"{shapemode}_{proj}")
+
     def workflow(self, df):
-        
         self.set_dataframe(df)
         self.calculate_pca()
         self.sort_shape_modes()
         self.calculate_feature_importance()
         self.save_feature_importance()
-        
         self.plot_maker.plot_explained_variance(self.pca)
         self.plot_maker.execute(display=False)
         
         self.space = shapespace.ShapeSpace(self.config)
         self.space.set_shape_space_axes(self.df_trans, self.df)
-        self.df_coeffs = self.get_shcoeffs_for_all_map_point_shapes()
-
+        
+        self.get_shcoeffs_for_all_map_point_shapes()
+        self.compute_displacement_vector_relative_to_reference()
         self.recontruct_meshes()
-        '''
-        animator = viz.Animator(self.config)
-        for shapemode in self.space.iter_shapemodes(self.config):        
-            df_paths = animator.animate_shape_modes_and_save_meshes(self)        
-            import pdb; pdb.set_trace()
+        self.generate_and_save_animated_2d_contours()
         return
-        '''
-
     
     @staticmethod
     def get_output_file_name():
         return None
 
+    @staticmethod
+    def translate_mesh_points(mesh, r):
+        coords = vtk2np(mesh.GetPoints().GetData())
+        coords += np.array(r, dtype=np.float32).reshape(1,3)
+        mesh.GetPoints().SetData(np2vtk(coords))
+        return mesh
+    
     @staticmethod
     def get_mesh_from_series(row, alias, lmax):
         coeffs = np.zeros((2, lmax, lmax), dtype=np.float32)
@@ -237,11 +236,24 @@ class ShapeModeCalculator(general.DataProducer):
             for m in range(l + 1):
                 try:
                     # Cosine SHE coefficients
-                    coeffs[0, l, m] = row[[f for f in row.keys() if f"{alias}_shcoeffs_L{l}M{m}C" in f]]
+                    coeffs[0, l, m] = row[
+                        [f for f in row.keys() if f"{alias}_shcoeffs_L{l}M{m}C" in f]
+                    ]
                     # Sine SHE coefficients
-                    coeffs[1, l, m] = row[[f for f in row.keys() if f"{alias}_shcoeffs_L{l}M{m}S" in f]]
+                    coeffs[1, l, m] = row[
+                        [f for f in row.keys() if f"{alias}_shcoeffs_L{l}M{m}S" in f]
+                    ]
                 # If a given (l,m) pair is not found, it is assumed to be zero
-                except:
-                    pass
+                except: pass
         mesh, _ = shtools.get_reconstruction_from_coeffs(coeffs)
         return mesh
+    
+    @staticmethod
+    def rotate_vector_relative_to_point(vector, point, angle):
+        angle = np.pi*angle/180.0
+        rot_mx = np.array([
+            [np.cos(angle), np.sin(angle), 0],
+            [-np.sin(angle), np.cos(angle), 0],
+            [0, 0, 1]])
+        u = np.array(vector)-np.array(point)
+        return np.matmul(rot_mx, u)

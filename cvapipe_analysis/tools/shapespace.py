@@ -158,8 +158,8 @@ class ShapeSpace(ShapeSpaceBasic):
         return df_tmp.index.values.tolist()
     
     def iter_active_cellids(self, config):
-        for b in self.iter_bins(config):
-            yield self.get_active_cellids()
+        for CellId in self.get_active_cellids():
+            yield CellId
 
     def get_active_scale(self):
         return self.active_scale
