@@ -11,7 +11,7 @@ from typing import Dict, List, Optional, Union
 from vtk.util.numpy_support import numpy_to_vtk as np2vtk
 from vtk.util.numpy_support import vtk_to_numpy as vtk2np
 
-from cvapipe_analysis.tools import general, cluster, shapespace, plotting, viz
+from cvapipe_analysis.tools import general, cluster, shapespace, plotting
 
 class ShapeModeCalculator(general.DataProducer):
     """
@@ -176,9 +176,6 @@ class ShapeModeCalculator(general.DataProducer):
         # Reconstruct mesh with twice more detail than original parameterization
         lrec = 2*self.config['features']['SHE']['lmax']
         abs_path_avgshape = self.abs_path_local_staging/f"shapemode/avgshape"
-        ############################################################################
-        self.df_coeffs = self.df_coeffs.loc[self.df_coeffs.shapemode=='NUC_MEM_PC1']
-        ############################################################################
         for shapemode, df_sm in self.df_coeffs.groupby('shapemode'):
             self.meshes[shapemode] = {}
             for alias in self.aliases_with_coeffs_available:
@@ -214,6 +211,7 @@ class ShapeModeCalculator(general.DataProducer):
         
         self.get_shcoeffs_for_all_map_point_shapes()
         self.compute_displacement_vector_relative_to_reference()
+        print("Generating 3D meshes. This might take some time...")
         self.recontruct_meshes()
         self.generate_and_save_animated_2d_contours()
         return
