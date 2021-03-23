@@ -3,24 +3,26 @@ appName: cvapipe_analysis
 project:
     # Sufix to append to local_staging
     local_staging: "/allen/aics/assay-dev/MicroscopyOtherData/Viana/projects/cvapipe_analysis/local_staging_temp"
-    overwrite: off
+    overwrite: on
 
 data:
     segmentation:
         nucleus:
-            name: "dna_segmentation"
+            channel: "dna_segmentation"
             alias: "NUC"
+            color: "#3AADA7"
         cell:
-            name: "membrane_segmentation"
+            channel: "membrane_segmentation"
             alias: "MEM"
-        structure: off
+            color: "#F200FF"
+
+features:
     align:
         reference: "cell"
         unique: off
-
-features:
     # SHE - Spherical harmonics expansion
     SHE:
+        aliases: ["NUC", "MEM"]
         # Size of Gaussian kernal used to smooth the
         # images before SHE coefficients calculation
         sigma: 2
@@ -42,7 +44,7 @@ pca:
     map_points: [-2, -1.5, -1.0, -0.5, 0.0, 0.5, 1.0, 1.5, 2.0]
     # limits of x and y axies in the animated GIFs
     plot_limits: [-150, 150, -80, 80]
-
+    
 parameterization:
     # List of images and their channels that should be
     # parameterized
