@@ -16,9 +16,8 @@ class ShapeSpaceBasic():
     may break if you move saved files from the places
     their are saved.
     """
-    bins=None
-    active_axis=None
-    map_points=[-2, -1.5, -1.0, -0.5, 0.0, 0.5, 1.0, 1.5, 2.0]
+    bins = None
+    active_axis = None
     
     def __init__(self, config):
         self.config = config
@@ -123,11 +122,12 @@ class ShapeSpace(ShapeSpaceBasic):
         self.meta = df_meta.loc[self.axes.index, ['structure_name']].copy()
 
     def load_shape_space_axes(self):
+        cols = ['structure_name', 'crop_seg', 'crop_raw']
         path_to_shapemode_manifest = self.local_staging/"shapemode/manifest.csv"
-        df_tmp = pd.read_csv(path_to_shapemode_manifest, index_col=0, low_memory=False, nrows=1024)
+        df_tmp = pd.read_csv(path_to_shapemode_manifest, index_col=0, low_memory=False)
         self.axes_original = df_tmp[[pc for pc in self.iter_shapemodes(self.config)]].copy()
         self.axes = self.remove_extreme_points(self.axes_original, self.removal_pct)
-        self.meta = df_tmp.loc[self.axes.index, ['structure_name']].copy()
+        self.meta = df_tmp.loc[self.axes.index, cols].copy()
             
     def set_active_axis(self, axis_name, digitize):
         if axis_name not in self.axes.columns:
