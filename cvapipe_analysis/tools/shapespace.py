@@ -124,7 +124,7 @@ class ShapeSpace(ShapeSpaceBasic):
 
     def load_shape_space_axes(self):
         path_to_shapemode_manifest = self.local_staging/"shapemode/manifest.csv"
-        df_tmp = pd.read_csv(path_to_shapemode_manifest, index_col=0, low_memory=False)
+        df_tmp = pd.read_csv(path_to_shapemode_manifest, index_col=0, low_memory=False, nrows=1024)
         self.axes_original = df_tmp[[pc for pc in self.iter_shapemodes(self.config)]].copy()
         self.axes = self.remove_extreme_points(self.axes_original, self.removal_pct)
         self.meta = df_tmp.loc[self.axes.index, ['structure_name']].copy()
@@ -144,6 +144,8 @@ class ShapeSpace(ShapeSpaceBasic):
         self.active_bin = None
         
     def set_active_structure(self, structure):
+        if isinstance(structure, str):
+            structure = [structure]
         self.active_structure=structure
 
     def deactive_structure(self):
@@ -154,7 +156,7 @@ class ShapeSpace(ShapeSpaceBasic):
         if self.active_bin is not None:
             df_tmp = df_tmp.loc[df_tmp.bin==self.active_bin]
         if self.active_structure is not None:
-            df_tmp = df_tmp.loc[df_tmp.structure_name==self.active_structure]
+            df_tmp = df_tmp.loc[df_tmp.structure_name.isin(self.active_structure)]
         return df_tmp.index.values.tolist()
     
     def iter_active_cellids(self, config):
