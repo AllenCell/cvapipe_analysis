@@ -136,7 +136,7 @@ class ShapeModeCalculator(general.DataProducer):
         df_inv['bin'] = np.arange(1, 1+len(map_points))
         return df_inv
 
-    def get_shcoeffs_for_all_map_point_shapes(self):
+    def compute_shcoeffs_for_all_map_point_shapes(self):
         with concurrent.futures.ProcessPoolExecutor(cluster.get_ncores()) as executor:
             df_coeffs = pd.concat(executor.map(
                 self.get_shcoeffs_for_map_point_shapes, [s for s in self.space.iter_shapemodes(self.config)]
@@ -165,7 +165,14 @@ class ShapeModeCalculator(general.DataProducer):
                         ro = [self.df.at[CellId, f'{mov_alias}_{s}'] for s in suffixes]
                         cm = [self.df.at[CellId, f'{ref_alias}_{s}'] for s in suffixes]
                         angle = self.df.at[CellId, f'{ref_alias}_shcoeffs_transform_angle_lcc']
-                        disp_vector.append(self.rotate_vector_relative_to_point(ro, cm, angle))
+                        if np.isnan(angle):
+                            '''Angle should be nan if no alignment was applied by cvapipe_analysis.
+                            In that case, both ro and cm were calculated in an previously aligned
+                            frame of reference. Therefore, not rotation is required.'''
+                            disp_vector.append(np.array(ro)-np.array(cm))
+                        else:
+                            disp_vector.append(self.rotate_vector_relative_to_point(ro, cm, angle))
+
                     dr_mean = np.array(disp_vector).mean(axis=0).tolist()
                     for du, suffix in zip(dr_mean, ['dx', 'dy', 'dz']):
                         self.df_coeffs.loc[df_bin.index, f'{mov_alias}_{suffix}'] = du
@@ -209,7 +216,7 @@ class ShapeModeCalculator(general.DataProducer):
         self.space = shapespace.ShapeSpace(self.config)
         self.space.set_shape_space_axes(self.df_trans, self.df)
         
-        self.get_shcoeffs_for_all_map_point_shapes()
+        self.compute_shcoeffs_for_all_map_point_shapes()
         self.compute_displacement_vector_relative_to_reference()
         print("Generating 3D meshes. This might take some time...")
         self.recontruct_meshes()
