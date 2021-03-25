@@ -159,7 +159,7 @@ class ShapeSpace(ShapeSpaceBasic):
             df_tmp = df_tmp.loc[df_tmp.structure_name.isin(self.active_structure)]
         return df_tmp.index.values.tolist()
     
-    def iter_active_cellids(self, config):
+    def iter_active_cellids(self):
         for CellId in self.get_active_cellids():
             yield CellId
 
