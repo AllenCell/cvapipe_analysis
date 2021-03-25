@@ -68,8 +68,11 @@ class LocalStagingReader(LocalStagingWriter):
         self.row = row
 
     def get_single_cell_images(self, imtype):
-        segs={}
-        imgs=AICSImage(self.row[imtype]).data.squeeze()
+        segs = {}
+        path = self.row[imtype]
+        if str(self.abs_path_local_staging) not in path:
+            path = self.abs_path_local_staging/f"loaddata/{self.row[imtype]}"
+        imgs = AICSImage(path).data.squeeze()
         for ch, img in zip(eval(self.row.name_dict)[imtype], imgs):
             segs[ch] = img
         return segs
