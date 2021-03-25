@@ -142,7 +142,7 @@ class FeatureCalculator(general.DataProducer):
                 (f"{value['alias']}_{k}", v) for (k, v) in features_obj.items()
             )
             features.update(features_obj)
-        self.features=pd.Series(features, name=self.row.name)
+        self.features = pd.Series(features, name=self.row.name)
         return
     
     @staticmethod
