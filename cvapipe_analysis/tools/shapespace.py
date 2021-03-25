@@ -23,7 +23,7 @@ class ShapeSpaceBasic():
     def __init__(self, config):
         self.config = config
         self.set_path_to_local_staging_folder(config['project']['local_staging'])
-        self.load_shapemode_manifest()
+        #self.load_shapemode_manifest()
 
     def set_path_to_local_staging_folder(self, path):
         if not isinstance(path, Path):
@@ -47,8 +47,8 @@ class ShapeSpaceBasic():
     @staticmethod
     def iter_shapemodes(config):
         npcs=config['pca']['number_of_pcs']
-        prefix=config['aggregation']['aggregate_on']
-        for pc_name in [f"{prefix}{pc}" for pc in range(1, npcs+1)]:
+        prefix = "_".join(config['pca']['aliases'])
+        for pc_name in [f"{prefix}_PC{pc}" for pc in range(1, npcs+1)]:
             yield pc_name
 
     @staticmethod
@@ -107,21 +107,28 @@ class ShapeSpace(ShapeSpaceBasic):
     their are saved.
     """
     active_bin = None
+    active_scale = None
     active_structure = None
     
     def __init__(self, config):
         super().__init__(config)
-
-    def load_shape_space_axes(self, removal_pct=1):
-        path_to_shapemode_manifest = self.local_staging/"shapemode/manifest.csv"
-        df_tmp = pd.read_csv(path_to_shapemode_manifest, index_col=0, low_memory=False)
-        self.axes_original = df_tmp[[pc for pc in self.iter_shapemodes(self.config)]].copy()
-        self.axes = self.remove_extreme_points(self.axes_original, removal_pct)
-        self.meta = df_tmp.loc[self.axes.index, ['structure_name']].copy()
+        self.removal_pct = self.config['pca']['removal_pct']
         
     def __repr__(self):
         return f"<{self.__class__.__name__}>original:{self.axes_original.shape}-filtered:{self.axes.shape}"
-    
+        
+    def set_shape_space_axes(self, df, df_meta):
+        self.axes_original = df.copy()
+        self.axes = self.remove_extreme_points(self.axes_original, self.removal_pct)
+        self.meta = df_meta.loc[self.axes.index, ['structure_name']].copy()
+
+    def load_shape_space_axes(self):
+        path_to_shapemode_manifest = self.local_staging/"shapemode/manifest.csv"
+        df_tmp = pd.read_csv(path_to_shapemode_manifest, index_col=0, low_memory=False)
+        self.axes_original = df_tmp[[pc for pc in self.iter_shapemodes(self.config)]].copy()
+        self.axes = self.remove_extreme_points(self.axes_original, self.removal_pct)
+        self.meta = df_tmp.loc[self.axes.index, ['structure_name']].copy()
+            
     def set_active_axis(self, axis_name, digitize):
         if axis_name not in self.axes.columns:
             raise ValueError(f"Axis {axis_name} not found.")
@@ -151,55 +158,33 @@ class ShapeSpace(ShapeSpaceBasic):
         return df_tmp.index.values.tolist()
     
     def iter_active_cellids(self, config):
-        for b in self.iter_bins(config):
-            yield self.get_active_cellids()
+        for CellId in self.get_active_cellids():
+            yield CellId
 
-    @staticmethod
-    def remove_extreme_points(axes, pct):
-        df_tmp = axes.copy()
-        df_tmp["extreme"] = False
-
-        for ax in axes.columns:
-            finf, fsup = np.percentile(axes[ax].values, [pct, 100 - pct])
-            df_tmp.loc[(df_tmp[ax] < finf), "extreme"] = True
-            df_tmp.loc[(df_tmp[ax] > fsup), "extreme"] = True
-
-        df_tmp = df_tmp.loc[df_tmp.extreme == False]
-        df_tmp = df_tmp.drop(columns=["extreme"])
-
-        return df_tmp
-
+    def get_active_scale(self):
+        return self.active_scale
+            
     def digitize_active_axis(self):
-
         if self.active_axis is None:
             raise ValueError("No active axis.")
-        
+            
         values = self.axes[self.active_axis].values.astype(np.float32)
         values -= values.mean()
-        pc_std = values.std()
-        values /= pc_std
+        self.active_scale = values.std()
+        values /= self.active_scale
 
-        LINF = -2.0 # inferior limit = -2 std
-        LSUP = 2.0 # superior limit = 2 std
-        nbins = self.get_number_of_map_points(self.config)
+        LINF = self.config['pca']['map_points'][0]
+        LSUP = self.config['pca']['map_points'][-1]
+        nbins = len(self.config['pca']['map_points'])
         binw = (LSUP-LINF)/(2*(nbins-1))
 
         bin_centers = np.linspace(LINF, LSUP, nbins)
         bin_edges = np.unique([(b-binw, b+binw) for b in bin_centers])
         bin_edges[0] = -np.inf
         bin_edges[-1] = np.inf
-
-        # Aplly digitization
         self.meta['bin'] = np.digitize(values, bin_edges)
         return
-
-    @staticmethod
-    def read_mesh(path):
-        reader = vtk.vtkPolyDataReader()
-        reader.SetFileName(path)
-        reader.Update()
-        return reader.GetOutput()
-
+    
     def get_index_of_bin(self, b):
         if self.active_axis is None:
             raise ValueError("No active axis.")
@@ -226,3 +211,22 @@ class ShapeSpace(ShapeSpaceBasic):
         index = self.get_index_of_bin(b)
         return self.read_mesh(self.df_shapemode.at[index, 'memMeshPath'])
 
+    @staticmethod
+    def read_mesh(path):
+        reader = vtk.vtkPolyDataReader()
+        reader.SetFileName(path)
+        reader.Update()
+        return reader.GetOutput()
+
+    @staticmethod
+    def remove_extreme_points(axes, pct):
+        df_tmp = axes.copy()
+        df_tmp["extreme"] = False
+        for ax in axes.columns:
+            finf, fsup = np.percentile(axes[ax].values, [pct, 100 - pct])
+            df_tmp.loc[(df_tmp[ax] < finf), "extreme"] = True
+            df_tmp.loc[(df_tmp[ax] > fsup), "extreme"] = True
+
+        df_tmp = df_tmp.loc[df_tmp.extreme == False]
+        df_tmp = df_tmp.drop(columns=["extreme"])
+        return df_tmp

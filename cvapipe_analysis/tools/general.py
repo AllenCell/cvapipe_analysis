@@ -33,68 +33,6 @@ def read_chunk_of_dataframe(cfg):
     df = pd.read_csv(cfg['csv'], index_col='CellId', skiprows=skip, nrows=cfg['nrows'])
     
     return df
-    
-
-def get_segmentations(path_seg, channels):
-
-    """
-    Find the segmentations that should be used for features
-    calculation.
-
-    Parameters
-    --------------------
-    path_seg: str
-        Path to the 4D binary image.
-    channels: list of str
-        Name of channels of the 4D binary image.
-
-    Returns
-    -------
-    result: seg_nuc, seg_mem, seg_str
-        3D binary images of nucleus, cell and structure.
-    """
-
-    seg_channel_names = ['dna_segmentation',
-                         'membrane_segmentation',
-                         'struct_segmentation_roof']
-
-    if not all(name in channels for name in seg_channel_names):
-        raise ValueError("One or more segmentation channels was\
-        not found.")
-
-    ch_dna = channels.index('dna_segmentation')
-    ch_mem = channels.index('membrane_segmentation')
-    ch_str = channels.index('struct_segmentation_roof')
-    
-    segs = AICSImage(path_seg).data.squeeze()
-
-    return segs[ch_dna], segs[ch_mem], segs[ch_str]
-    
-def get_raws(path_raw, channels):
-
-    """
-    Find the raw images.
-
-    Parameters
-    --------------------
-    path_raw: str
-        Path to the 4D raw image.
-    channels: list of str
-        Name of channels of the 4D raw image.
-
-    Returns
-    -------
-    result: nuc, mem, struct
-        3D raw images of nucleus, cell and structure.
-    """
-
-    ch_dna = channels.index('dna')
-    ch_mem = channels.index('membrane')
-    ch_str = channels.index('structure')
-    
-    raw = AICSImage(path_raw).data.squeeze()
-
-    return raw[ch_dna], raw[ch_mem], raw[ch_str]
 
 class LocalStagingWriter:
     """
@@ -114,6 +52,30 @@ class LocalStagingWriter:
         if not isinstance(path, Path):
             path = Path(path)
         self.abs_path_local_staging = path
+
+class LocalStagingReader(LocalStagingWriter):
+    """
+    DESC
+    
+    WARNING: All classes are assumed to know the whole
+    structure of directories inside the local_staging
+    folder and this is hard coded. Therefore, classes
+    may break if you move saved files from the places
+    their are saved.
+    """
+    def __init__(self, config, row):
+        super().__init__(config)
+        self.row = row
+
+    def get_single_cell_images(self, imtype):
+        segs = {}
+        path = self.row[imtype]
+        if str(self.abs_path_local_staging) not in path:
+            path = self.abs_path_local_staging/f"loaddata/{self.row[imtype]}"
+        imgs = AICSImage(path).data.squeeze()
+        for ch, img in zip(eval(self.row.name_dict)[imtype], imgs):
+            segs[ch] = img
+        return segs
         
 class DataProducer(LocalStagingWriter):
     """
@@ -176,9 +138,8 @@ class DataProducer(LocalStagingWriter):
                 self.workflow(row)
                 rel_path_to_output_file = self.save()
             except Exception as ex:
+                print(f"\n>>>{ex}\n")
                 rel_path_to_output_file = None
-            except KeyboardInterrupt:
-                sys.exit()
         self.status(row.name, rel_path_to_output_file)
         return rel_path_to_output_file
         

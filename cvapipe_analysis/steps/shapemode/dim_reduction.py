@@ -5,6 +5,36 @@ import matplotlib.pyplot as plt
 from sklearn.decomposition import PCA
 from typing import Dict, List, Optional, Union
 
+from cvapipe_analysis.tools import general, cluster, shapespace
+
+class ShapeModesCalculator(general.DataProducer):
+    """
+    Class for calculating shape modes.
+    
+    WARNING: All classes are assumed to know the whole
+    structure of directories inside the local_staging
+    folder and this is hard coded. Therefore, classes
+    may break if you move saved files away from the
+    places their are saved.
+    """
+    
+    subfolder = 'shapemode/avgshape'
+    
+    def __init__(self, config):
+        super().__init__(config)
+
+    def save(self):
+        save_as = self.get_rel_output_file_path_as_str(self.row)
+        return save_as
+    
+    def workflow(self):
+        return
+    
+    @staticmethod
+    def get_output_file_name():
+        return None
+
+        
 class pPCA:
     '''
     Simple class for store PCA objects with persistent feature names.
@@ -59,17 +89,12 @@ def pca_analysis(
             PCA objected fitted to the input data. This can be used
             to perform inverse transfrom or transform new data.
     """
-
-    # Check wether all features are available
-    for f in feature_names:
-        if f not in df.columns:
-            raise ValueError(f"Column {f} not found in the input dataframe.")
         
     # Get feature matrix
     df_pca = df[feature_names]
     matrix_of_features = df_pca.values.copy()
     matrix_of_features_ids = df_pca.index
-
+    
     # Fit and transform the data
     pca = PCA(n_components=npcs_to_calc)
     pca = pca.fit(matrix_of_features)

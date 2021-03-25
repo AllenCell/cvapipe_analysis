@@ -2,18 +2,59 @@ appName: cvapipe_analysis
 
 project:
     # Sufix to append to local_staging
-    local_staging: "/allen/aics/assay-dev/MicroscopyOtherData/Viana/projects/cvapipe_analysis/local_staging_full"
-    overwrite: False
+    local_staging: "/allen/aics/assay-dev/MicroscopyOtherData/Viana/projects/cvapipe_analysis/local_staging_temp"
+    overwrite: on
+
+data:
+    segmentation:
+        nucleus:
+            channel: "dna_segmentation"
+            alias: "NUC"
+            color: "#3AADA7"
+        cell:
+            channel: "membrane_segmentation"
+            alias: "MEM"
+            color: "#F200FF"
+
+features:
+    align:
+        reference: "cell"
+        unique: off
+    # SHE - Spherical harmonics expansion
+    SHE:
+        aliases: ["NUC", "MEM"]
+        # Size of Gaussian kernal used to smooth the
+        # images before SHE coefficients calculation
+        sigma: 2
+        # Number of SHE coefficients used to describe cell
+        # and nuclear shape
+        lmax: 16
 
 pca:
+    remove_outliers: off
+    # Specify the a set of aliases here
+    aliases: ["NUC", "MEM"]
+    # Sort shape modes by volume of
+    sorter: "MEM"
     # Number of principal components to be calculated
     number_of_pcs: 8
-    # Number of map points along each principal component
-    number_map_points: 9
+    # Percentage of exteme points to be removed
+    removal_pct: 1
     # Map points
     map_points: [-2, -1.5, -1.0, -0.5, 0.0, 0.5, 1.0, 1.5, 2.0]
     # limits of x and y axies in the animated GIFs
     plot_limits: [-150, 150, -80, 80]
+    
+parameterization:
+    # List of images and their channels that should be
+    # parameterized
+    intensities:
+        'GFP': ['crop_raw', 'structure']
+        'SEG': ['crop_seg', 'structure_seg']
+    # Number of interplation points between nuclear
+    # centroid and nuclear shell, and from nuclear
+    # shell to cell membrane.
+    nisos: [32, 32]
 
 aggregation:
     type: ['avg']
@@ -22,21 +63,7 @@ aggregation:
     # DNA_PC: shape space of nucleus alone
     # MEM_PC: shape space of cell alone
     # DNA_MEM_PC: shape space of nucleus and cell together
-    aggregate_on: "DNA_MEM_PC"
-
-parameterization:
-    # List of images and their channels that should be
-    # parameterized
-    intensities:
-        'GFP': ['crop_raw', 'structure']
-        'SEG': ['crop_seg', 'structure_seg']
-    # Number of SHE coefficients used to describe cell
-    # and nuclear shape
-    lmax: 16
-    # Number of interplation points between nuclear
-    # centroid and nuclear shell, and from nuclear
-    # shell to cell membrane.
-    nisos: [32, 32]
+    aggregate_on: "NUC_MEM"
 
 structures:
 

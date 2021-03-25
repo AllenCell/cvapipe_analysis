@@ -9,293 +9,179 @@ from aicsshparam import shtools, shparam
 from skimage import measure as skmeasure
 from skimage import morphology as skmorpho
 
-from cvapipe_analysis.tools import general
+from cvapipe_analysis.tools import general, cluster
 
-def cast_features(features):
-    
+class FeatureCalculator(general.DataProducer):
     """
-    Cast feature values from numpy type to python so that the
-    Json dict can be serialized.
-
-    Parameters
-    --------------------
-    features: dict
-        Dictionary of features.
-
-    Returns
-    -------
-    features: dict
-        Dictionary of features converted into python type.
+    Class for feature extraction.
+    
+    WARNING: All classes are assumed to know the whole
+    structure of directories inside the local_staging
+    folder and this is hard coded. Therefore, classes
+    may break if you move saved files away from the
+    places their are saved.
     """
     
-    for key, value in features.items():
-        if isinstance(value, np.integer):
-            features[key] = int(value)
-        elif isinstance(value, float):
-            features[key] = float(value)
-        elif isinstance(value, np.ndarray):
-            features[key] = value.tolist()
+    subfolder = 'computefeatures/cell_features'
+    
+    def __init__(self, config):
+        super().__init__(config)
+    
+    def save(self):
+        save_as = self.get_rel_output_file_path_as_str(self.row)
+        df = pd.DataFrame([self.features])
+        df.index = df.index.rename('CellId')
+        df.to_csv(save_as)
+        return save_as
+
+    def get_features_from_binary_image(self, input_image, input_reference_image, compute_shcoeffs=True):
+        features = {}
+        input_image = (input_image>0).astype(np.uint8)
+        input_image_lcc = skmeasure.label(input_image)
+        # Number of connected components
+        features[f'connectivity_cc'] = input_image_lcc.max()
+        if features[f'connectivity_cc'] > 0:
+
+            # Find largest connected component (lcc)
+            counts = np.bincount(input_image_lcc.reshape(-1))
+            lcc = 1+np.argmax(counts[1:])
+            input_image_lcc[input_image_lcc!=lcc] = 0
+            input_image_lcc[input_image_lcc==lcc] = 1
+            input_image_lcc = input_image_lcc.astype(np.uint8)
+
+            for img, suffix in zip([input_image, input_image_lcc], ['', '_lcc']):
+                z, y, x = np.where(img)
+                features[f'shape_volume{suffix}'] = img.sum()
+                features[f'position_depth{suffix}'] = 1+np.ptp(z)
+                for uname, u in zip(['x', 'y', 'z'], [x, y, z]):
+                    features[f'position_{uname}_centroid{suffix}'] = u.mean()
+                features[f'roundness_surface_area{suffix}'] = self.get_surface_area(img)
         else:
-            # To deal with the case value = np.nan
-            features[key] = int(value)
-            
-    return features
+            # If no foreground pixels are found
+            for img, suffix in zip([input_image,input_image_lcc], ['', '_lcc']):
+                features[f'shape_volume{suffix}'] = np.nan
+                features[f'position_depth{suffix}'] = np.nan
+                for uname in ['x', 'y', 'z']:
+                    features[f'position_{uname}_centroid{suffix}'] = np.nan
+                features[f'roundness_surface_area{suffix}'] = np.nan
 
-def get_surface_area(input_img):
+        if not compute_shcoeffs:
+            return features
 
-    """
-    Calculates the surface area of a binary shape by counting the
-    number of boundary faces.
+        angle = np.nan
+        if input_reference_image is not None:
+            # Get alignment angle based on the reference image. Variance
+            # paper uses make_unique = False
+            input_ref_image_aligned, angle = shtools.align_image_2d(
+                image=input_reference_image,
+                make_unique=self.config['features']['align']['unique']
+            )
+            # Rotate input image according the reference alignment angle
+            input_image_lcc_aligned = shtools.apply_image_alignment_2d(
+                image=input_image_lcc,
+                angle=angle
+            ).squeeze()
+        else:
+            input_image_lcc_aligned = input_image_lcc
 
-    Parameters
-    --------------------
-    input_image: ndarray
-        3D input image representing the single cell segmentation that
-        represents either dna, cell or structure.
+        (coeffs, _), (_, _, _, transform) = shparam.get_shcoeffs(
+            image=input_image_lcc_aligned,
+            lmax=self.config['features']['SHE']['lmax'],
+            sigma=self.config['features']['SHE']['sigma'],
+            alignment_2d=False
+        )
 
-    Returns
-    -------
-    result: int
-        Number of boundary faces.
-    """
-    
-    # Forces a 1 pixel-wide offset to avoid problems with binary
-    # erosion algorithm
+        if transform is not None:
+            transform = {
+                'shcoeffs_transform_xc_lcc': transform[0],
+                'shcoeffs_transform_yc_lcc': transform[1],
+                'shcoeffs_transform_zc_lcc': transform[2],
+                'shcoeffs_transform_angle_lcc': angle,
+            }
+        else:
+            transform = {
+                'shcoeffs_transform_xc_lcc': np.nan,
+                'shcoeffs_transform_yc_lcc': np.nan,
+                'shcoeffs_transform_zc_lcc': np.nan,
+                'shcoeffs_transform_angle_lcc': np.nan,
+            }
 
-    input_img[:,:,[0,-1]] = 0
-    input_img[:,[0,-1],:] = 0
-    input_img[[0,-1],:,:] = 0
-
-    input_img_surface = np.logical_xor(input_img, skmorpho.binary_erosion(input_img)).astype(np.uint8)
-
-    # Loop through the boundary voxels to calculate the number of
-    # boundary faces. Using 6-neighborhod.
-
-    pxl_z, pxl_y, pxl_x = np.nonzero(input_img_surface)
-
-    dx = np.array([ 0, -1,  0,  1,  0,  0])
-    dy = np.array([ 0,  0,  1,  0, -1,  0])
-    dz = np.array([-1,  0,  0,  0,  0,  1])
-    
-    surface_area = 0
-
-    for (k, j, i) in zip(pxl_z, pxl_y, pxl_x):
-        surface_area += 6 - input_img_surface[k+dz,j+dy,i+dx].sum()
-
-    return int(surface_area)
-
-def get_features(input_image, input_reference_image, compute_shcoeffs=True):
-    
-    """
-    Extracts single cell features used in the variance paper.
-
-    Parameters
-    --------------------
-    input_image: ndarray
-        3D image representing the single cell segmentation that
-        represents either dna, cell or structure.
-    input_reference_image: ndarray
-        3D image representing the reference that should be used
-        align the input image. This is only used for the spherical
-        harmonics expansion. In case None is provided, the input
-        image is not aligned.
-
-    Returns
-    -------
-    result: dict
-        Dictionary with feature names and values.
-    """
-
-    features = {}
-    
-    # Binarize the input and cast to 8-bit
-    input_image = (input_image>0).astype(np.uint8)
-    
-    input_image_lcc = skmeasure.label(input_image)
-    
-    # Number of connected components
-    features[f'connectivity_cc'] = input_image_lcc.max()
-    
-    if features[f'connectivity_cc'] > 0:
-    
-        # Find largest connected component (lcc)
-        counts = np.bincount(input_image_lcc.reshape(-1))
-        lcc = 1 + np.argmax(counts[1:])
-
-        input_image_lcc[input_image_lcc!=lcc] = 0
-        input_image_lcc[input_image_lcc==lcc] = 1
-        input_image_lcc = input_image_lcc.astype(np.uint8)
-
-        # Basic features
-        for img, suffix in zip([input_image,input_image_lcc],['','_lcc']):
-
-            z, y, x = np.where(img)
-
-            features[f'shape_volume{suffix}'] = img.sum()
-            features[f'position_depth{suffix}'] = 1 + np.ptp(z)
-            for uname, u in zip(['x','y','z'],[x,y,z]):
-                features[f'position_{uname}_centroid{suffix}'] = u.mean()
-            features[f'roundness_surface_area{suffix}'] = get_surface_area(img)
-
-    else:
-        # If no foreground pixels are found
-        for img, suffix in zip([input_image,input_image_lcc],['','_lcc']):
-            features[f'shape_volume{suffix}'] = np.nan
-            features[f'position_depth{suffix}'] = np.nan
-            for uname in ['x','y','z']:
-                features[f'position_{uname}_centroid{suffix}'] = np.nan
-            features[f'roundness_surface_area{suffix}'] = np.nan
-        
-    if not compute_shcoeffs:
-        features = cast_features(features)
+        # Add suffix to identify coeffs have been calculated on the
+        # largest connected component
+        coeffs = dict(
+            (f'{key}_lcc',value) for (key,value) in coeffs.items()
+        )
+        features.update(coeffs)
+        features.update(transform)
         return features
     
-    # Spherical harmonics expansion
-    angle = np.nan
-    if input_reference_image is not None:
+    def get_reference_image_for_alignment(self, segs):
+        '''Returns None if no alignment reference is specified.'''
+        align_reference = self.config['features']['align']['reference']
+        if isinstance(align_reference, str):
+            return segs[self.config['data']['segmentation'][align_reference]['channel']]
+        return None
 
-        # Get alignment angle based on the reference image. Variance
-        # paper uses make_unique = False
-        input_ref_image_aligned, angle = shtools.align_image_2d(
-            image = input_reference_image,
-            make_unique = False
-        )
-                
-        # Rotate input image according the reference alignment angle
-        input_image_lcc_aligned = shtools.apply_image_alignment_2d(
-            image = input_image_lcc,
-            angle = angle
-        ).squeeze()
-                
-    else:
+    def workflow(self, row):
+        self.row = row
+        reader = general.LocalStagingReader(self.config, row)
+        segs = reader.get_single_cell_images('crop_seg')
+        raws = reader.get_single_cell_images('crop_raw')
         
-        input_image_lcc_aligned = input_image_lcc
+        features={}
+        align_reference_img = self.get_reference_image_for_alignment(segs)
+        for obj, value in self.config['data']['segmentation'].items():
+            shcoeffs = value['alias'] in self.config['features']['SHE']['aliases']
+            features_obj = self.get_features_from_binary_image(
+                input_image=segs[value['channel']],
+                input_reference_image=align_reference_img,
+                compute_shcoeffs=shcoeffs
+            )
+            
+            features_obj = dict(
+                (f"{value['alias']}_{k}", v) for (k, v) in features_obj.items()
+            )
+            features.update(features_obj)
+        self.features = pd.Series(features, name=self.row.name)
+        return
+    
+    @staticmethod
+    def get_output_file_name(row):
+        return f"{row.name}.csv"
+
+    @staticmethod
+    def get_surface_area(input_img):
+        # Forces a 1 pixel-wide offset to avoid problems with binary
+        # erosion algorithm
+        input_img[:, :, [0, -1]] = 0
+        input_img[:, [0, -1], :] = 0
+        input_img[[0, -1], :, :] = 0
+        input_img_surface = np.logical_xor(input_img, skmorpho.binary_erosion(input_img)).astype(np.uint8)
         
-    (coeffs, _), (_, _, _, transform) = shparam.get_shcoeffs(
-        image = input_image_lcc_aligned,
-        lmax = 16,
-        sigma = 2,
-        alignment_2d = False
-    )
-    
-    if transform is not None:
-        transform = {
-            'shcoeffs_transform_xc_lcc': transform[0],
-            'shcoeffs_transform_yc_lcc': transform[1],
-            'shcoeffs_transform_zc_lcc': transform[2],
-            'shcoeffs_transform_angle_lcc': angle,
-        }
-    else:
-        transform = {
-            'shcoeffs_transform_xc_lcc': np.nan,
-            'shcoeffs_transform_yc_lcc': np.nan,
-            'shcoeffs_transform_zc_lcc': np.nan,
-            'shcoeffs_transform_angle_lcc': np.nan,
-        }
+        # Loop through the boundary voxels to calculate the number of
+        # boundary faces. Using 6-neighborhod.
+        pxl_z, pxl_y, pxl_x = np.nonzero(input_img_surface)
+        dx = np.array([ 0, -1,  0,  1,  0,  0])
+        dy = np.array([ 0,  0,  1,  0, -1,  0])
+        dz = np.array([-1,  0,  0,  0,  0,  1])
 
-    # Add suffix to identify coeffs have been calculated on the
-    # largest connected component
-    coeffs = dict(
-        (f'{key}_lcc',value) for (key,value) in coeffs.items()
-    )
-        
-    features.update(coeffs)
-    features.update(transform)
-
-    for key, value in features.items():
-        features = cast_features(features)
-    
-    return features
-
-def load_images_and_calculate_features(path_seg, channels, path_output):
-    
-    """
-    Load segmentation images, compute features and saves features
-    as a JSON file.
-
-    Parameters
-    --------------------
-    path_seg: Path
-        Path to the 4D binary image.
-    channels: list of str
-        Name of channels of the 4D raw image.
-    path_outout: Path
-        Path to save the features.
-
-    """
-    
-    # Find the correct segmentation for nucleus,
-    # cell and structure
-    seg_dna, seg_mem, seg_str = general.get_segmentations(
-        path_seg=path_seg,
-        channels=channels
-    )
-
-    # Compute nuclear features
-    features_dna = get_features(
-        input_image=seg_dna, input_reference_image=seg_mem
-    )
-
-    # Compute cell features
-    features_mem = get_features(
-        input_image=seg_mem, input_reference_image=seg_mem
-    )
-
-    # Compute structure features
-    features_str = get_features(
-        input_image=seg_str, input_reference_image=None, compute_shcoeffs=False
-    )
-
-    # Append prefix to features names
-    features_dna = dict(
-        (f"dna_{key}", value) for (key, value) in features_dna.items()
-    )
-    features_mem = dict(
-        (f"mem_{key}", value) for (key, value) in features_mem.items()
-    )
-    features_str = dict(
-        (f"str_{key}", value) for (key, value) in features_str.items()
-    )
-
-    # Concatenate all features for this cell
-    features = features_dna.copy()
-    features.update(features_mem)
-    features.update(features_str)
-
-    # Save to JSON
-    with open(path_output, "w") as f:
-        json.dump(features, f)
-
-    return
-
+        surface_area = 0
+        for (k, j, i) in zip(pxl_z, pxl_y, pxl_x):
+            surface_area += 6-input_img_surface[k+dz, j+dy, i+dx].sum()
+        return int(surface_area)
 
 if __name__ == "__main__":
     
     config = general.load_config_file()
-    path_to_local_staging_folder = config['project']['local_staging']
     
-    parser = argparse.ArgumentParser(description='Batch feature extraction.')
+    parser = argparse.ArgumentParser(description='Batch single cell feature extraction.')
     parser.add_argument('--csv', help='Path to the dataframe.', required=True)
     args = vars(parser.parse_args())
 
     df = pd.read_csv(args['csv'], index_col='CellId')
     print(f"Processing dataframe of shape {df.shape}")
-        
-    def wrapper_for_feature_calculation(row):
-        
-        path_seg = f"{path_to_local_staging_folder}/loaddata/{row.crop_seg}"
-        channels = eval(row.name_dict)["crop_seg"]
-        path_out = f"{path_to_local_staging_folder}/computefeatures/cell_features/{row.name}.json"
-        
-        try:
-            load_images_and_calculate_features(path_seg, channels, path_out)
-            print(f"Index {row.name} complete.")
-        except:
-            print(f"Index {row.name} FAILED.")
-            
-    N_CORES = len(os.sched_getaffinity(0))
-    with concurrent.futures.ProcessPoolExecutor(N_CORES) as executor:
-        executor.map(
-            wrapper_for_feature_calculation, [row for _,row in df.iterrows()]
-        )
 
+    calculator = FeatureCalculator(config)
+    with concurrent.futures.ProcessPoolExecutor(cluster.get_ncores()) as executor:
+        executor.map(calculator.execute, [row for _,row in df.iterrows()])
+    
