@@ -160,7 +160,7 @@ class ShapeModeCalculator(general.DataProducer):
                 self.space.set_active_axis(shapemode, digitize=True)
                 for b, df_bin in df_shapemode.groupby('bin'):
                     self.space.set_active_bin(b)
-                    for CellId in self.space.iter_active_cellids(self.config):
+                    for CellId in self.space.iter_active_cellids():
                         suffixes = [f'position_{u}_centroid_lcc' for u in ['x', 'y', 'z']]
                         ro = [self.df.at[CellId, f'{mov_alias}_{s}'] for s in suffixes]
                         cm = [self.df.at[CellId, f'{ref_alias}_{s}'] for s in suffixes]
