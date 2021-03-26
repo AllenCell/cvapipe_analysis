@@ -16,9 +16,8 @@ class ShapeSpaceBasic():
     may break if you move saved files from the places
     their are saved.
     """
-    bins=None
-    active_axis=None
-    map_points=[-2, -1.5, -1.0, -0.5, 0.0, 0.5, 1.0, 1.5, 2.0]
+    bins = None
+    active_axis = None
     
     def __init__(self, config):
         self.config = config
@@ -123,11 +122,12 @@ class ShapeSpace(ShapeSpaceBasic):
         self.meta = df_meta.loc[self.axes.index, ['structure_name']].copy()
 
     def load_shape_space_axes(self):
+        cols = ['structure_name', 'crop_seg', 'crop_raw', 'name_dict']
         path_to_shapemode_manifest = self.local_staging/"shapemode/manifest.csv"
         df_tmp = pd.read_csv(path_to_shapemode_manifest, index_col=0, low_memory=False)
         self.axes_original = df_tmp[[pc for pc in self.iter_shapemodes(self.config)]].copy()
         self.axes = self.remove_extreme_points(self.axes_original, self.removal_pct)
-        self.meta = df_tmp.loc[self.axes.index, ['structure_name']].copy()
+        self.meta = df_tmp.loc[self.axes.index, cols].copy()
             
     def set_active_axis(self, axis_name, digitize):
         if axis_name not in self.axes.columns:
@@ -144,6 +144,8 @@ class ShapeSpace(ShapeSpaceBasic):
         self.active_bin = None
         
     def set_active_structure(self, structure):
+        if isinstance(structure, str):
+            structure = [structure]
         self.active_structure=structure
 
     def deactive_structure(self):
@@ -154,10 +156,10 @@ class ShapeSpace(ShapeSpaceBasic):
         if self.active_bin is not None:
             df_tmp = df_tmp.loc[df_tmp.bin==self.active_bin]
         if self.active_structure is not None:
-            df_tmp = df_tmp.loc[df_tmp.structure_name==self.active_structure]
+            df_tmp = df_tmp.loc[df_tmp.structure_name.isin(self.active_structure)]
         return df_tmp.index.values.tolist()
     
-    def iter_active_cellids(self, config):
+    def iter_active_cellids(self):
         for CellId in self.get_active_cellids():
             yield CellId
 
@@ -189,8 +191,8 @@ class ShapeSpace(ShapeSpaceBasic):
         if self.active_axis is None:
             raise ValueError("No active axis.")
 
-        index = self.df_shapemode.loc[
-            (self.df_shapemode.shapemode==self.active_axis)&(self.df_shapemode.bin==b)
+        index = self.df_results.loc[
+            (self.df_results.shapemode==self.active_axis)&(self.df_results.bin==b)
         ].index
     
         if len(index) == 0:
@@ -205,11 +207,11 @@ class ShapeSpace(ShapeSpaceBasic):
 
     def get_dna_mesh_of_bin(self, b):
         index = self.get_index_of_bin(b)
-        return self.read_mesh(self.df_shapemode.at[index, 'dnaMeshPath'])
+        return self.read_mesh(self.df_results.at[index, 'dnaMeshPath'])
     
     def get_mem_mesh_of_bin(self, b):
         index = self.get_index_of_bin(b)
-        return self.read_mesh(self.df_shapemode.at[index, 'memMeshPath'])
+        return self.read_mesh(self.df_results.at[index, 'memMeshPath'])
 
     @staticmethod
     def read_mesh(path):
