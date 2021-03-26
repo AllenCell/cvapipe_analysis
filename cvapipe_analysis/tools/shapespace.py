@@ -122,7 +122,7 @@ class ShapeSpace(ShapeSpaceBasic):
         self.meta = df_meta.loc[self.axes.index, ['structure_name']].copy()
 
     def load_shape_space_axes(self):
-        cols = ['structure_name', 'crop_seg', 'crop_raw']
+        cols = ['structure_name', 'crop_seg', 'crop_raw', 'name_dict']
         path_to_shapemode_manifest = self.local_staging/"shapemode/manifest.csv"
         df_tmp = pd.read_csv(path_to_shapemode_manifest, index_col=0, low_memory=False)
         self.axes_original = df_tmp[[pc for pc in self.iter_shapemodes(self.config)]].copy()
@@ -191,8 +191,8 @@ class ShapeSpace(ShapeSpaceBasic):
         if self.active_axis is None:
             raise ValueError("No active axis.")
 
-        index = self.df_shapemode.loc[
-            (self.df_shapemode.shapemode==self.active_axis)&(self.df_shapemode.bin==b)
+        index = self.df_results.loc[
+            (self.df_results.shapemode==self.active_axis)&(self.df_results.bin==b)
         ].index
     
         if len(index) == 0:
@@ -207,11 +207,11 @@ class ShapeSpace(ShapeSpaceBasic):
 
     def get_dna_mesh_of_bin(self, b):
         index = self.get_index_of_bin(b)
-        return self.read_mesh(self.df_shapemode.at[index, 'dnaMeshPath'])
+        return self.read_mesh(self.df_results.at[index, 'dnaMeshPath'])
     
     def get_mem_mesh_of_bin(self, b):
         index = self.get_index_of_bin(b)
-        return self.read_mesh(self.df_shapemode.at[index, 'memMeshPath'])
+        return self.read_mesh(self.df_results.at[index, 'memMeshPath'])
 
     @staticmethod
     def read_mesh(path):
