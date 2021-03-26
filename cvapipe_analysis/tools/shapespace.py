@@ -149,6 +149,9 @@ class ShapeSpace(ShapeSpaceBasic):
     def set_active_structure(self, structure):
         if isinstance(structure, str):
             structure = [structure]
+        for s in structure:
+            if s not in self.meta.structure_name.unique():
+                raise ValueError(f"Structure {s} not found.")
         self.active_structure=structure
 
     def deactive_structure(self):
