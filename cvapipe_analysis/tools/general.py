@@ -109,7 +109,10 @@ class DataProducer(LocalStagingWriter):
             return rel_path_to_output_file
         return None
 
-    # Might not be needed.
+    def load_shapemode_manifest(self):
+        self.df = pd.read_csv(self.abs_path_local_staging/"shapemode/manifest.csv", index_col='CellId')
+        print(f"Dataframe loaded: {self.df.shape}")
+    
     def load_parameterization_manifest(self):
         self.df = pd.read_csv(self.abs_path_local_staging/"parameterization/manifest.csv", index_col='CellId')
         print(f"Dataframe loaded: {self.df.shape}")
