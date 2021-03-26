@@ -204,17 +204,20 @@ class ShapeModeCalculator(general.DataProducer):
             for proj, contours in projections.items():
                 self.plot_maker.animate_contours(contours, f"{shapemode}_{proj}")
 
-    def workflow(self, df):
+    def create_shape_space(self, df):
         self.set_dataframe(df)
         self.calculate_pca()
-        self.sort_shape_modes()
+        self.sort_shape_modes()        
+        self.space = shapespace.ShapeSpace(self.config)
+        self.space.set_shape_space_axes(self.df_trans, self.df)
+        return
+    
+    def workflow(self, df):
+        self.create_shape_space(df)
         self.calculate_feature_importance()
         self.save_feature_importance()
         self.plot_maker.plot_explained_variance(self.pca)
         self.plot_maker.execute(display=False)
-        
-        self.space = shapespace.ShapeSpace(self.config)
-        self.space.set_shape_space_axes(self.df_trans, self.df)
         
         self.compute_shcoeffs_for_all_map_point_shapes()
         self.compute_displacement_vector_relative_to_reference()
