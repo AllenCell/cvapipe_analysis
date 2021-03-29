@@ -7,33 +7,45 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 from pathlib import Path
+from datetime import datetime
 from aicsimageio import AICSImage
-import matplotlib.pyplot as plt
+from contextlib import contextmanager
 
 from cvapipe_analysis.tools import cluster
 from .shapespace import ShapeSpaceBasic, ShapeSpace
 
 def load_config_file():
-    config = yaml.load(open("config.yaml", "r"), Loader=yaml.FullLoader)
+    with open('config.yaml', 'r') as f:
+        config = yaml.load(f, Loader=yaml.FullLoader)    
     return config
+
+def save_config_file(config, abs_path_to_folder):
+    abs_path_to_folder = Path(abs_path_to_folder)
+    with open(abs_path_to_folder/'parameters.yaml', 'w') as f:
+        yaml.dump(config, f)
+    return
 
 def create_workflow_file_from_config():
     config = load_config_file()
     local_staging = config['project']['local_staging']
-    with open("workflow_config.json", "w") as fj:
-        json.dump({"project_local_staging_dir": local_staging}, fj)
+    with open('workflow_config.json', 'w') as fj:
+        json.dump({'project_local_staging_dir': local_staging}, fj)
 
-def read_chunk_of_dataframe(cfg):
+def get_date_time():
+    return datetime.now().strftime("%d/%m/%Y %H:%M:%S")
         
-    # Keep the header
-    skip = cfg['skip']
-    if skip > 0:
-        skip = range(1, skip+1)
-    
-    df = pd.read_csv(cfg['csv'], index_col='CellId', skiprows=skip, nrows=cfg['nrows'])
-    
-    return df
-
+@contextmanager
+def configuration(abs_path_to_folder=None):
+    config = load_config_file()
+    config['log'] = {}
+    try:
+        config['log']['start'] = get_date_time()
+        yield config
+    finally:
+        if abs_path_to_folder is not None:
+            config['log']['end'] = get_date_time()
+            save_config_file(config, abs_path_to_folder)
+        
 class LocalStagingWriter:
     """
     Support class. Should not be instantiated directly.
@@ -157,7 +169,7 @@ class DataProducer(LocalStagingWriter):
                 tqdm(executor.map(self.load_csv_file_as_dataframe, files), total=len(files)),
                 axis=0, ignore_index=True)
         return df
-
+    
     @staticmethod
     def load_csv_file_as_dataframe(fpath):
         df = None
