@@ -39,7 +39,7 @@ class Shapemode(Step):
         
         with general.configuration(self.step_local_staging_dir) as config:
             # Load parameterization dataframe
-            path_to_loaddata_manifest = self.project_local_staging_dir / 'computefeatures/manifest.csv'
+            path_to_loaddata_manifest = self.project_local_staging_dir / 'preprocessing/manifest.csv'
             df = pd.read_csv(path_to_loaddata_manifest, index_col='CellId')
             log.info(f"Manifest: {df.shape}")
             # Make necessary folders
@@ -49,4 +49,5 @@ class Shapemode(Step):
 
             calculator = ShapeModeCalculator(config)
             calculator.workflow(df)
+
         return
