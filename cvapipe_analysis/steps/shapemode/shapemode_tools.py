@@ -185,7 +185,7 @@ class ShapeModeCalculator(general.DataProducer):
         abs_path_avgshape = self.abs_path_local_staging/f"shapemode/avgshape"
         for shapemode, df_sm in self.df_coeffs.groupby('shapemode'):
             self.meshes[shapemode] = {}
-            for alias in self.aliases_with_coeffs_available:
+            for alias in self.aliases:
                 self.meshes[shapemode][alias] = []
                 for _, row in df_sm.iterrows():
                     mesh = self.get_mesh_from_series(row, alias, lrec)
@@ -199,8 +199,9 @@ class ShapeModeCalculator(general.DataProducer):
         return
     
     def generate_and_save_animated_2d_contours(self):
+        swapxy_on_zproj = self.config['pca']['plot']['swapxy_on_zproj']
         for shapemode, meshes in tqdm(self.meshes.items(), total=len(self.meshes)):
-            projections = self.plot_maker.get_2d_contours(meshes)
+            projections = self.plot_maker.get_2d_contours(meshes, swapxy_on_zproj)
             for proj, contours in projections.items():
                 self.plot_maker.animate_contours(contours, f"{shapemode}_{proj}")
 
