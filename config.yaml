@@ -2,8 +2,8 @@ appName: cvapipe_analysis
 
 project:
     # Sufix to append to local_staging
-    local_staging: "/allen/aics/assay-dev/MicroscopyOtherData/Viana/projects/cvapipe_analysis/local_staging_npm1_lcc_cells"
-    overwrite: off
+    local_staging: "/allen/aics/assay-dev/MicroscopyOtherData/Viana/projects/cvapipe_analysis/local_staging_full"
+    overwrite: on
 
 data:
     segmentation:
@@ -15,10 +15,14 @@ data:
             channel: "membrane_segmentation_roof"
             alias: "MEM"
             color: "#F200FF"
-        npm1:
+        structure:
             channel: "struct_segmentation"
-            alias: "NPM1"
+            alias: "STR"
             color: "#000000"
+
+preprocessing:
+    remove_mitotics: on
+    remove_outliers: on
 
 features:
     align:
@@ -26,7 +30,7 @@ features:
         unique: off
     # SHE - Spherical harmonics expansion
     SHE:
-        aliases: ["NUC", "MEM", "NPM1"]
+        aliases: ["NUC", "MEM"]
         # Size of Gaussian kernal used to smooth the
         # images before SHE coefficients calculation
         sigma: 2
@@ -35,9 +39,8 @@ features:
         lmax: 16
 
 pca:
-    remove_outliers: off
     # Specify the a set of aliases here
-    aliases: ["NUC", "MEM", "NPM1"]
+    aliases: ["NUC", "MEM"]
     # Sort shape modes by volume of
     sorter: "MEM"
     # Number of principal components to be calculated

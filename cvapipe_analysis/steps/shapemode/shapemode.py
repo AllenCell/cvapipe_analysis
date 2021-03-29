@@ -11,15 +11,8 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 
-from cvapipe_analysis.tools import general, cluster, shapespace
+from cvapipe_analysis.tools import general
 from .shapemode_tools import ShapeModeCalculator
-
-from .outliers import outliers_removal
-from .dim_reduction import pca_analysis
-from .avgshape import digitize_shape_mode
-from .avgshape import get_shcoeffs_from_pc_coords
-from .avgshape import animate_shape_modes_and_save_meshes
-from .plotting import paired_correlation, dataset_summary_table
 
 ###############################################################################
 
@@ -41,8 +34,6 @@ class Shapemode(Step):
         self,
         debug: bool = False,
         overwrite: bool = False,
-        remove_mitotics: bool = True,
-        no_structural_outliers: bool = False,
         **kwargs
     ):
         

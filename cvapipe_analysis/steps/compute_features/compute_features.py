@@ -36,38 +36,36 @@ class ComputeFeatures(Step):
         **kwargs
     ):
         
-        # Load configuration file
-        config = general.load_config_file()
+        with general.configuration(self.step_local_staging_dir) as config:
         
-        # Load parameterization dataframe
-        path_to_loaddata_manifest = self.project_local_staging_dir / 'loaddata/manifest.csv'
-        df = pd.read_csv(path_to_loaddata_manifest, index_col='CellId')
-        log.info(f"Manifest: {df.shape}")
-        
-        # Make necessary folders
-        save_dir = self.step_local_staging_dir / 'cell_features'
-        save_dir.mkdir(parents=True, exist_ok=True)
-                
-        if distribute:
-            nworkers = config['resources']['nworkers']            
-            distributor = cluster.FeaturesDistributor(df, nworkers)
-            distributor.distribute(config, log)
-            log.info(f"Multiple jobs have been launched. Please come back when the calculation is complete.")            
-            return None
-        
-        calculator = FeatureCalculator(config)
-        with concurrent.futures.ProcessPoolExecutor(cluster.get_ncores()) as executor:
-            executor.map(calculator.execute, [row for _,row in df.iterrows()])
+            # Load parameterization dataframe
+            path_to_loaddata_manifest = self.project_local_staging_dir / 'loaddata/manifest.csv'
+            df = pd.read_csv(path_to_loaddata_manifest, index_col='CellId')
+            log.info(f"Manifest: {df.shape}")
 
-        log.info(f"Loading results...")
-        
-        df_results = calculator.load_results_in_single_dataframe()
-        df_results = df_results.set_index('CellId')
-        
-        log.info(f"Saving manifest...")
+            # Make necessary folders
+            save_dir = self.step_local_staging_dir / 'cell_features'
+            save_dir.mkdir(parents=True, exist_ok=True)
 
-        self.manifest = df.merge(df_results, left_index=True, right_index=True)
-        manifest_path = self.step_local_staging_dir / 'manifest.csv'
-        self.manifest.to_csv(manifest_path)
+            if distribute:
+                nworkers = config['resources']['nworkers']            
+                distributor = cluster.FeaturesDistributor(df, nworkers)
+                distributor.distribute(config, log)
+                log.info(f"Multiple jobs have been launched. Please come back when the calculation is complete.")            
+                return None
+
+            calculator = FeatureCalculator(config)
+            with concurrent.futures.ProcessPoolExecutor(cluster.get_ncores()) as executor:
+                executor.map(calculator.execute, [row for _,row in df.iterrows()])
+
+            log.info(f"Loading results...")
+
+            df_results = calculator.load_results_in_single_dataframe()
+            df_results = df_results.set_index('CellId')
+        
+            log.info(f"Saving manifest...")
+            self.manifest = df.merge(df_results, left_index=True, right_index=True)
+            manifest_path = self.step_local_staging_dir / 'manifest.csv'
+            self.manifest.to_csv(manifest_path)
 
         return manifest_path
