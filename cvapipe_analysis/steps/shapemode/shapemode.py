@@ -46,20 +46,16 @@ class Shapemode(Step):
         **kwargs
     ):
         
-        # Load configuration file
-        config = general.load_config_file()
-        
-        # Load parameterization dataframe
-        path_to_loaddata_manifest = self.project_local_staging_dir / 'computefeatures/manifest.csv'
-        df = pd.read_csv(path_to_loaddata_manifest, index_col='CellId')
-        log.info(f"Manifest: {df.shape}")
-        
-        # Make necessary folders
-        for folder in ['pca', 'avgshape']:
-            save_dir = self.step_local_staging_dir / folder
-            save_dir.mkdir(parents=True, exist_ok=True)
-                        
-        calculator = ShapeModeCalculator(config)
-        calculator.workflow(df)
+        with general.configuration(self.step_local_staging_dir) as config:
+            # Load parameterization dataframe
+            path_to_loaddata_manifest = self.project_local_staging_dir / 'computefeatures/manifest.csv'
+            df = pd.read_csv(path_to_loaddata_manifest, index_col='CellId')
+            log.info(f"Manifest: {df.shape}")
+            # Make necessary folders
+            for folder in ['pca', 'avgshape']:
+                save_dir = self.step_local_staging_dir / folder
+                save_dir.mkdir(parents=True, exist_ok=True)
 
-        return None
+            calculator = ShapeModeCalculator(config)
+            calculator.workflow(df)
+        return
