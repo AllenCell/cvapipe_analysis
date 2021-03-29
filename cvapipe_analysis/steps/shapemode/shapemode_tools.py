@@ -205,6 +205,10 @@ class ShapeModeCalculator(general.DataProducer):
             for proj, contours in projections.items():
                 self.plot_maker.animate_contours(contours, f"{shapemode}_{proj}")
 
+    def combine_animated_gifs(self):
+        shapemodes = [mode for mode in self.space.iter_shapemodes(self.config)]
+        self.plot_maker.combine_and_save_animated_gifs(shapemodes)
+
     def create_shape_space(self, df):
         self.set_dataframe(df)
         self.calculate_pca()
@@ -219,12 +223,13 @@ class ShapeModeCalculator(general.DataProducer):
         self.save_feature_importance()
         self.plot_maker.plot_explained_variance(self.pca)
         self.plot_maker.execute(display=False)
-        
+
         self.compute_shcoeffs_for_all_map_point_shapes()
         self.compute_displacement_vector_relative_to_reference()
         print("Generating 3D meshes. This might take some time...")
         self.recontruct_meshes()
         self.generate_and_save_animated_2d_contours()
+        self.combine_animated_gifs()
         return
     
     @staticmethod

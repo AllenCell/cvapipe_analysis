@@ -6,11 +6,12 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 from pathlib import Path
+from typing import Optional
 from functools import reduce
 import matplotlib.pyplot as plt
 from matplotlib import animation
-from typing import Optional
 from scipy import cluster as spcluster
+from aicsimageio import AICSImage, writers
 from vtk.util.numpy_support import vtk_to_numpy as vtk2np
 from vtk.util.numpy_support import numpy_to_vtk as np2vtk
 
@@ -349,6 +350,40 @@ class ShapeModePlotMaker(PlotMaker):
         plt.close("all")
         return
 
+    def load_animated_gif(self, shapemode, proj):
+        fname = self.abs_path_local_staging
+        fname = fname / f"{self.subfolder}/{shapemode}_{proj}.gif"
+        image = AICSImage(fname).data.squeeze()
+        return image
+    
+    def combine_and_save_animated_gifs(self, shapemodes):
+        stack = []
+        for shapemode in tqdm(shapemodes):
+            imx = self.load_animated_gif(shapemode, "x")
+            imy = self.load_animated_gif(shapemode, "y")
+            imz = self.load_animated_gif(shapemode, "z")
+            if imx.ndim == 3:
+                imx, imy, imz = imx.T, imy.T, imz.T
+            img = np.c_[imz, imy, imx]
+            img = np.swapaxes(img, 0, 1)
+            stack.append(img)
+        stack = np.array(stack)
+        # Here we deal with RGBA vs grayscale images
+        if stack.ndim == 4:
+            stack = np.expand_dims(stack, axis=1)
+            stack = np.repeat(stack, 4, axis=1)
+        stack = np.concatenate(stack[:], axis=-2)[:3]
+        stack = np.concatenate([stack[:, :-1], stack[:, ::-1]], axis=1)
+        # Reduce the empty space between images
+        gaps = stack.min(axis=(0, 1, 3)) != 255
+        for r in range(5):
+            gaps[1:-1] = gaps[2:] + gaps[:-2]
+        stack = stack[:, :, gaps>0,:]
+        fname = self.abs_path_local_staging / f"{self.subfolder}/combined.tif"
+        with writers.ome_tiff_writer.OmeTiffWriter(fname, overwrite_file=True) as writer:
+            writer.save(stack, dimension_order='CZYX')
+        return
+    
     @staticmethod
     def find_plane_mesh_intersection(mesh, proj):
 
