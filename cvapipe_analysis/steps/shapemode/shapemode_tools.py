@@ -74,7 +74,6 @@ class ShapeModeCalculator(general.DataProducer):
             df_dimred[pc_name] = pc
             df_dimred[pc_name.replace("_PC", "_aPC")] = apc
             df_dimred[pc_name.replace("_PC", "_cPC")] = cpc
-        # Store results as a dataframe
         df_dimred["features"] = self.features
         df_dimred = pd.DataFrame(df_dimred)
         df_dimred = df_dimred.set_index("features", drop=True)
@@ -86,9 +85,8 @@ class ShapeModeCalculator(general.DataProducer):
         with open(abs_path_txt_file, "w") as flog:
             for pc in range(self.npcs):
                 print(f"\nExplained variance PC{pc+1}={100*self.pca.explained_variance_ratio_[pc]:.1f}%", file=flog)
-                # _PC - raw loading
-                # _aPC - absolute loading
-                # _cPC - normalized cummulative loading
+                '''_PC: raw loading, _aPC: absolute loading and
+                _cPC: normalized cummulative loading'''
                 pc_name = self.df_trans.columns[pc]
                 df_sorted = self.df_dimred.sort_values(
                     by=[pc_name.replace("_PC", "_aPC")], ascending=False

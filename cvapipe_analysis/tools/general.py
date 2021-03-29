@@ -67,7 +67,8 @@ class LocalStagingWriter:
 
 class LocalStagingReader(LocalStagingWriter):
     """
-    DESC
+    Class that provides functionalities to read results
+    from local_staging.
     
     WARNING: All classes are assumed to know the whole
     structure of directories inside the local_staging
@@ -91,7 +92,8 @@ class LocalStagingReader(LocalStagingWriter):
         
 class DataProducer(LocalStagingWriter):
     """
-    DESC
+    Functionalities for steps that produce results
+    that should be saved in the local_staging folder.
     
     WARNING: All classes are assumed to know the whole
     structure of directories inside the local_staging
