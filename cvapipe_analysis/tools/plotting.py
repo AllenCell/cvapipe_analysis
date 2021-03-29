@@ -287,10 +287,11 @@ class ShapeModePlotMaker(PlotMaker):
         
     def animate_contours(self, contours, prefix):
         nbins = len(self.config['pca']['map_points'])
-        hmin, hmax, vmin, vmax = self.config['pca']['plot_limits']
+        hmin, hmax, vmin, vmax = self.config['pca']['plot']['limits']
         offset = 0.05*(hmax-hmin)
 
         fig, ax = plt.subplots(1, 1, figsize=(3, 3))
+        plt.tight_layout()
         plt.close()
         ax.set_xlim(hmin-offset, hmax+offset)
         ax.set_ylim(vmin-offset, vmax+offset)
@@ -402,16 +403,20 @@ class ShapeModePlotMaker(PlotMaker):
         return np.array(coords)
 
     @staticmethod
-    def get_2d_contours(named_meshes):
+    def get_2d_contours(named_meshes, swapxy_on_zproj=False):
         contours = {}
-        for dim, proj in zip(['z', 'y', 'x'], [[0, 1], [0, 2], [1, 2]]):
+        projs = [[0, 1], [0, 2], [1, 2]]
+        if swapxy_on_zproj:
+            projs = [[0, 1], [1, 2], [0, 2]]
+        for dim, proj in zip(['z', 'y', 'x'], projs):
             contours[dim] = {}
             for alias, meshes in named_meshes.items():
                 contours[dim][alias] = []
                 for mesh in meshes:
-                    contours[dim][alias].append(
-                        ShapeModePlotMaker.find_plane_mesh_intersection(mesh, proj)
-                    )
+                    coords = ShapeModePlotMaker.find_plane_mesh_intersection(mesh, proj)
+                    if swapxy_on_zproj and dim=='z':
+                        coords = coords[:, ::-1]
+                    contours[dim][alias].append(coords)
         return contours
     
     def workflow(self):
