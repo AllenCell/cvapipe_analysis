@@ -82,7 +82,9 @@ class Preprocessing(Step):
                 df = df.drop(columns=['Outlier'])
                 log.info(f"Shape of data without outliers: {df.shape}")
             
+            log.info(f"Saving manifest...")
             self.manifest = df
             manifest_path = self.step_local_staging_dir / 'manifest.csv'
             self.manifest.to_csv(manifest_path)
+
             return manifest_path
