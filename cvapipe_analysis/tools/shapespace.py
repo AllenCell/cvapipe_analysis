@@ -140,7 +140,7 @@ class ShapeSpace(ShapeSpaceBasic):
     def set_active_bin(self, b):
         nbins = len(self.config['pca']['map_points'])
         if (b<1) or (b>nbins):
-            raise ValueError(f"Bin number must be in the range [1,{nbins}]").
+            raise ValueError(f"Bin number must be in the range [1,{nbins}]")
         self.active_bin = b
 
     def deactive_bin(self):
