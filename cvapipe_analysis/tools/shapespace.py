@@ -174,19 +174,14 @@ class ShapeSpace(ShapeSpaceBasic):
             
     def digitize_active_axis(self):
         if self.active_axis is None:
-            raise ValueError("No active axis.")
-            
+            raise ValueError("No active axis.")    
         values = self.axes[self.active_axis].values.astype(np.float32)
         values -= values.mean()
         self.active_scale = values.std()
         values /= self.active_scale
 
-        LINF = self.config['pca']['map_points'][0]
-        LSUP = self.config['pca']['map_points'][-1]
-        nbins = len(self.config['pca']['map_points'])
-        binw = (LSUP-LINF)/(2*(nbins-1))
-
-        bin_centers = np.linspace(LINF, LSUP, nbins)
+        bin_centers = self.config['pca']['map_points']
+        binw = np.diff(bin_centers).mean()
         bin_edges = np.unique([(b-binw, b+binw) for b in bin_centers])
         bin_edges[0] = -np.inf
         bin_edges[-1] = np.inf
