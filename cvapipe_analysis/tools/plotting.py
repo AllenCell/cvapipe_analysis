@@ -10,6 +10,7 @@ from typing import Optional
 from functools import reduce
 import matplotlib.pyplot as plt
 from matplotlib import animation
+from scipy import stats as spstats
 from scipy import cluster as spcluster
 from aicsimageio import AICSImage, writers
 from vtk.util.numpy_support import vtk_to_numpy as vtk2np
@@ -313,7 +314,7 @@ class ShapeModePlotMaker(PlotMaker):
         plt.tight_layout()
         self.figs.append((fig, "explained_variance"))
         return
-
+    
     def animate_contours(self, contours, prefix):
         nbins = len(self.config["pca"]["map_points"])
         hmin, hmax, vmin, vmax = self.config["pca"]["plot"]["limits"]
@@ -502,5 +503,91 @@ class ShapeModePlotMaker(PlotMaker):
                     contours[dim][alias].append(coords)
         return contours
 
+    def plot_paired_correlations(self, df, off=0):
+        npts = df.shape[0]
+        cmap = plt.cm.get_cmap("tab10")
+        prange = []
+        for f in df.columns:
+            prange.append(np.percentile(df[f].values, [off, 100 - off]))
+        # Create a grid of nfxnf
+        nf = len(df.columns)
+        fig, axs = plt.subplots(nf, nf, figsize=(2*nf, 2*nf), sharex="col",
+            gridspec_kw={"hspace": 0.1, "wspace": 0.1},
+        )
+        for f1id, f1 in enumerate(df.columns):
+            yrange = []
+            for f2id, f2 in enumerate(df.columns):
+                ax = axs[f1id, f2id]
+                y = df[f1].values
+                x = df[f2].values
+                valids = np.where((
+                    (y > prange[f1id][0])&
+                    (y < prange[f1id][1])&
+                    (x > prange[f2id][0])&
+                    (x < prange[f2id][1])))
+                if f2id < f1id:
+                    xmin = x[valids].min()
+                    xmax = x[valids].max()
+                    ymin = y[valids].min()
+                    ymax = y[valids].max()
+                    yrange.append([ymin, ymax])
+                    ax.plot(x[valids], y[valids], ".", markersize=2, color="black", alpha=0.8)
+                    ax.plot([xmin, xmax], [xmin, xmax], "--")
+                    if f2id:
+                        plt.setp(ax.get_yticklabels(), visible=False)
+                        ax.tick_params(axis="y", which="both", length=0.0)
+                    if f1id < nf - 1:
+                        ax.tick_params(axis="x", which="both", length=0.0)
+                # Add annotations on upper triangle
+                elif f2id > f1id:
+                    plt.setp(ax.get_xticklabels(), visible=False)
+                    plt.setp(ax.get_yticklabels(), visible=False)
+                    ax.tick_params(axis="x", which="both", length=0.0)
+                    ax.tick_params(axis="y", which="both", length=0.0)
+                    pearson, p_pvalue = spstats.pearsonr(x, y)
+                    spearman, s_pvalue = spstats.spearmanr(x, y)
+                    ax.text(0.05, 0.8, f"Pearson: {pearson:.2f}", size=10, ha="left",
+                            transform=ax.transAxes,
+                    )
+                    ax.text(0.05, 0.6, f"P-value: {p_pvalue:.1E}", size=10, ha="left",
+                            transform=ax.transAxes,
+                    )
+                    ax.text(0.05, 0.4, f"Spearman: {spearman:.2f}", size=10, ha="left",
+                        transform=ax.transAxes,
+                    )
+                    ax.text(0.05, 0.2, f"P-value: {s_pvalue:.1E}", size=10, ha="left",
+                        transform=ax.transAxes,
+                    )
+                # Single variable distribution at diagonal
+                else:
+                    ax.set_frame_on(False)
+                    plt.setp(ax.get_yticklabels(), visible=False)
+                    ax.tick_params(axis="y", which="both", length=0.0)
+                    ax.hist(x[valids], bins=16, density=True, histtype="stepfilled",
+                            color="white", edgecolor="black", label="Complete",
+                    )
+                    ax.hist(x[valids], bins=16, density=True, histtype="stepfilled",
+                            color=cmap(0), alpha=0.2, label="Incomplete",
+                    )
+                if f1id == nf - 1:
+                    ax.set_xlabel(f2, fontsize=7)
+                if not f2id and f1id:
+                    ax.set_ylabel(f1, fontsize=7)
+            if yrange:
+                ymin = np.min([ymin for (ymin, ymax) in yrange])
+                ymax = np.max([ymax for (ymin, ymax) in yrange])
+                for f2id, f2 in enumerate(df.columns):
+                    ax = axs[f1id, f2id]
+                    if f2id < f1id:
+                        ax.set_ylim(ymin, ymax)
+
+        # Global annotation
+        fig.add_subplot(111, frameon=False)
+        plt.tick_params(labelcolor="none", top=False, bottom=False, left=False, right=False)
+        plt.title(f"Total number of points: {npts}", fontsize=24)
+
+        self.figs.append((fig, "paired_correlations"))
+        return
+    
     def workflow(self):
         return
