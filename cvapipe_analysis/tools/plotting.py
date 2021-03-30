@@ -503,6 +503,30 @@ class ShapeModePlotMaker(PlotMaker):
                     contours[dim][alias].append(coords)
         return contours
 
+    @staticmethod
+    def render_and_save_meshes(meshes, path):
+        '''This requires a X server to be available'''
+        renderer = vtk.vtkRenderer()
+        renderWindow = vtk.vtkRenderWindow()
+        renderWindow.SetOffScreenRendering(1)
+        renderWindow.AddRenderer(renderer)
+        renderer.SetBackground(1, 1, 1)
+        for mesh in meshes:
+            mapper = vtk.vtkPolyDataMapper()
+            mapper.SetInputData(mesh)
+            actor = vtk.vtkActor()
+            actor.SetMapper(mapper)
+            renderer.AddActor(actor)
+        renderWindow.Render()
+        windowToImageFilter = vtk.vtkWindowToImageFilter()
+        windowToImageFilter.SetInput(renderWindow)
+        windowToImageFilter.Update()
+        writer = vtk.vtkPNGWriter()
+        writer.SetFileName(path)
+        writer.SetInputConnection(windowToImageFilter.GetOutputPort())
+        writer.Write()
+        return
+    
     def plot_paired_correlations(self, df, off=0):
         npts = df.shape[0]
         cmap = plt.cm.get_cmap("tab10")
