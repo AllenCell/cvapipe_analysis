@@ -135,6 +135,7 @@ class ShapeModeCalculator(general.DataProducer):
         return df_inv
 
     def compute_shcoeffs_for_all_map_point_shapes(self):
+        df_coeffs = []
         with concurrent.futures.ProcessPoolExecutor(cluster.get_ncores()) as executor:
             df_coeffs = pd.concat(executor.map(
                 self.get_shcoeffs_for_map_point_shapes, [s for s in self.space.iter_shapemodes(self.config)]
@@ -158,7 +159,10 @@ class ShapeModeCalculator(general.DataProducer):
                 self.space.set_active_axis(shapemode, digitize=True)
                 for b, df_bin in df_shapemode.groupby('bin'):
                     self.space.set_active_bin(b)
-                    for CellId in self.space.iter_active_cellids():
+                    CellIds = self.space.get_active_cellids()
+                    if not len(CellIds):
+                        raise ValueError(f"No cells found at bin {b}.")
+                    for CellId in CellIds:
                         suffixes = [f'position_{u}_centroid_lcc' for u in ['x', 'y', 'z']]
                         ro = [self.df.at[CellId, f'{mov_alias}_{s}'] for s in suffixes]
                         cm = [self.df.at[CellId, f'{ref_alias}_{s}'] for s in suffixes]
@@ -220,6 +224,7 @@ class ShapeModeCalculator(general.DataProducer):
         self.calculate_feature_importance()
         self.save_feature_importance()
         self.plot_maker.plot_explained_variance(self.pca)
+        self.plot_maker.plot_paired_correlations(self.space.axes)
         self.plot_maker.execute(display=False)
 
         self.compute_shcoeffs_for_all_map_point_shapes()
