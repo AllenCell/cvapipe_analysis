@@ -5,21 +5,21 @@ import pandas as pd
 from tqdm import tqdm
 from pathlib import Path
 
-from cvapipe_analysis.tools import general, cluster
+from cvapipe_analysis.tools import io
 
-class DataLoader(general.DataProducer):
+class DataLoader(io.LocalStagingIO):
     """
     Functionalities for downloading the variance
     dataset used in the paper or load a custom
     dataset specified as an input csv file.
-    
+
     WARNING: All classes are assumed to know the whole
     structure of directories inside the local_staging
     folder and this is hard coded. Therefore, classes
     may break if you move saved files from the places
     their are saved.
     """
-    
+
     package_name = "aics/hipsc_single_cell_image_dataset"
     registry = "s3://allencell"
     subfolder = 'loaddata'
@@ -33,7 +33,7 @@ class DataLoader(general.DataProducer):
 
     def __init__(self, control):
         super().__init__(control)
-        
+
     def load(self, parameters):
         if 'csv' in parameters:
             return self.load_data_from_csv(parameters)
@@ -70,17 +70,18 @@ class DataLoader(general.DataProducer):
                 df.loc[index, col] = dst
         return df
 
+    # TODO: Merge this upstream LocalStagingIO.load_csv_file_as_dataframe?
     def load_data_from_csv(self, parameters):
         df = pd.read_csv(parameters['csv'])
         self.is_dataframe_valid(df)
         df = df[self.required_df_columns].set_index('CellId', drop=True)
         self.create_symlinks(df)
         return df
-    
+
     @staticmethod
     def get_interphase_test_set(df):
         df_test = pd.DataFrame([])
-        df = df.loc[df.cell_stage=='M0']# M0=interphase
+        df = df.loc[df.cell_stage=='M0']# M0 = interphase
         for struct, df_struct in df.groupby('structure_name'):
             df_test = df_test.append(df_struct.sample(n=12, random_state=666, replace=False))
         return df_test.copy()

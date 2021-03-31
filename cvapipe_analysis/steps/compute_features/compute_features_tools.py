@@ -9,9 +9,9 @@ from aicsshparam import shtools, shparam
 from skimage import measure as skmeasure
 from skimage import morphology as skmorpho
 
-from cvapipe_analysis.tools import general, controller
+from cvapipe_analysis.tools import io, general, controller
 
-class FeatureCalculator(general.DataProducer):
+class FeatureCalculator(io.DataProducer):
     """
     Class for feature extraction.
 
@@ -22,13 +22,34 @@ class FeatureCalculator(general.DataProducer):
     places their are saved.
     """
 
-    subfolder = 'computefeatures/cell_features'
-
     def __init__(self, control):
         super().__init__(control)
+        self.subfolder = 'computefeatures/cell_features'
 
+    def workflow(self):
+        device = io.LocalStagingIO(self.control)
+        segs = device.get_single_cell_images(self.row, 'crop_seg')
+
+        features = {}
+        align_ref_ch = self.control.get_alignment_reference_channel()
+        for alias, channel in self.control.get_data_seg_alias_channel_dict().items():
+            features_alias = self.get_features_from_binary_image(
+                input_image=segs[channel],
+                input_reference_image=segs[align_ref_ch],
+                compute_shcoeffs=self.control.should_calculate_shcoeffs(alias)
+            )
+            features_alias = dict(
+                (f"{alias}_{k}", v) for (k, v) in features_alias.items()
+            )
+            features.update(features_alias)
+        self.features = pd.Series(features, name=self.row.name)
+        return
+
+    def get_output_file_name(self):
+        return f"{self.row.name}.csv"
+    
     def save(self):
-        save_as = self.get_rel_output_file_path_as_str(self.row)
+        save_as = self.get_output_file_path()
         df = pd.DataFrame([self.features])
         df.index = df.index.rename('CellId')
         df.to_csv(save_as)
@@ -114,30 +135,6 @@ class FeatureCalculator(general.DataProducer):
         features.update(coeffs)
         features.update(transform)
         return features
-
-    def workflow(self, row):
-        self.row = row
-        reader = general.LocalStagingReader(self.control, row)
-        segs = reader.get_single_cell_images('crop_seg')
-
-        features = {}
-        align_ref_ch = self.control.get_alignment_reference_channel()
-        for alias, channel in self.control.get_data_seg_alias_channel_dict().items():
-            features_alias = self.get_features_from_binary_image(
-                input_image=segs[channel],
-                input_reference_image=segs[align_ref_ch],
-                compute_shcoeffs=self.control.should_calculate_shcoeffs(alias)
-            )
-            features_alias = dict(
-                (f"{alias}_{k}", v) for (k, v) in features_alias.items()
-            )
-            features.update(features_alias)
-        self.features = pd.Series(features, name=self.row.name)
-        return
-
-    @staticmethod
-    def get_output_file_name(row):
-        return f"{row.name}.csv"
 
     @staticmethod
     def get_surface_area(input_img):

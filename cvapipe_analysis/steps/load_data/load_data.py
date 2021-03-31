@@ -24,7 +24,7 @@ class LoadData(Step):
     def run(self, **kwargs):
 
         with general.configuration(self.step_local_staging_dir) as control:
-        
+
             loader = DataLoader(control)
             df = loader.load(kwargs)
 

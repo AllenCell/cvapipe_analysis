@@ -8,7 +8,7 @@ from typing import Dict, List, Optional, Union
 
 import concurrent
 import pandas as pd
-from cvapipe_analysis.tools import general, cluster
+from cvapipe_analysis.tools import io, general, cluster
 from .compute_features_tools import FeatureCalculator
 
 log = logging.getLogger(__name__)
@@ -26,13 +26,11 @@ class ComputeFeatures(Step):
 
         with general.configuration(self.step_local_staging_dir) as control:
 
-            # Load parameterization dataframe
-            path_to_loaddata_manifest = self.project_local_staging_dir / 'loaddata/manifest.csv'
-            df = pd.read_csv(path_to_loaddata_manifest, index_col='CellId')
+            device = io.LocalStagingIO(control)
+            df = device.load_step_manifest("loaddata")
             log.info(f"Manifest: {df.shape}")
 
-            # Make necessary folders
-            save_dir = self.step_local_staging_dir / 'cell_features'
+            save_dir = self.step_local_staging_dir/"cell_features"
             save_dir.mkdir(parents=True, exist_ok=True)
 
             if distribute:
