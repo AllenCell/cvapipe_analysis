@@ -2,21 +2,21 @@ appName: cvapipe_analysis
 
 project:
     # Sufix to append to local_staging
-    local_staging: "/allen/aics/assay-dev/MicroscopyOtherData/Viana/projects/cvapipe_analysis/local_staging_full"
+    local_staging: "/allen/aics/assay-dev/MicroscopyOtherData/Viana/projects/cvapipe_analysis/local_staging_yeast_linked"
     overwrite: on
 
 data:
     segmentation:
         nucleus:
-            channel: "dna_segmentation"
+            channel: "nuc"
             alias: "NUC"
             color: "#3AADA7"
         cell:
-            channel: "membrane_segmentation_roof"
+            channel: "mem"
             alias: "MEM"
             color: "#F200FF"
         structure:
-            channel: "struct_segmentation"
+            channel: "structure"
             alias: "STR"
             color: "#000000"
 
@@ -25,9 +25,10 @@ preprocessing:
     remove_outliers: on
 
 features:
-    align:
-        reference: "cell"
+    alignment:
+        align: off
         unique: off
+        reference: "nucleus"
     # SHE - Spherical harmonics expansion
     SHE:
         aliases: ["NUC", "MEM"]
@@ -38,19 +39,21 @@ features:
         # and nuclear shape
         lmax: 16
 
-pca:
+shapespace:
     # Specify the a set of aliases here
     aliases: ["NUC", "MEM"]
     # Sort shape modes by volume of
     sorter: "MEM"
-    # Number of principal components to be calculated
-    number_of_pcs: 8
     # Percentage of exteme points to be removed
     removal_pct: 1
+    # Number of principal components to be calculated
+    number_of_shape_modes: 8
     # Map points
     map_points: [-2, -1.5, -1.0, -0.5, 0.0, 0.5, 1.0, 1.5, 2.0]
-    # limits of x and y axies in the animated GIFs
-    plot_limits: [-150, 150, -80, 80]
+    plot:
+        swapxy_on_zproj: off
+        # limits of x and y axies in the animated GIFs
+        limits: [-150, 150, -80, 80]
     
 parameterization:
     # List of images and their channels that should be
@@ -106,10 +109,10 @@ structures:
         "CTNNB1": ["adherens junctions", "#CB1CCC"]
         "PXN": ["matrix adhesions", "#77207C"]
 
-resources:
+distribute:
     # In case a (slurm) cluster is available
     cores: 30
-    nworkers: 32
+    number_of_workers: 32
     memory: "8GB"
     queue: "aics_cpu_general"
     walltime: "9-24:00:00"

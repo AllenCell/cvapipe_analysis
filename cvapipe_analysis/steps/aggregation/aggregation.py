@@ -68,6 +68,11 @@ class Aggregation(Step):
                 nworkers = config['resources']['nworkers']            
                 distributor = cluster.AggregationDistributor(df_agg, nworkers)
                 distributor.distribute(config, log)
+                '''Setting chunk size to 1 here so that each job has to generate
+                a single file. Otherwise Slurm crashes for reasons that I don't
+                yet know. It seems to me that aggregation_tools.py is leaking
+                memory. To be investigated.'''
+                distributor.set_chunk_size(1)
 
                 log.info(f"Multiple jobs have been launched. Please come back when the calculation is complete.")            
                 return None

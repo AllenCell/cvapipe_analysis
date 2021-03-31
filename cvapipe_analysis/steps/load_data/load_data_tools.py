@@ -31,8 +31,8 @@ class DataLoader(general.DataProducer):
         'name_dict'
     ]
 
-    def __init__(self, config):
-        super().__init__(config)
+    def __init__(self, control):
+        super().__init__(control)
         
     def load(self, parameters):
         if 'csv' in parameters:
@@ -45,7 +45,7 @@ class DataLoader(general.DataProducer):
         if test:
             print('Downloading test dataset with 12 interphase cell images per structure.')
             df_meta = self.get_interphase_test_set(df_meta)
-        path = self.abs_path_local_staging/self.subfolder
+        path = self.control.get_staging()/self.subfolder
         for i, row in df_meta.iterrows():
             pkg[row["crop_raw"]].fetch(path/row["crop_raw"])
             pkg[row["crop_seg"]].fetch(path/row["crop_seg"])
@@ -59,7 +59,7 @@ class DataLoader(general.DataProducer):
 
     def create_symlinks(self, df):
         for col in ['crop_raw', 'crop_seg']:
-            abs_path_data_folder = self.abs_path_local_staging/f"{self.subfolder}"
+            abs_path_data_folder = self.control.get_staging()/f"{self.subfolder}"
             (abs_path_data_folder/col).mkdir(parents=True, exist_ok=True)
         for index, row in tqdm(df.iterrows(), total=len(df)):
             idx = str(uuid.uuid4())[:8]
