@@ -139,7 +139,7 @@ class ShapeModeCalculator(io.DataProducer):
 
     def sort_shape_modes(self):
         ranker = self.control.get_alias_for_sorting_shape_modes()
-        ranker = [f for f in self.df.columns if ranker in f][0]
+        ranker = f"{ranker}_shape_volume"
         for pcid, pc in enumerate(self.df_trans.columns):
             pearson = np.corrcoef(self.df[ranker].values, self.df_trans[pc].values)
             if pearson[0, 1] < 0:
