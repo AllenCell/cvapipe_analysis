@@ -28,16 +28,11 @@ class FeatureCalculator(io.DataProducer):
 
     def workflow(self):
         device = io.LocalStagingIO(self.control)
-        segs = device.get_single_cell_images(self.row, 'crop_seg')
+        self.segs = device.get_single_cell_images(self.row, 'crop_seg')
 
         features = {}
-        align_ref_ch = self.control.get_alignment_reference_channel()
         for alias, channel in self.control.get_data_seg_alias_channel_dict().items():
-            features_alias = self.get_features_from_binary_image(
-                input_image=segs[channel],
-                input_reference_image=segs[align_ref_ch],
-                compute_shcoeffs=self.control.should_calculate_shcoeffs(alias)
-            )
+            features_alias = self.get_features_from_binary_image(alias)
             features_alias = dict(
                 (f"{alias}_{k}", v) for (k, v) in features_alias.items()
             )
@@ -55,8 +50,10 @@ class FeatureCalculator(io.DataProducer):
         df.to_csv(save_as)
         return save_as
 
-    def get_features_from_binary_image(self, input_image, input_reference_image, compute_shcoeffs=True):
+    def get_features_from_binary_image(self, alias):
         features = {}
+        ch = self.control.get_channel_from_alias(alias)
+        input_image = self.segs[ch]
         input_image = (input_image>0).astype(np.uint8)
         input_image_lcc = skmeasure.label(input_image)
         # Number of connected components
@@ -86,13 +83,14 @@ class FeatureCalculator(io.DataProducer):
                     features[f'position_{uname}_centroid{suffix}'] = np.nan
                 features[f'roundness_surface_area{suffix}'] = np.nan
 
-        if not compute_shcoeffs:
+        if not self.control.should_calculate_shcoeffs(alias):
             return features
 
         angle = np.nan
-        if input_reference_image is not None:
-            # Get alignment angle based on the reference image. Variance
-            # paper uses make_unique = False
+        if self.control.run_alignment():
+            input_reference_image = self.control.get_alignment_reference_alias()
+            if input_reference_image is None:
+                raise ValueError("Please specify a reference for alignment.")
             input_ref_image_aligned, angle = shtools.align_image_2d(
                 image=input_reference_image,
                 make_unique=self.control.make_alignment_unique()
