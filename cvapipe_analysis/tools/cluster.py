@@ -10,7 +10,6 @@ from pathlib import Path
 from typing import NamedTuple, Optional, Union, List, Dict
 
 import cvapipe_analysis
-from cvapipe_analysis.tools import shapespace
 
 class Distributor:
     """
