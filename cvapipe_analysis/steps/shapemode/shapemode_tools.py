@@ -11,7 +11,7 @@ from typing import Dict, List, Optional, Union
 from vtk.util.numpy_support import numpy_to_vtk as np2vtk
 from vtk.util.numpy_support import vtk_to_numpy as vtk2np
 
-from cvapipe_analysis.tools import io, cluster, shapespace, plotting
+from cvapipe_analysis.tools import io, cluster, plotting
 
 class ShapeModeCalculator(io.DataProducer):
     """
@@ -67,7 +67,7 @@ class ShapeModeCalculator(io.DataProducer):
         
     def save(self):
         return self.get_output_file_name()
-        
+
     def set_dataframe(self, df):
         self.df = df
         self.features = [
@@ -241,7 +241,6 @@ class ShapeModeCalculator(io.DataProducer):
     def create_shape_space(self):
         self.calculate_pca()
         self.sort_shape_modes()
-        self.space = shapespace.ShapeSpace(self.control)
         self.space.set_shape_space_axes(self.df_trans, self.df)
         return
     
