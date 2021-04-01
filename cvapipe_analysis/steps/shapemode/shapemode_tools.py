@@ -6,7 +6,6 @@ from tqdm import tqdm
 from pathlib import Path
 from aicsshparam import shtools
 import matplotlib.pyplot as plt
-from sklearn.decomposition import PCA
 from typing import Dict, List, Optional, Union
 from vtk.util.numpy_support import numpy_to_vtk as np2vtk
 from vtk.util.numpy_support import vtk_to_numpy as vtk2np
@@ -26,8 +25,13 @@ class ShapeModeCalculator(io.DataProducer):
 
     def __init__(self, control):
         super().__init__(control)
-        self.stepfolder = "shapemode/avgshape"
-        self.plot_maker = plotting.ShapeModePlotMaker(control)
+        self.space = shapespace.ShapeSpace(control)
+        self.plot_maker_sm = plotting.ShapeModePlotMaker(control)
+        self.plot_maker_sp = plotting.ShapeSpacePlotMaker(control)
+
+    def set_data(self, df):
+        self.df = df
+        self.features = self.control.get_features_for_pca(df)
 
     def execute(self):
         '''Implements its own execution method bc this step can't
@@ -38,7 +42,6 @@ class ShapeModeCalculator(io.DataProducer):
             try:
                 self.workflow()
                 computed = True
-                path_to_output_file = self.save()
             except Exception as ex:
                 print(f"\n>>>{ex}\n")
                 path_to_output_file = None
@@ -46,122 +49,44 @@ class ShapeModeCalculator(io.DataProducer):
         return path_to_output_file
         
     def workflow(self):
-        self.create_shape_space()
-        self.calculate_feature_importance()
-        self.save_feature_importance()
-        self.plot_maker.plot_explained_variance(self.pca)
-        self.plot_maker.plot_paired_correlations(self.space.axes)
-        self.plot_maker.execute(display=False)
+        self.space.execute(self.df, self.features)
+        self.plot_maker_sp.save_feature_importance(self.space)
+        self.plot_maker_sp.plot_explained_variance(self.space)
+        self.plot_maker_sp.plot_pairwise_correlations(self.space)
+        self.plot_maker_sp.execute(display=False)
 
         self.compute_shcoeffs_for_all_shape_modes()
         self.compute_displacement_vector_relative_to_reference()
         print("Generating 3D meshes. This might take some time...")
         self.recontruct_meshes()
         self.generate_and_save_animated_2d_contours()
-        self.plot_maker.combine_and_save_animated_gifs()
+        self.plot_maker_sm.combine_and_save_animated_gifs()
         return
 
     def get_output_file_name(self):
-        rel_path = f"{self.stepfolder}/combined.tif"
+        rel_path = "shapemode/avgshape/combined.tif"
         return self.control.get_staging()/rel_path
         
     def save(self):
-        return self.get_output_file_name()
+        # For consistency.
+        pass
         
-    def set_dataframe(self, df):
-        self.df = df
-        self.features = [
-            f for f in self.df.columns if any(
-                w in f for w in [
-                    f"{alias}_shcoeffs_L"
-                    for alias in self.control.get_aliases_for_pca()
-                ]
-            )
-        ]
-        
-    def calculate_pca(self):
-        df_pca = self.df[self.features]
-        matrix_of_features = df_pca.values.copy()
-        pca = PCA(self.control.get_number_of_shape_modes())
-        pca = pca.fit(matrix_of_features)
-        matrix_of_features_transform = pca.transform(matrix_of_features)
-        self.df_trans = pd.DataFrame(
-            data=matrix_of_features_transform,
-            columns=[f for f in self.control.iter_shape_modes()])
-        self.df_trans.index = df_pca.index
-        self.pca = pca
-        return
-
-    def calculate_feature_importance(self):
-        df_dimred = {}
-        loading = self.pca.components_.T * np.sqrt(self.pca.explained_variance_)
-        for comp, pc_name in enumerate(self.df_trans.columns):
-            load = loading[:, comp]
-            pc = [v for v in load]
-            apc = [v for v in np.abs(load)]
-            total = np.sum(apc)
-            cpc = [100 * v / total for v in apc]
-            df_dimred[pc_name] = pc
-            df_dimred[pc_name.replace("_PC", "_aPC")] = apc
-            df_dimred[pc_name.replace("_PC", "_cPC")] = cpc
-        df_dimred["features"] = self.features
-        df_dimred = pd.DataFrame(df_dimred)
-        df_dimred = df_dimred.set_index("features", drop=True)
-        self.df_dimred = df_dimred
-        return
-
-    def save_feature_importance(self):
-        path = f"{self.stepfolder}/feature_importance.txt"
-        abs_path_txt_file = self.control.get_staging()/path
-        print(abs_path_txt_file)
-        with open(abs_path_txt_file, "w") as flog:
-            for col, sm in enumerate(self.control.iter_shape_modes()):
-                exp_var = 100*self.pca.explained_variance_ratio_[col]
-                print(f"\nExplained variance {sm}={exp_var:.1f}%", file=flog)
-                '''_PC: raw loading, _aPC: absolute loading and
-                _cPC: normalized cummulative loading'''
-                pc_name = self.df_trans.columns[col]
-                df_sorted = self.df_dimred.sort_values(
-                    by=[pc_name.replace("_PC", "_aPC")], ascending=False
-                )
-                pca_cum_contrib = np.cumsum(
-                    df_sorted[pc_name.replace("_PC", "_aPC")].values/
-                    df_sorted[pc_name.replace("_PC", "_aPC")].sum()
-                )
-                pca_cum_thresh = np.abs(pca_cum_contrib-0.80).argmin()
-                df_sorted = df_sorted.head(n=pca_cum_thresh+1)
-                print(df_sorted[[
-                    pc_name,
-                    pc_name.replace("_PC", "_aPC"),
-                    pc_name.replace("_PC", "_cPC"),]].head(), file=flog
-                )
-        return
-
-    def sort_shape_modes(self):
-        ranker = self.control.get_alias_for_sorting_shape_modes()
-        ranker = f"{ranker}_shape_volume"
-        for pcid, pc in enumerate(self.df_trans.columns):
-            pearson = np.corrcoef(self.df[ranker].values, self.df_trans[pc].values)
-            if pearson[0, 1] < 0:
-                self.df_trans[pc] *= -1
-                self.pca.components_[pcid] *= -1
-
     def get_coordinates_matrix(self, coords, comp):
         '''Coords has shape (N,). Creates a matrix of shape
         (N,M), where M is the reduced dimension. comp is an
         integer from 1 to npcs.'''
         npts = len(coords)
-        matrix = np.zeros((npts, self.pca.n_components), dtype=np.float32)
+        matrix = np.zeros((npts, self.space.pca.n_components), dtype=np.float32)
         matrix[:, comp] = coords
         return matrix
 
     def get_shcoeffs_for_all_map_points(self, shape_mode):
-        self.space.set_active_axis(shape_mode, digitize=True)
+        self.space.set_active_shape_mode(shape_mode, digitize=True)
         mps = self.control.get_map_points()
         coords = [m*self.space.get_active_scale() for m in mps]
         matrix = self.get_coordinates_matrix(coords, int(shape_mode[-1])-1)
         # Inverse PCA here: PCA coords -> shcoeffs
-        df_inv = pd.DataFrame(self.pca.inverse_transform(matrix))
+        df_inv = pd.DataFrame(self.space.pca.inverse_transform(matrix))
         df_inv.columns = self.features
         df_inv['shape_mode'] = shape_mode
         df_inv['mpId'] = np.arange(1, 1+len(mps))
@@ -185,7 +110,7 @@ class ShapeModeCalculator(io.DataProducer):
         for mov_alias in mov_aliases:
             for sm, df_sm in self.df_coeffs.groupby('shape_mode'):
                 disp_vector = []
-                self.space.set_active_axis(sm, digitize=True)
+                self.space.set_active_shape_mode(sm, digitize=True)
                 for mpId, df_mp in df_sm.groupby('mpId'):
                     self.space.set_active_map_point_index(mpId)
                     CellIds = self.space.get_active_cellids()
@@ -234,16 +159,9 @@ class ShapeModeCalculator(io.DataProducer):
     def generate_and_save_animated_2d_contours(self):
         swap = self.control.swapxy_on_zproj()
         for sm, meshes in tqdm(self.meshes.items(), total=len(self.meshes)):
-            projs = self.plot_maker.get_2d_contours(meshes, swap)
+            projs = self.plot_maker_sm.get_2d_contours(meshes, swap)
             for proj, contours in projs.items():
-                self.plot_maker.animate_contours(contours, f"{sm}_{proj}")
-
-    def create_shape_space(self):
-        self.calculate_pca()
-        self.sort_shape_modes()
-        self.space = shapespace.ShapeSpace(self.control)
-        self.space.set_shape_space_axes(self.df_trans, self.df)
-        return
+                self.plot_maker_sm.animate_contours(contours, f"{sm}_{proj}")
     
     @staticmethod
     def translate_mesh_points(mesh, r):

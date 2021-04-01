@@ -21,8 +21,8 @@ data:
             color: "#000000"
 
 preprocessing:
-    remove_mitotics: on
-    remove_outliers: on
+    remove_mitotics: off
+    remove_outliers: off
 
 features:
     alignment:
@@ -31,7 +31,7 @@ features:
         reference: "nucleus"
     # SHE - Spherical harmonics expansion
     SHE:
-        aliases: ["NUC", "MEM"]
+        aliases: ["STR", "NUC", "MEM"]
         # Size of Gaussian kernal used to smooth the
         # images before SHE coefficients calculation
         sigma: 2
@@ -41,15 +41,15 @@ features:
 
 shapespace:
     # Specify the a set of aliases here
-    aliases: ["NUC", "MEM"]
+    aliases: ["STR", "NUC", "MEM"]
     # Sort shape modes by volume of
     sorter: "MEM"
     # Percentage of exteme points to be removed
-    removal_pct: 1
+    removal_pct: 5
     # Number of principal components to be calculated
-    number_of_shape_modes: 8
+    number_of_shape_modes: 4
     # Map points
-    map_points: [-2, -1.5, -1.0, -0.5, 0.0, 0.5, 1.0, 1.5, 2.0]
+    map_points: [-1, 0, 1]
     plot:
         swapxy_on_zproj: off
         # limits of x and y axies in the animated GIFs

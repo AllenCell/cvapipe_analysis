@@ -52,6 +52,19 @@ class Controller:
         aliases = self.get_data_seg_aliases()
         channels = self.get_data_seg_channels()
         return dict(zip(aliases, channels))
+    def get_data_seg_alias_name_dict(self):
+        named_aliases = self.get_data_seg_name_alias_dict()
+        return dict([(v['alias'], k) for k, v in named_aliases.items()])
+    def get_name_from_alias(self, alias):
+        return self.get_data_seg_alias_name_dict()[alias]
+    def get_channel_from_alias(self, alias):
+        return self.get_data_seg_alias_channel_dict()[alias]
+    def get_name_from_channel(self, channel):
+        return self.get_data_seg_alias_name_dict()[channel]
+    def get_color_from_alias(self, alias):
+        return self.data_seg_section[self.get_name_from_alias(alias)]['color']
+    def get_alias_from_channel(self, channel):
+        return self.data_seg_section[self.get_name_from_channel(channel)]['alias']
     def iter_data_seg_aliases(self):
         for alias in self.get_data_seg_aliases():
             yield alias
@@ -69,12 +82,20 @@ class Controller:
         return self.features_section['alignment']['reference']
     def get_alignment_reference_alias(self):
         name = self.get_alignment_reference_name()
-        return self.get_data_seg_name_alias_dict()[name]['alias']
+        if name:
+            return self.get_data_seg_name_alias_dict()[name]['alias']
+        return None
     def get_alignment_reference_channel(self):
         name = self.get_alignment_reference_name()
         return self.get_data_seg_name_alias_dict()[name]['channel']
+    def get_alignment_moving_aliases(self):
+        ref = self.get_alignment_reference_alias()
+        aliases = self.get_aliases_with_shcoeffs_available()
+        return [a for a in aliases if a != ref]
+    def get_aliases_with_shcoeffs_available(self):
+        return self.features_section['SHE']['aliases']
     def should_calculate_shcoeffs(self, alias):
-        return alias in self.features_section['SHE']['aliases']
+        return alias in self.get_aliases_with_shcoeffs_available()
     def get_lmax(self):
         return self.features_section['SHE']['lmax']
     def get_sigma(self):
@@ -82,12 +103,23 @@ class Controller:
 
     def get_aliases_for_pca(self):
         return self.space_section['aliases']
-    def get_alias_for_sorting_pcs(self):
+    def get_features_for_pca(self, df):
+        prefixes = [f"{alias}_shcoeffs_L" for alias in self.get_aliases_for_pca()]
+        return [f for f in df.columns if any(w in f for w in prefixes)]
+    def get_shape_modes_prefix(self):
+        return "_".join(self.get_aliases_for_pca())
+    def get_alias_for_sorting_pca_axes(self):
         return self.space_section['sorter']
+    def get_features_for_sorting_pca_axes(self):
+        ranker = self.get_alias_for_sorting_pca_axes()
+        return f"{ranker}_shape_volume"
     def get_removal_pct(self):
         return self.space_section['removal_pct']
     def get_number_of_shape_modes(self):
         return self.space_section['number_of_shape_modes']
+    def get_shape_modes(self):
+        p = self.get_shape_modes_prefix()
+        return [f"{p}_PC{s}" for s in range(1, 1+self.get_number_of_shape_modes())]
     def get_map_points(self):
         return self.space_section['map_points']
     def get_number_of_map_points(self):
@@ -103,12 +135,8 @@ class Controller:
         for m in self.get_map_points():
             yield m
     def iter_shape_modes(self):
-        p = "_".join(self.get_aliases_for_pca())
-        for s in range(1, 1+self.get_number_of_shape_modes()):
-            yield f"{p}_PC{s}"
-
-    def get_available_parameterized_intensities(self):
-        return [k for k in self.config['parameterization']['intensities'].keys()]
+        for s in self.get_shape_modes():
+            yield s
 
     # Misc
     def log(self, info):
@@ -117,6 +145,9 @@ class Controller:
         for k, v in info.items():
             self.config["log"].setdefault(k, []).append(v)
 
+    def get_available_parameterized_intensities(self):
+        return [k for k in self.config['parameterization']['intensities'].keys()]
+    
     @staticmethod
     def get_ncores():
         return len(os.sched_getaffinity(0))
