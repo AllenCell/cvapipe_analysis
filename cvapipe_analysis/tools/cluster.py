@@ -97,8 +97,10 @@ class Distributor:
         return
 
     def distribute(self):
-        print("Cleaning distribute directory.")
+        print("\nCleaning distribute directory.\n")
         self.clean_distribute_folder()
+        print(f"\nDistributing dataframe of shape: {self.df.shape}")
+        print(f"in chunks of size {self.chunk_size}.\n")
         for chunk, df_chunk in self.get_next_chunk():
             abs_path_to_dataframe = self.abs_path_to_distribute/f"dataframes/{chunk}.csv"
             df_chunk.to_csv(abs_path_to_dataframe)

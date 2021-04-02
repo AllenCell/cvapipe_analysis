@@ -10,7 +10,7 @@ class ShapeSpaceBasic():
     Basic functionalities of shape space that does
     not require loading the manifest from mshapemode
     step.
-    
+
     WARNING: All classes are assumed to know the whole
     structure of directories inside the local_staging
     folder and this is hard coded. Therefore, classes
@@ -18,7 +18,7 @@ class ShapeSpaceBasic():
     their are saved.
     """
     map_point_index = None
-    active_shapemode = None
+    active_shape_mode = None
 
     def __init__(self, control):
         self.control = control
@@ -26,6 +26,39 @@ class ShapeSpaceBasic():
     def set_active_shape_mode(self, sm):
         self.active_shapeMode = sm
 
+    @staticmethod
+    def expand(dc):
+        '''Works like the function expand from snakemake. Given
+        a dict like this:
+        {'var1': ['x1', 'x2'], 'var2': ['y1', 'y2', 'y3']},
+        it return elements of the permutation of all possible
+        combinations of values:
+        [{'var1': 'x1', 'var2': 'y1'},
+         {'var1': 'x1', 'var2': 'y2'},
+         {'var1': 'x1', 'var2': 'y3'},
+         {'var1': 'x2', 'var2': 'y1'},
+         {'var1': 'x2', 'var2': 'y2'},
+         {'var1': 'x2', 'var2': 'y3'}]'''
+        keys, values = zip(*dc.items())
+        combs = [
+            dict(zip(keys, v)) for v in itertools.product(*values)
+        ]
+        df = pd.DataFrame(combs)
+        for _, row in df.iterrows():
+            yield row
+
+    @staticmethod
+    def remove_extreme_points(axes, pct):
+        df_tmp = axes.copy()
+        df_tmp["extreme"] = False
+        for ax in axes.columns:
+            finf, fsup = np.percentile(axes[ax].values, [pct, 100 - pct])
+            df_tmp.loc[(df_tmp[ax] < finf), "extreme"] = True
+            df_tmp.loc[(df_tmp[ax] > fsup), "extreme"] = True
+        df_tmp = df_tmp.loc[df_tmp.extreme == False]
+        df_tmp = df_tmp.drop(columns=["extreme"])
+        return df_tmp
+        
     '''
     #TODO: move these to controller
     @staticmethod
@@ -42,6 +75,8 @@ class ShapeSpaceBasic():
     def iter_structures(config):
         for s in config['structures']['desc'].keys():
             yield s
+
+    
 
     @staticmethod
     def iter_param_values_as_dataframe(config, iters, no_equals=None):
@@ -66,27 +101,14 @@ class ShapeSpaceBasic():
 class ShapeSpace(ShapeSpaceBasic):
     """
     Implements functionalities to navigate the shape
-    space.
+    space. Process for shape space creation:
+    features -> axes -> filter extremes -> shape modes
 
     WARNING: All classes are assumed to know the whole
     structure of directories inside the local_staging
     folder and this is hard coded. Therefore, classes
     may break if you move saved files from the places
     their are saved.
-    
-    self.calculate_pca()
-    self.sort_shape_modes()
-    
-    self.space = shapespace.ShapeSpace(self.control)
-    self.space.set_shape_space_axes(self.df_trans, self.df)
-    self.calculate_feature_importance()
-    self.save_feature_importance()
-    self.plot_maker.plot_explained_variance(self.pca)
-    self.plot_maker.plot_paired_correlations(self.space.axes)
-    self.plot_maker.execute(display=False)
-
-    features -> axes -> filter extremes -> shape modes
-
     """
     active_scale = None
     active_structure = None
@@ -94,9 +116,9 @@ class ShapeSpace(ShapeSpaceBasic):
     def __init__(self, control):
         super().__init__(control)
 
-    def execute(self, df, features):
+    def execute(self, df):
         self.df = df
-        self.features = features
+        self.features = self.control.get_features_for_pca(df)
         self.workflow()
 
     def workflow(self):
@@ -183,7 +205,7 @@ class ShapeSpace(ShapeSpaceBasic):
         self.active_scale = values.std()
         values /= self.active_scale
         bin_centers = self.control.get_map_points()
-        binw = np.diff(bin_centers).mean()
+        binw = 0.5*np.diff(bin_centers).mean()
         bin_edges = np.unique([(b-binw, b+binw) for b in bin_centers])
         bin_edges[0] = -np.inf
         bin_edges[-1] = np.inf
@@ -198,6 +220,42 @@ class ShapeSpace(ShapeSpaceBasic):
         if self.active_structure is not None:
             df_tmp = df_tmp.loc[df_tmp.structure_name.isin(self.active_structure)]
         return df_tmp.index.values.tolist()
+
+    def browse(self, constraints):
+        '''Limits the shape space in a specific region and
+        returns the cells ids in that regions (shape mode and
+        map point index). Can also constrain by structure
+        name and then only cell ids of the same structure will
+        be returned.'''
+        if not "shape_mode" in constraints:
+            raise ValueError("Shape mode not in constraints.")
+        val = constraints['shape_mode']
+        if val != self.active_shape_mode:
+            self.set_active_shape_mode(val, True)
+        df = self.meta
+        if "mpId" in constraints:
+            val = constraints['mpId']
+            df = df.loc[df.mpId==val]
+            if not len(df):
+                print(f"No cells found at mpId: {val}")
+                return []
+        if "structure" in constraints:
+            val = constraints["structure"]
+            sid = self.df.loc[self.df.structure_name==val].index
+            df = df.loc[df.index.isin(sid)]
+            if not len(df):
+                print(f"No {val} cells found at mpId.")
+                return []
+        return df.index.values.tolist()
+
+    def get_aggregated_dataframe_with_cellIds(self):
+        variables = self.control.get_variables_values_for_aggregation()
+        df = pd.DataFrame()
+        for row in self.expand(variables):
+            row["CellIds"] = self.browse(row)
+            df = df.append(row, ignore_index=True)
+        df.mpId = df.mpId.astype(np.int64)
+        return df
 
     '''
     
@@ -237,14 +295,4 @@ class ShapeSpace(ShapeSpaceBasic):
         return index[0]
     '''
     
-    @staticmethod
-    def remove_extreme_points(axes, pct):
-        df_tmp = axes.copy()
-        df_tmp["extreme"] = False
-        for ax in axes.columns:
-            finf, fsup = np.percentile(axes[ax].values, [pct, 100 - pct])
-            df_tmp.loc[(df_tmp[ax] < finf), "extreme"] = True
-            df_tmp.loc[(df_tmp[ax] > fsup), "extreme"] = True
-        df_tmp = df_tmp.loc[df_tmp.extreme == False]
-        df_tmp = df_tmp.drop(columns=["extreme"])
-        return df_tmp
+

@@ -31,7 +31,6 @@ class ShapeModeCalculator(io.DataProducer):
 
     def set_data(self, df):
         self.df = df
-        self.features = self.control.get_features_for_pca(df)
 
     def execute(self):
         '''Implements its own execution method bc this step can't
@@ -49,7 +48,7 @@ class ShapeModeCalculator(io.DataProducer):
         return path_to_output_file
         
     def workflow(self):
-        self.space.execute(self.df, self.features)
+        self.space.execute(self.df)
         self.plot_maker_sp.save_feature_importance(self.space)
         self.plot_maker_sp.plot_explained_variance(self.space)
         self.plot_maker_sp.plot_pairwise_correlations(self.space)
@@ -87,7 +86,7 @@ class ShapeModeCalculator(io.DataProducer):
         matrix = self.get_coordinates_matrix(coords, int(shape_mode[-1])-1)
         # Inverse PCA here: PCA coords -> shcoeffs
         df_inv = pd.DataFrame(self.space.pca.inverse_transform(matrix))
-        df_inv.columns = self.features
+        df_inv.columns = self.space.features
         df_inv['shape_mode'] = shape_mode
         df_inv['mpId'] = np.arange(1, 1+len(mps))
         return df_inv
@@ -120,7 +119,7 @@ class ShapeModeCalculator(io.DataProducer):
                         suffixes = [f'position_{u}_centroid_lcc' for u in ['x', 'y', 'z']]
                         ro = [self.df.at[CellId, f'{mov_alias}_{s}'] for s in suffixes]
                         cm = [self.df.at[CellId, f'{ref_alias}_{s}'] for s in suffixes]
-                        angle = self.df.at[CellId, f'{ref_alias}_shcoeffs_transform_angle_lcc']
+                        angle = self.df.at[CellId, f'{ref_alias}_transform_angle_lcc']
                         if np.isnan(angle):
                             '''Angle should be nan if no alignment was applied by
                             cvapipe_analysis. In that case, both ro and cm were

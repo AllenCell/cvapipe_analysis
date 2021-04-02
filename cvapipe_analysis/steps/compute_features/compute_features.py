@@ -55,4 +55,4 @@ class ComputeFeatures(Step):
             manifest_path = self.step_local_staging_dir / 'manifest.csv'
             self.manifest.to_csv(manifest_path)
 
-        return manifest_path
+        return

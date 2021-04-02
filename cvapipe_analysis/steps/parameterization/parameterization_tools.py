@@ -5,7 +5,6 @@ import concurrent
 import pandas as pd
 from pathlib import Path
 from aicsimageio import writers
-from aicsshparam import shtools
 from aicscytoparam import cytoparam
 
 from cvapipe_analysis.tools import io, general, controller
@@ -29,12 +28,8 @@ class Parameterizer(io.DataProducer):
         
     def workflow(self):
 
-        img, chnames = self.get_single_cell_images(self.row, return_stack=True)
-        self.img = img
-        self.channel_names = chnames
-
-        fcalc = compute_features_tools.FeatureCalculator(self.control)
-        img, _ = fcalc.align_if_necessary(img, self.control, channel_names=chnames)
+        self.load_single_cell_data()
+        self.align_data()
 
         alias_outer = self.control.get_outer_most_alias_to_parameterize()
         alias_inner = self.control.get_inner_most_alias_to_parameterize()
@@ -70,8 +65,8 @@ class Parameterizer(io.DataProducer):
         named_imgs = []
         for alias in self.control.get_aliases_to_parameterize():
             channel_name = self.control.get_channel_from_alias(alias)
-            ch = self.channel_names.index(channel_name)
-            named_imgs.append((alias, self.img[ch]))
+            ch = self.channels.index(channel_name)
+            named_imgs.append((alias, self.data_aligned[ch]))
         return named_imgs
 
     def find_shcoeffs_and_centroid(self, alias):
@@ -80,7 +75,7 @@ class Parameterizer(io.DataProducer):
             for k, v in self.row.items() if f'{alias}_shcoeffs_L' in k
         )
         centroid = [
-            self.row[f'{alias}_shcoeffs_transform_{r}c_lcc']
+            self.row[f'{alias}_transform_{r}c_lcc']
             for r in ['x', 'y', 'z']
         ]
         return coeffs, centroid

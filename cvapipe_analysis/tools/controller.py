@@ -26,7 +26,7 @@ class Controller:
         self.config = config
         self.config['log'] = {}
         self.set_abs_path_to_local_staging_folder(config['project']['local_staging'])
-        self.data_seg_section = self.config['data']['segmentation']
+        self.data_section = self.config['data']
         self.features_section = self.config['features']
         self.space_section = self.config['shapespace']
         self.distribute_section = self.config['distribute']
@@ -41,54 +41,53 @@ class Controller:
     def overwrite(self):
         return self.config['project']['overwrite']
 
-    def get_data_seg_names(self):
-        return [k for k in self.data_seg_section.keys()]
-    def get_data_seg_aliases(self):
-        return [v['alias'] for k, v in self.data_seg_section.items()]
-    def get_data_seg_channels(self):
-        return [v['channel'] for k, v in self.data_seg_section.items()]
-    def get_data_seg_name_alias_dict(self):
-        return self.data_seg_section
-    def get_data_seg_alias_channel_dict(self):
-        aliases = self.get_data_seg_aliases()
-        channels = self.get_data_seg_channels()
+    def get_data_names(self):
+        return [k for k in self.data_section.keys()]
+    def get_data_aliases(self):
+        return [v['alias'] for k, v in self.data_section.items()]
+    def get_data_channels(self):
+        return [v['channel'] for k, v in self.data_section.items()]
+    def get_data_name_alias_dict(self):
+        return self.data_section
+    def get_data_alias_channel_dict(self):
+        aliases = self.get_data_aliases()
+        channels = self.get_data_channels()
         return dict(zip(aliases, channels))
-    def get_data_seg_alias_name_dict(self):
-        named_aliases = self.get_data_seg_name_alias_dict()
+    def get_data_alias_name_dict(self):
+        named_aliases = self.get_data_name_alias_dict()
         return dict([(v['alias'], k) for k, v in named_aliases.items()])
     def get_name_from_alias(self, alias):
-        return self.get_data_seg_alias_name_dict()[alias]
+        return self.get_data_alias_name_dict()[alias]
     def get_channel_from_alias(self, alias):
-        return self.get_data_seg_alias_channel_dict()[alias]
+        return self.get_data_alias_channel_dict()[alias]
     def get_name_from_channel(self, channel):
-        return self.get_data_seg_alias_name_dict()[channel]
+        return self.get_data_alias_name_dict()[channel]
     def get_color_from_alias(self, alias):
-        return self.data_seg_section[self.get_name_from_alias(alias)]['color']
+        return self.data_section[self.get_name_from_alias(alias)]['color']
     def get_alias_from_channel(self, channel):
-        return self.data_seg_section[self.get_name_from_channel(channel)]['alias']
-    def iter_data_seg_aliases(self):
-        for alias in self.get_data_seg_aliases():
-            yield alias
+        return self.data_section[self.get_name_from_channel(channel)]['alias']
 
     def remove_mitotics(self):
         return self.config['preprocessing']['remove_mitotics']
     def remove_outliers(self):
         return self.config['preprocessing']['remove_outliers']
 
+    def get_aliases_for_feature_extraction(self):
+        return self.features_section['aliases']
     def should_align(self):
-        return self.features_section['alignment']['align']
+        return self.features_section['SHE']['alignment']['align']
     def make_alignment_unique(self):
-        return self.features_section['alignment']['unique']
+        return self.features_section['SHE']['alignment']['unique']
     def get_alignment_reference_name(self):
-        return self.features_section['alignment']['reference']
+        return self.features_section['SHE']['alignment']['reference']
     def get_alignment_reference_alias(self):
         name = self.get_alignment_reference_name()
         if name:
-            return self.get_data_seg_name_alias_dict()[name]['alias']
+            return self.get_data_name_alias_dict()[name]['alias']
         return None
     def get_alignment_reference_channel(self):
         name = self.get_alignment_reference_name()
-        return self.get_data_seg_name_alias_dict()[name]['channel']
+        return self.get_data_name_alias_dict()[name]['channel']
     def get_alignment_moving_aliases(self):
         ref = self.get_alignment_reference_alias()
         aliases = self.get_aliases_with_shcoeffs_available()
@@ -123,13 +122,15 @@ class Controller:
         return [f"{p}_PC{s}" for s in range(1, 1+self.get_number_of_shape_modes())]
     def get_map_points(self):
         return self.space_section['map_points']
+    def get_map_point_indexes(self):
+        return np.arange(1, 1+self.get_number_of_map_points())
     def get_number_of_map_points(self):
         return len(self.get_map_points())
     def get_plot_limits(self):
         return self.space_section['plot']['limits']
     def swapxy_on_zproj(self):
         return self.space_section['plot']['swapxy_on_zproj']
-    def iter_map_points_index(self):
+    def iter_map_point_indexes(self):
         for index in range(1, 1+self.get_number_of_map_points()):
             yield index
     def iter_map_points(self):
@@ -147,6 +148,16 @@ class Controller:
         return self.param_section['parameterize']
     def get_number_of_interpolating_points(self):
         return self.param_section['number_of_interpolating_points']
+
+    def get_variables_values_for_aggregation(self):
+        variables = {}
+        variables['shape_mode'] = self.get_shape_modes()
+        variables['mpId'] = self.get_map_point_indexes()
+        variables['aggtype'] = self.config['aggregation']['type']
+        variables['alias'] = self.param_section['parameterize']
+        structs = self.config['structures']['desc']
+        variables['structure'] = [k for k in structs.keys()]
+        return variables
 
     # Misc
     def log(self, info):

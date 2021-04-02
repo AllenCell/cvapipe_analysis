@@ -38,4 +38,3 @@ def configuration(path_to_folder=None):
         if path_to_folder is not None:
             control.log({"end": get_date_time()})
             save_config_file(control.config, path_to_folder)
-        else: pass

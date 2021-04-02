@@ -1,13 +1,16 @@
 import os
 import sys
+import vtk
 import yaml
 import json
+import errno
 import concurrent
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
 from pathlib import Path
 from datetime import datetime
+from aicsshparam import shtools
 from contextlib import contextmanager
 from aicsimageio import AICSImage, writers
 
@@ -60,6 +63,17 @@ class LocalStagingIO:
             df = df[[c for c in df.columns if not any(s in c for s in feats)]]
         return df
 
+    def read_map_point_mesh(self, alias):
+        row = self.row
+        path = f"shapemode/avgshape/{alias}_{row.shape_mode}_{row.mpId}.vtk"
+        path = self.control.get_staging()/path
+        if not path.is_file():
+            raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), path)
+        reader = vtk.vtkPolyDataReader()
+        reader.SetFileName(str(path))
+        reader.Update()
+        return reader.GetOutput()
+    
     def read_parameterized_intensity(self, index, return_intensity_names=False):
         path = f"parameterization/representations/{index}.tif"
         abs_path_to_rep_file = self.control.get_staging()/path
@@ -99,17 +113,14 @@ class LocalStagingIO:
         return None
     
     @staticmethod
-    def write_ome_tif(path, img, channel_names=None):
+    def write_ome_tif(path, img, channel_names=None, image_name=None):
         path = Path(path)
         dims = [['X','Y','Z','C','T'][d] for d in range(img.ndim)]
         dims = ''.join(dims[::-1])
+        name = path.stem if image_name is None else image_name
         with writers.ome_tiff_writer.OmeTiffWriter(path, overwrite_file=True) as writer:
             writer.save(
-                img,
-                dimension_order = dims,
-                image_name = path.stem,
-                channel_names = channel_names
-            )
+                img, dimension_order=dims, image_name=name, channel_names=channel_names)
         return
 
     @staticmethod
@@ -165,7 +176,7 @@ class DataProducer(LocalStagingIO):
             self.CellIds = self.row.CellIds
             if isinstance(self.CellIds, str):
                 self.CellIds = eval(self.CellIds)
-
+    
     def execute(self, row):
         computed = False
         self.set_row(row)
@@ -181,3 +192,23 @@ class DataProducer(LocalStagingIO):
         self.status(row.name, path_to_output_file, computed)
         return path_to_output_file
         
+    def load_single_cell_data(self):
+        self.data, self.channels = self.get_single_cell_images(
+            self.row, return_stack="True")
+        return
+
+    def align_data(self):
+        self.angle = np.nan
+        self.data_aligned = self.data
+        if self.control.should_align():
+            alias_ref = self.control.get_alignment_reference_alias()
+            if alias_ref is None:
+                raise ValueError("Specify a reference alias for alignment.")
+            chn = self.channels.index(self.control.get_channel_from_alias(alias_ref))            
+            ref = self.data[chn]
+            unq = self.control.make_alignment_unique()
+            _, self.angle = shtools.align_image_2d(ref, unq)
+            self.data_aligned = shtools.apply_image_alignment_2d(self.data, self.angle)
+        return
+    
+
