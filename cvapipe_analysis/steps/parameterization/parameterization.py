@@ -27,7 +27,7 @@ class Parameterization(Step):
         with general.configuration(self.step_local_staging_dir) as control:
 
             device = io.LocalStagingIO(control)
-            df = device.load_step_manifest("computefeatures")
+            df = device.load_step_manifest("preprocessing")
             log.info(f"Manifest: {df.shape}")
 
             save_dir = self.step_local_staging_dir/"representations"
