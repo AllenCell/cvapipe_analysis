@@ -28,8 +28,7 @@ class FeatureCalculator(io.DataProducer):
 
     def workflow(self):
         device = io.LocalStagingIO(self.control)
-        self.segs = device.get_single_cell_images(self.row, 'crop_seg')
-
+        self.segs = device.get_single_cell_images(self.row)
         features = {}
         for alias, channel in self.control.get_data_seg_alias_channel_dict().items():
             features_alias = self.get_features_from_binary_image(alias)
@@ -85,24 +84,10 @@ class FeatureCalculator(io.DataProducer):
 
         if not self.control.should_calculate_shcoeffs(alias):
             return features
-
-        angle = np.nan
-        if self.control.run_alignment():
-            input_reference_image = self.control.get_alignment_reference_alias()
-            if input_reference_image is None:
-                raise ValueError("Please specify a reference for alignment.")
-            input_ref_image_aligned, angle = shtools.align_image_2d(
-                image=input_reference_image,
-                make_unique=self.control.make_alignment_unique()
-            )
-            # Rotate input image according the reference alignment angle
-            input_image_lcc_aligned = shtools.apply_image_alignment_2d(
-                image=input_image_lcc,
-                angle=angle
-            ).squeeze()
-        else:
-            input_image_lcc_aligned = input_image_lcc
-
+        
+        input_image_lcc_aligned, angle = self.align_if_necessary(
+            self.segs, self.control, input_image_lcc)
+        
         (coeffs, _), (_, _, _, transform) = shparam.get_shcoeffs(
             image=input_image_lcc_aligned,
             lmax=self.control.get_lmax(),
@@ -134,6 +119,41 @@ class FeatureCalculator(io.DataProducer):
         features.update(transform)
         return features
 
+    
+    @staticmethod
+    def align_if_necessary(ref, control, imgs=None, channel_names=None):
+        angle = np.nan
+        if control.should_align():
+            alias = control.get_alignment_reference_alias()
+            if alias is None:
+                raise ValueError("Specify an reference alias for alignment.")
+            ch = control.get_channel_from_alias(alias)
+            unique = control.make_alignment_unique()
+            if isinstance(ref, dict):
+                if ch not in ref:
+                    raise ValueError(f"Channel {ch} not found.")
+            else:
+                if channel_names is None:
+                    raise TypeError("Provide channel names when ref is not a dict.")
+                ch = channel_names.index(ch)
+            if imgs is None:
+                imgs = ref.copy()
+            ref = ref[ch]
+            imgs_aligned, angle = FeatureCalculator.run_alignment_with_reference(
+                ref, unique, imgs
+            )
+        return imgs_aligned, angle
+    
+    @staticmethod
+    def run_alignment_with_reference(ref, unique, img):
+        if ref.ndim != 3:
+            raise ValueError("Dim of ref image should be 3.")
+        _, angle = shtools.align_image_2d(ref, unique)
+        img_aligned = shtools.apply_image_alignment_2d(img, angle)
+        if img.ndim == 3:
+            img_aligned = img_aligned.squeeze()
+        return img_aligned, angle
+    
     @staticmethod
     def get_surface_area(input_img):
         # Forces a 1 pixel-wide offset to avoid problems with binary

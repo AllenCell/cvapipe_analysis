@@ -8,11 +8,13 @@ from aicsimageio import writers
 from aicsshparam import shtools
 from aicscytoparam import cytoparam
 
-from cvapipe_analysis.tools import general, cluster
+from cvapipe_analysis.tools import io, general, controller
+from cvapipe_analysis.steps.compute_features import compute_features_tools
 
-class Parameterizer(general.DataProducer):
+class Parameterizer(io.DataProducer):
     """
-    Desc
+    Functionalities for parameterizing channels of
+    single cell images.
     
     WARNING: All classes are assumed to know the whole
     structure of directories inside the local_staging
@@ -21,91 +23,73 @@ class Parameterizer(general.DataProducer):
     their are saved.
     """
     
-    subfolder = 'parameterization/representations'
-    
     def __init__(self, config):
         super().__init__(config)
+        self.subfolder = 'parameterization/representations'
         
-    def workflow(self, row):
-        self.set_row(row)
-        channels = eval(self.row.name_dict)
-        path_seg = self.abs_path_local_staging/f"loaddata/{self.row.crop_seg}"
-        _, _, seg_str = general.get_segmentations(
-            path_seg=path_seg,
-            channels=channels['crop_seg']
-        )
-        path_raw = self.abs_path_local_staging/f"loaddata/{self.row.crop_raw}"
-        _, _, raw_str = general.get_raws(
-            path_raw=path_raw,
-            channels=channels['crop_raw']
-        )
+    def workflow(self):
 
-        # Rotate structure segmentation with same angle used to align the cell
-        self.seg_str_aligned = shtools.apply_image_alignment_2d(
-            image = seg_str,
-            angle = self.row.mem_shcoeffs_transform_angle_lcc
-        ).squeeze()
-        # Rotate FP structure with same angle used to align the cell
-        self.raw_str_aligned = shtools.apply_image_alignment_2d(
-            image = raw_str,
-            angle = self.row.mem_shcoeffs_transform_angle_lcc
-        ).squeeze()
+        img, chnames = self.get_single_cell_images(self.row, return_stack=True)
+        self.img = img
+        self.channel_names = chnames
 
-        # Find cell coefficients and centroid. Also rename coeffs to agree
-        # with aics-cytoparam
-        coeffs_mem = dict(
-            (f"{k.replace('mem_','').replace('_lcc','')}",v)
-            for k,v in self.row.items() if 'mem_shcoeffs_L' in k
-        )
-        centroid_mem = [
-            self.row[f'mem_shcoeffs_transform_{r}c_lcc'] for r in ['x','y','z']
-        ]
-        # Find nuclear coefficients and centroid. Also rename coeffs to agree
-        # with aics-cytoparam
-        coeffs_dna = dict(
-            (f"{k.replace('dna_','').replace('_lcc','')}",v)
-            for k,v in self.row.items() if 'dna_shcoeffs_L' in k
-        )
-        centroid_dna = [
-            self.row[f'dna_shcoeffs_transform_{r}c_lcc'] for r in ['x','y','z']
-        ]    
+        fcalc = compute_features_tools.FeatureCalculator(self.control)
+        img, _ = fcalc.align_if_necessary(img, self.control, channel_names=chnames)
 
-        # Run aics-cytoparam
+        alias_outer = self.control.get_outer_most_alias_to_parameterize()
+        alias_inner = self.control.get_inner_most_alias_to_parameterize()
+        
+        coeffs_outer, centroid_outer = self.find_shcoeffs_and_centroid(alias_outer)
+        coeffs_inner, centroid_inner = self.find_shcoeffs_and_centroid(alias_inner)
+
+        named_imgs = self.get_list_of_imgs_to_create_representation_for()
+        
+        n = self.control.get_number_of_interpolating_points()
         self.representations = cytoparam.parameterization_from_shcoeffs(
-            coeffs_mem = coeffs_mem,
-            centroid_mem = centroid_mem,
-            coeffs_nuc = coeffs_dna,
-            centroid_nuc = centroid_dna,
-            nisos = [32,32],
-            # The names below should come from the config file
-            # once the feature calculation is implemented
-            # as a class.
-            images_to_probe = [
-                ('GFP', self.raw_str_aligned),
-                ('SEG', self.seg_str_aligned)
-            ]
+            coeffs_mem = coeffs_outer,
+            centroid_mem = centroid_outer,
+            coeffs_nuc = coeffs_inner,
+            centroid_nuc = centroid_inner,
+            nisos = [n, n],
+            images_to_probe = named_imgs
         )
-    
-    @staticmethod
-    def get_output_file_name(row):
-        return f"{row.name}.tif"
-    
-    def save(self):
-        save_as = self.get_rel_output_file_path_as_str(self.row)
-        with writers.ome_tiff_writer.OmeTiffWriter(save_as, overwrite_file=True) as writer:
-            writer.save(
-                self.representations.get_image_data('CZYX', S=0, T=0),
-                dimension_order = 'CZYX',
-                image_name = Path(save_as).stem,
-                channel_names = self.representations.channel_names
-            )
-        return save_as
+        return
 
+    def get_output_file_name(self):
+        return f"{self.row.name}.tif"
+
+    def save(self):
+        save_as = self.get_output_file_path()
+        img = self.representations.get_image_data('CZYX', S=0, T=0)
+        self.write_ome_tif(
+            save_as, img, channel_names=self.representations.channel_names
+        )
+        return save_as
+    
+    def get_list_of_imgs_to_create_representation_for(self):
+        named_imgs = []
+        for alias in self.control.get_aliases_to_parameterize():
+            channel_name = self.control.get_channel_from_alias(alias)
+            ch = self.channel_names.index(channel_name)
+            named_imgs.append((alias, self.img[ch]))
+        return named_imgs
+
+    def find_shcoeffs_and_centroid(self, alias):
+        coeffs = dict(
+            (f"{k.replace(f'{alias}_','').replace('_lcc','')}",v)
+            for k, v in self.row.items() if f'{alias}_shcoeffs_L' in k
+        )
+        centroid = [
+            self.row[f'{alias}_shcoeffs_transform_{r}c_lcc']
+            for r in ['x', 'y', 'z']
+        ]
+        return coeffs, centroid
     
 if __name__ == "__main__":
 
     config = general.load_config_file()
-    
+    control = controller.Controller(config)
+
     parser = argparse.ArgumentParser(description='Batch single cell parameterization.')
     parser.add_argument('--csv', help='Path to the dataframe.', required=True)
     args = vars(parser.parse_args())
@@ -113,6 +97,6 @@ if __name__ == "__main__":
     df = pd.read_csv(args['csv'], index_col='CellId')
     print(f"Processing dataframe of shape {df.shape}")
 
-    parameterizer = Parameterizer(config)
-    with concurrent.futures.ProcessPoolExecutor(cluster.get_ncores()) as executor:
+    parameterizer = Parameterizer(control)
+    with concurrent.futures.ProcessPoolExecutor(control.get_ncores()) as executor:
         executor.map(parameterizer.execute, [row for _,row in df.iterrows()])

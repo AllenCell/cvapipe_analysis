@@ -2,23 +2,26 @@ appName: cvapipe_analysis
 
 project:
     # Sufix to append to local_staging
-    local_staging: "/allen/aics/assay-dev/MicroscopyOtherData/Viana/projects/cvapipe_analysis/local_staging_yeast_linked"
+    local_staging: "/allen/aics/assay-dev/MicroscopyOtherData/Viana/projects/cvapipe_analysis/local_staging_test"
     overwrite: on
 
 data:
     segmentation:
         nucleus:
-            channel: "nuc"
+            channel: "dna_segmentation"
             alias: "NUC"
             color: "#3AADA7"
         cell:
-            channel: "mem"
+            channel: "membrane_segmentation"
             alias: "MEM"
             color: "#F200FF"
         structure:
-            channel: "structure"
+            channel: "struct_segmentation_roof"
             alias: "STR"
             color: "#000000"
+        raw_structure:
+            channel: "structure"
+            alias: "RAWSTR"
 
 preprocessing:
     remove_mitotics: off
@@ -26,12 +29,12 @@ preprocessing:
 
 features:
     alignment:
-        align: off
+        align: on
         unique: off
-        reference: "nucleus"
+        reference: "cell"
     # SHE - Spherical harmonics expansion
     SHE:
-        aliases: ["STR", "NUC", "MEM"]
+        aliases: ["NUC", "MEM"]
         # Size of Gaussian kernal used to smooth the
         # images before SHE coefficients calculation
         sigma: 2
@@ -41,7 +44,7 @@ features:
 
 shapespace:
     # Specify the a set of aliases here
-    aliases: ["STR", "NUC", "MEM"]
+    aliases: ["NUC", "MEM"]
     # Sort shape modes by volume of
     sorter: "MEM"
     # Percentage of exteme points to be removed
@@ -56,15 +59,10 @@ shapespace:
         limits: [-150, 150, -80, 80]
     
 parameterization:
-    # List of images and their channels that should be
-    # parameterized
-    intensities:
-        'GFP': ['crop_raw', 'structure']
-        'SEG': ['crop_seg', 'structure_seg']
-    # Number of interplation points between nuclear
-    # centroid and nuclear shell, and from nuclear
-    # shell to cell membrane.
-    nisos: [32, 32]
+    inner: "NUC"
+    outer: "MEM"
+    parameterize: ["RAWSTR", "STR"]
+    number_of_interpolating_points: 32
 
 aggregation:
     type: ['avg']

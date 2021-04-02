@@ -8,8 +8,8 @@ import pandas as pd
 from tqdm import tqdm
 from pathlib import Path
 from datetime import datetime
-from aicsimageio import AICSImage
 from contextlib import contextmanager
+from aicsimageio import AICSImage, writers
 
 class LocalStagingIO:
     """
@@ -25,15 +25,27 @@ class LocalStagingIO:
     def __init__(self, control):
         self.control = control
 
-    def get_single_cell_images(self, row, imtype):
-        segs = {}
-        path = row[imtype]
-        if str(self.control.get_staging()) not in path:
-            path = self.control.get_staging()/f"loaddata/{row[imtype]}"
-        imgs = AICSImage(path).data.squeeze()
-        for ch, img in zip(eval(row.name_dict)[imtype], imgs):
-            segs[ch] = img
-        return segs
+    def get_single_cell_images(self, row, return_stack=False):
+        imgs = []
+        imtypes = [k for k in eval(row.name_dict).keys()]
+        channel_names = [v for k, v in eval(row.name_dict).items()]
+        channel_names = [ch for names in channel_names for ch in names]
+        for imtype in imtypes:
+            if imtype in row:
+                path = row[imtype]
+                if str(self.control.get_staging()) not in path:
+                    path = self.control.get_staging()/f"loaddata/{row[imtype]}"
+                img = AICSImage(path).data.squeeze()
+                imgs.append(img)
+        imgs = np.vstack(imgs)
+        if return_stack:
+            return imgs, channel_names
+        imgs_dict = {}
+        for imtype in imtypes:
+            if imtype in row:
+                for ch, img in zip(channel_names, imgs):
+                    imgs_dict[ch] = img
+        return imgs_dict
 
     def get_abs_path_to_step_manifest(self, step):
         return self.control.get_staging()/f"{step}/manifest.csv"
@@ -86,6 +98,20 @@ class LocalStagingIO:
             return path_to_output_file
         return None
     
+    @staticmethod
+    def write_ome_tif(path, img, channel_names=None):
+        path = Path(path)
+        dims = [['X','Y','Z','C','T'][d] for d in range(img.ndim)]
+        dims = ''.join(dims[::-1])
+        with writers.ome_tiff_writer.OmeTiffWriter(path, overwrite_file=True) as writer:
+            writer.save(
+                img,
+                dimension_order = dims,
+                image_name = path.stem,
+                channel_names = channel_names
+            )
+        return
+
     @staticmethod
     def status(idx, output, computed):
         msg = "FAIL"

@@ -30,6 +30,7 @@ class Controller:
         self.features_section = self.config['features']
         self.space_section = self.config['shapespace']
         self.distribute_section = self.config['distribute']
+        self.param_section = self.config['parameterization']
 
     def set_abs_path_to_local_staging_folder(self, path):
         self.abs_path_local_staging = Path(path)
@@ -74,7 +75,7 @@ class Controller:
     def remove_outliers(self):
         return self.config['preprocessing']['remove_outliers']
 
-    def run_alignment(self):
+    def should_align(self):
         return self.features_section['alignment']['align']
     def make_alignment_unique(self):
         return self.features_section['alignment']['unique']
@@ -137,6 +138,15 @@ class Controller:
     def iter_shape_modes(self):
         for s in self.get_shape_modes():
             yield s
+
+    def get_inner_most_alias_to_parameterize(self):
+        return self.param_section['inner']
+    def get_outer_most_alias_to_parameterize(self):
+        return self.param_section['outer']
+    def get_aliases_to_parameterize(self):
+        return self.param_section['parameterize']
+    def get_number_of_interpolating_points(self):
+        return self.param_section['number_of_interpolating_points']
 
     # Misc
     def log(self, info):
