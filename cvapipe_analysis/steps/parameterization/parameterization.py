@@ -45,6 +45,3 @@ class Parameterization(Step):
             parameterizer = Parameterizer(control)
             with concurrent.futures.ProcessPoolExecutor(control.get_ncores()) as executor:
                 executor.map(parameterizer.execute, [row for _,row in df.iterrows()])
-
-            return
-            

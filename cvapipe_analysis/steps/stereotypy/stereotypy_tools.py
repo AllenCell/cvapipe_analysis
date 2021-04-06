@@ -18,9 +18,9 @@ from aics_dask_utils import DistributedHandler
 from vtk.util.numpy_support import vtk_to_numpy, numpy_to_vtk
 import concurrent
 
-from cvapipe_analysis.tools import general, cluster
+from cvapipe_analysis.tools import general, io, cluster
 
-class StereotypyCalculator(general.DataProducer):
+class StereotypyCalculator(io.DataProducer):
     """
     Provides the functionalities necessary for
     calculating the stereotypy of cells using their

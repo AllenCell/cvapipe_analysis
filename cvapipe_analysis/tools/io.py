@@ -76,8 +76,10 @@ class LocalStagingIO:
     
     def read_parameterized_intensity(self, index, return_intensity_names=False):
         path = f"parameterization/representations/{index}.tif"
-        abs_path_to_rep_file = self.control.get_staging()/path
-        code = AICSImage(abs_path_to_rep_file)
+        path = self.control.get_staging()/path
+        if not path.is_file():
+            raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), path)
+        code = AICSImage(path)
         intensity_names = code.get_channel_names()
         code = code.data.squeeze()
         if return_intensity_names:
@@ -86,9 +88,12 @@ class LocalStagingIO:
 
     def read_agg_parameterized_intensity(self, row):
         path = f"aggregation/repsagg/{self.get_aggrep_file_name(row)}"
-        abs_path_to_rep_file = self.control.get_staging()/path
-        agg_code = AICSImage(abs_path_to_rep_file).data.squeeze()
-        return agg_code
+        path = self.control.get_staging()/path
+        if not path.is_file():
+            raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), path)
+        code = AICSImage(path)
+        code = code.data.squeeze()
+        return code
 
     def load_results_in_single_dataframe(self):
         ''' Not sure this function is producing a column named index when
@@ -137,10 +142,27 @@ class LocalStagingIO:
             df = pd.read_csv(fpath)
         except: pass
         return df
-        
+    
+    @staticmethod
+    def get_prefix_from_row(row):
+        fname = []
+        for col in ["aggtype",
+                    "alias",
+                    "structure",
+                    "structure1",
+                    "structure2",
+                    "shape_mode",
+                    "mpId"]:
+            if col in row:
+                val = row[col]
+                if not isinstance(val, str):
+                    val = str(val)
+                fname.append(val)
+        return "-".join(fname)
+    
     @staticmethod
     def get_aggrep_file_name(row):
-        return f"{row.aggtype}-{row.intensity}-{row.structure_name}-{row.shapemode}-B{row.bin}-CODE.tif"
+        return f"{row.aggtype}-{row.alias}-{row.structure}-{row.shape_mode}-{row.mpId}.tif"
 
     @staticmethod
     def get_output_file_name(row):
@@ -211,4 +233,9 @@ class DataProducer(LocalStagingIO):
             self.data_aligned = shtools.apply_image_alignment_2d(self.data, self.angle)
         return
     
+    @staticmethod
+    def correlate_representations(rep1, rep2):
+        pcor = np.corrcoef(rep1.flatten(), rep2.flatten())
+        # Returns Nan if rep1 or rep2 is empty.
+        return pcor[0,1]
 

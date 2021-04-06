@@ -39,14 +39,12 @@ class Aggregator(io.DataProducer):
         self.subfolder = 'aggregation/aggmorph'
 
     def workflow(self):
-        print(self.row.CellIds)
         self.set_agg_function()
         self.aggregate_parameterized_intensities()
         self.morph_on_shapemode_shape()
     
     def get_output_file_name(self):
-        r = self.row
-        return f"{r.aggtype}-{r.alias}-{r.structure}-{r.shape_mode}-{r.mpId}.tif"
+        return f"{self.get_prefix_from_row(self.row)}.tif"
 
     def save(self):
         img = self.morphed
@@ -67,9 +65,12 @@ class Aggregator(io.DataProducer):
     
     def aggregate_parameterized_intensities(self):
         nc = self.control.get_ncores()
+        if not len(self.CellIds):
+            raise ValueError("No cells found for parameterization.")
         with concurrent.futures.ProcessPoolExecutor(nc) as executor:
             pints = list(
                 executor.map(self.read_parameterized_intensity, self.CellIds))
+        pints = [p for p in pints if p is not None]
         agg_pint = self.agg_func(np.array(pints), axis=0)
         ch = self.control.get_aliases_to_parameterize().index(self.row.alias)
         self.aggregated_parameterized_intensity = agg_pint[ch].copy()
@@ -109,10 +110,6 @@ class Aggregator(io.DataProducer):
         )
         self.morphed = np.stack([self.domain, self.morphed])
         return
-    
-    def get_rel_aggrep_file_path_as_str(self, row):
-        file_name = self.get_aggrep_file_name(row)
-        return f"{self.abs_path_local_staging.name}/aggregation/repsagg/{file_name}"
     
 if __name__ == "__main__":
 

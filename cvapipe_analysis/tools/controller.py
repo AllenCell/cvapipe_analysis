@@ -126,6 +126,11 @@ class Controller:
         return np.arange(1, 1+self.get_number_of_map_points())
     def get_number_of_map_points(self):
         return len(self.get_map_points())
+    def get_center_map_point_index(self):
+        return int(0.5*(self.get_number_of_map_points()+1))
+    def get_extreme_opposite_map_point_indexes(self, off=0):
+        mpIds = self.get_map_point_indexes()
+        return [mpIds[0+off], mpIds[-1-off]]
     def get_plot_limits(self):
         return self.space_section['plot']['limits']
     def swapxy_on_zproj(self):
@@ -155,10 +160,22 @@ class Controller:
         variables['mpId'] = self.get_map_point_indexes()
         variables['aggtype'] = self.config['aggregation']['type']
         variables['alias'] = self.param_section['parameterize']
-        structs = self.config['structures']['desc']
+        structs = self.config['structures']
         variables['structure'] = [k for k in structs.keys()]
         return variables
+    def duplicate_variable(self, variables, v):
+        vals = variables.pop(v)
+        variables[f"{v}1"] = vals
+        variables[f"{v}2"] = vals
+        return variables
 
+    @staticmethod
+    def get_filtered_dataframe(df, filters):
+        for k, v in filters.items():
+            values = v if isinstance(v, list) else [v]
+            df = df.loc[df[k].isin(values)]
+        return df
+    
     # Misc
     def log(self, info):
         if not isinstance(info, dict):
@@ -166,8 +183,12 @@ class Controller:
         for k, v in info.items():
             self.config["log"].setdefault(k, []).append(v)
 
-    def get_available_parameterized_intensities(self):
-        return [k for k in self.config['parameterization']['intensities'].keys()]
+    def get_gene_names(self):
+        return [k for k in self.config['structures'].keys()]
+    def get_structure_names(self):
+        return [v[0] for k, v in self.config['structures'].items()]
+    
+    
     
     @staticmethod
     def get_ncores():

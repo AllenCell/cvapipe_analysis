@@ -2,6 +2,7 @@ import vtk
 import itertools
 import numpy as np
 import pandas as pd
+from tqdm import tqdm
 from pathlib import Path
 from sklearn.decomposition import PCA
 
@@ -43,9 +44,7 @@ class ShapeSpaceBasic():
         combs = [
             dict(zip(keys, v)) for v in itertools.product(*values)
         ]
-        df = pd.DataFrame(combs)
-        for _, row in df.iterrows():
-            yield row
+        return pd.DataFrame(combs)
 
     @staticmethod
     def remove_extreme_points(axes, pct):
@@ -248,51 +247,27 @@ class ShapeSpace(ShapeSpaceBasic):
                 return []
         return df.index.values.tolist()
 
-    def get_aggregated_dataframe_with_cellIds(self):
-        variables = self.control.get_variables_values_for_aggregation()
-        df = pd.DataFrame()
-        for row in self.expand(variables):
-            row["CellIds"] = self.browse(row)
-            df = df.append(row, ignore_index=True)
+    def get_aggregated_df(self, variables, include_cellIds=True):
+        df = self.expand(variables)
+        if include_cellIds:
+            df["CellIds"] = 0
+            df.CellIds = df.CellIds.astype(object)
+            for index, row in df.iterrows():
+                df.at[index, "CellIds"] = self.browse(row)
         df.mpId = df.mpId.astype(np.int64)
         return df
 
-    '''
-    
-    def set_active_structure(self, structure):
-        if isinstance(structure, str):
-            structure = [structure]
-        for s in structure:
-            if s not in self.meta.structure_name.unique():
-                raise ValueError(f"Structure {s} not found.")
-        self.active_structure = structure
-
-    def deactive_structure(self):
-        self.active_structure = None
-
-
-    def iter_active_cellids(self):
-        for CellId in self.get_active_cellids():
-            yield CellId
-            
-    #TODO: rename this func
-    def get_index_of_bin(self, mp):
-        if self.active_axis is None:
-            raise ValueError("No active axis.")
-
-        index = self.df_results.loc[
-            (self.df_results.shape_mode==self.active_axis)&(self.df_results.mpId==mp)
-        ].index
-
-        if len(index) == 0:
-            raise ValueError(f"No rows for {self.active_axis} and map point index {mpId}.")
-
-        if len(index) > 1:
-            warnings.warn(f"More than one index found for pc {self.active_axis}\
-            and map point index {mp}. Something seems wrong with the dataframe\
-            of VTK paths generated in the step shapemode. Continuing with first\
-            index.")
-        return index[0]
-    '''
-    
-
+    def save_summary(self, df, path):
+        filters = dict((k, df[k].unique()[0]) for k in ["aggtype", "alias"])
+        for k, v in filters.items():
+            df = df.loc[df[k]==v]     
+        for index, row in df.iterrows():
+            df.at[index, "ncells"] = len(row.CellIds)
+        df.ncells = df.ncells.astype(int)
+        df.mpId -= self.control.get_center_map_point_index()
+        df = df.drop(columns=[k for k in filters.keys()]+["CellIds"])
+        df = df.set_index(["shape_mode", "structure", "mpId"])
+        df = df.unstack(level=-1)
+        df.to_html(self.control.get_staging()/path)
+        return df
+                

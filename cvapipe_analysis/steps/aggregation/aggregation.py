@@ -27,7 +27,7 @@ class Aggregation(Step):
 
         with general.configuration(self.step_local_staging_dir) as control:
 
-            for folder in ['repsagg', 'aggmorph']:
+            for folder in ["repsagg", "aggmorph"]:
                 save_dir = self.step_local_staging_dir / folder
                 save_dir.mkdir(parents=True, exist_ok=True)
 
@@ -35,7 +35,9 @@ class Aggregation(Step):
             df = device.load_step_manifest("preprocessing")
             space = shapespace.ShapeSpace(control)
             space.execute(df)
-            df_agg = space.get_aggregated_dataframe_with_cellIds()
+            variables = control.get_variables_values_for_aggregation()
+            df_agg = space.get_aggregated_df(variables)
+            space.save_summary(df_agg, "aggregation/summary.html")
             
             if distribute:
 
@@ -55,10 +57,5 @@ class Aggregation(Step):
             for index, row in tqdm(df_agg.iterrows(), total=len(df_agg)):
                 '''Concurrent processes inside. Do not use concurrent here.'''
                 aggregator.execute(row)
-
-            log.info(f"Saving manifest...")
-            self.manifest = df_agg
-            manifest_path = self.step_local_staging_dir / 'manifest.csv'
-            self.manifest.to_csv(manifest_path)
-
-        return manifest_path
+                
+        return
