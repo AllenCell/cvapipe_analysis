@@ -37,7 +37,6 @@ class Aggregation(Step):
             space.execute(df)
             variables = control.get_variables_values_for_aggregation()
             df_agg = space.get_aggregated_df(variables)
-            space.save_summary(df_agg, "aggregation/summary.html")
             
             if distribute:
 

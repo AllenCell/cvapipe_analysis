@@ -32,7 +32,6 @@ class Shapemode(Step):
             for folder in ["pca", "avgshape"]:
                 save_dir = self.step_local_staging_dir/folder
                 save_dir.mkdir(parents=True, exist_ok=True)
-            
 
             calculator = ShapeModeCalculator(control)
             calculator.set_data(df)

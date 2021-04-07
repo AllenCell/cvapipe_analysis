@@ -49,6 +49,7 @@ class ShapeModeCalculator(io.DataProducer):
         
     def workflow(self):
         self.space.execute(self.df)
+        self.space.save_summary("shapemode/summary.html")
         self.plot_maker_sp.save_feature_importance(self.space)
         self.plot_maker_sp.plot_explained_variance(self.space)
         self.plot_maker_sp.plot_pairwise_correlations(self.space)
@@ -68,8 +69,8 @@ class ShapeModeCalculator(io.DataProducer):
         
     def save(self):
         # For consistency.
-        pass
-        
+        return
+
     def get_coordinates_matrix(self, coords, comp):
         '''Coords has shape (N,). Creates a matrix of shape
         (N,M), where M is the reduced dimension. comp is an

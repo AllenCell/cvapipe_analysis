@@ -125,7 +125,6 @@ class ShapeSpace(ShapeSpaceBasic):
         self.calculate_feature_importance()
         pct = self.control.get_removal_pct()
         self.shape_modes = self.remove_extreme_points(self.axes, pct)
-        self.calculate_feature_importance()
 
     ############
     # AXES
@@ -257,7 +256,9 @@ class ShapeSpace(ShapeSpaceBasic):
         df.mpId = df.mpId.astype(np.int64)
         return df
 
-    def save_summary(self, df, path):
+    def save_summary(self, path):
+        variables = self.control.get_variables_values_for_aggregation()
+        df = self.get_aggregated_df(variables)
         filters = dict((k, df[k].unique()[0]) for k in ["aggtype", "alias"])
         for k, v in filters.items():
             df = df.loc[df[k]==v]     
@@ -266,8 +267,11 @@ class ShapeSpace(ShapeSpaceBasic):
         df.ncells = df.ncells.astype(int)
         df.mpId -= self.control.get_center_map_point_index()
         df = df.drop(columns=[k for k in filters.keys()]+["CellIds"])
+        genes = self.control.get_gene_names()
+        df.structure = pd.Categorical(df.structure, genes)
+        df = df.sort_values(by="structure")
         df = df.set_index(["shape_mode", "structure", "mpId"])
         df = df.unstack(level=-1)
         df.to_html(self.control.get_staging()/path)
-        return df
+        return
                 
