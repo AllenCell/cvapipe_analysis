@@ -46,7 +46,7 @@ class ConcordanceCalculator(io.DataProducer):
         return
 
     def get_output_file_name(self):
-        fname = self.get_file_name_from_row(self.row)
+        fname = self.get_prefix_from_row(self.row)
         return f"{fname}.csv"
     
     def save(self):

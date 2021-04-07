@@ -2,25 +2,25 @@ appName: cvapipe_analysis
 
 project:
     # Sufix to append to local_staging
-    local_staging: "/allen/aics/assay-dev/MicroscopyOtherData/Viana/projects/cvapipe_analysis/local_staging_m4m5_cells"
-    overwrite: on
+    local_staging: "/allen/aics/assay-dev/MicroscopyOtherData/Viana/projects/cvapipe_analysis/local_staging_test"
+    overwrite: off
 
 data:
     nucleus:
         channel: "dna_segmentation"
-        alias: "dna"
+        alias: "NUC"
         color: "#3AADA7"
     cell:
         channel: "membrane_segmentation"
-        alias: "mem"
+        alias: "MEM"
         color: "#F200FF"
     structure:
         channel: "struct_segmentation_roof"
-        alias: "str"
+        alias: "STR"
         color: "#000000"
 
 features:
-    aliases: ["dna", "mem"]
+    aliases: ["NUC", "MEM"]
     # SHE - Spherical harmonics expansion
     SHE:
         alignment:
@@ -41,7 +41,7 @@ preprocessing:
 
 shapespace:
     # Specify the a set of aliases here
-    aliases: ["DNA", "MEM"]
+    aliases: ["NUC", "MEM"]
     # Sort shape modes by volume of
     sorter: "MEM"
     # Percentage of exteme points to be removed

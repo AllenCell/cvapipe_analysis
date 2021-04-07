@@ -49,9 +49,6 @@ class Concordance(Step):
                 return None
 
             calculator = ConcordanceCalculator(control)
-            for index, row in df_agg.iterrows():
-                calculator.execute(row)
-                
             with concurrent.futures.ProcessPoolExecutor(control.get_ncores()) as executor:
                 executor.map(calculator.execute, [row for _,row in df_agg.iterrows()])
 

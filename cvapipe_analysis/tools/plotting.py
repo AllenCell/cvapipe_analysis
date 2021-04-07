@@ -82,13 +82,11 @@ class PlotMaker(io.LocalStagingIO):
         matrix[:] = np.nan
         names1 = df.structure1.unique()
         names2 = df.structure2.unique()
-        import pdb; pdb.set_trace()
         for s1, name1 in enumerate(rank):
             for s2, name2 in enumerate(rank):
                 if (name1 in names1) and (name2 in names2):
                     indexes = df.loc[(df.structure1==name1)&(df.structure2==name2)].index
                     matrix[s1, s2] = df.at[indexes[0], "Pearson"]
-        import pdb; pdb.set_trace()
         return matrix
 
     @staticmethod
@@ -170,6 +168,7 @@ class ConcordancePlotMaker(PlotMaker):
         if diagonal:
             ax.plot([-0.5, ns - 0.5], [-0.5, ns - 0.5], "k-", linewidth=2)
         ax.set_title(self.get_dataframe_desc(self.df))
+        plt.tight_layout()
         prefix = "heatmap" if "prefix" not in kwargs else kwargs["prefix"]
         self.figs.append((fig, f"{prefix}_" + self.get_dataframe_desc(self.df)))
         return
@@ -190,7 +189,7 @@ class ConcordancePlotMaker(PlotMaker):
     def make_dendrogram(self):
         Z = spcluster.hierarchy.linkage(self.matrix, "average")
         Z = spcluster.hierarchy.optimal_leaf_ordering(Z, self.matrix)
-        fig, ax = plt.subplots(1, 1, figsize=(8, 3))
+        fig, ax = plt.subplots(1, 1, figsize=(8, 8))
         dn = spcluster.hierarchy.dendrogram(
             Z, labels=self.control.get_structure_names(), leaf_rotation=90
         )
