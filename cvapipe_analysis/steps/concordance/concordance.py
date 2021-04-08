@@ -69,9 +69,4 @@ class Concordance(Step):
                     pmaker.filter_dataframe({'alias': alias, 'shape_mode': shape_mode, 'mpId': mpIds})
                     pmaker.execute(display=False)
 
-            log.info(f"Saving manifest...")
-            self.manifest = df_agg
-            manifest_path = self.step_local_staging_dir / 'manifest.csv'
-            self.manifest.to_csv(manifest_path)
-
         return
