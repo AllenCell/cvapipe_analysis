@@ -7,15 +7,8 @@ from pathlib import Path
 from typing import Dict, List, Optional, Union
 from datastep import Step, log_run_params
 
-import numpy as np
-import pandas as pd
-from tqdm import tqdm
-
-from cvapipe_analysis.tools import general, cluster, shapespace, plotting
+from cvapipe_analysis.tools import general
 from .load_data_tools import DataLoader
-
-import pdb;
-tr = pdb.set_trace
 
 log = logging.getLogger(__name__)
 
@@ -28,21 +21,15 @@ class LoadData(Step):
         super().__init__(direct_upstream_tasks=direct_upstream_tasks, config=config)
 
     @log_run_params
-    def run(
-        self,
-        #test: Optional[bool]=False,
-        #csv: Optional[Path]=None,
-        **kwargs
-    ):
+    def run(self, **kwargs):
 
-        # Load configuration file
-        config = general.load_config_file()
-        
-        loader = DataLoader(config)
-        df = loader.load(kwargs)
-        
-        self.manifest = df
-        manifest_path = self.step_local_staging_dir / 'manifest.csv'
-        self.manifest.to_csv(manifest_path)
-        
+        with general.configuration(self.step_local_staging_dir) as control:
+
+            loader = DataLoader(control)
+            df = loader.load(kwargs)
+
+            self.manifest = df
+            manifest_path = self.step_local_staging_dir / 'manifest.csv'
+            self.manifest.to_csv(manifest_path)
+
         return manifest_path

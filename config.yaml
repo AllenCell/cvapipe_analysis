@@ -2,34 +2,31 @@ appName: cvapipe_analysis
 
 project:
     # Sufix to append to local_staging
-    local_staging: "/allen/aics/assay-dev/MicroscopyOtherData/Viana/projects/cvapipe_analysis/local_staging_full"
-    overwrite: on
+    local_staging: "/allen/aics/assay-dev/MicroscopyOtherData/Viana/projects/cvapipe_analysis/local_staging_test"
+    overwrite: off
 
 data:
-    segmentation:
-        nucleus:
-            channel: "dna_segmentation"
-            alias: "NUC"
-            color: "#3AADA7"
-        cell:
-            channel: "membrane_segmentation_roof"
-            alias: "MEM"
-            color: "#F200FF"
-        structure:
-            channel: "struct_segmentation"
-            alias: "STR"
-            color: "#000000"
-
-preprocessing:
-    remove_mitotics: on
-    remove_outliers: on
+    nucleus:
+        channel: "dna_segmentation"
+        alias: "NUC"
+        color: "#3AADA7"
+    cell:
+        channel: "membrane_segmentation"
+        alias: "MEM"
+        color: "#F200FF"
+    structure:
+        channel: "struct_segmentation_roof"
+        alias: "STR"
+        color: "#000000"
 
 features:
-    align:
-        reference: "cell"
-        unique: off
+    aliases: ["NUC", "MEM"]
     # SHE - Spherical harmonics expansion
     SHE:
+        alignment:
+            align: off
+            unique: off
+            reference: "cell"
         aliases: ["NUC", "MEM"]
         # Size of Gaussian kernal used to smooth the
         # images before SHE coefficients calculation
@@ -38,30 +35,31 @@ features:
         # and nuclear shape
         lmax: 16
 
-pca:
+preprocessing:
+    remove_mitotics: on
+    remove_outliers: on
+
+shapespace:
     # Specify the a set of aliases here
     aliases: ["NUC", "MEM"]
     # Sort shape modes by volume of
     sorter: "MEM"
-    # Number of principal components to be calculated
-    number_of_pcs: 8
     # Percentage of exteme points to be removed
     removal_pct: 1
+    # Number of principal components to be calculated
+    number_of_shape_modes: 5
     # Map points
-    map_points: [-2, -1.5, -1.0, -0.5, 0.0, 0.5, 1.0, 1.5, 2.0]
-    # limits of x and y axies in the animated GIFs
-    plot_limits: [-150, 150, -80, 80]
+    map_points: [-1.0, 0.0, 1.0]
+    plot:
+        swapxy_on_zproj: off
+        # limits of x and y axies in the animated GIFs
+        limits: [-150, 150, -80, 80]
     
 parameterization:
-    # List of images and their channels that should be
-    # parameterized
-    intensities:
-        'GFP': ['crop_raw', 'structure']
-        'SEG': ['crop_seg', 'structure_seg']
-    # Number of interplation points between nuclear
-    # centroid and nuclear shell, and from nuclear
-    # shell to cell membrane.
-    nisos: [32, 32]
+    inner: "NUC"
+    outer: "MEM"
+    parameterize: ["RAWSTR", "STR"]
+    number_of_interpolating_points: 32
 
 aggregation:
     type: ['avg']
@@ -73,43 +71,36 @@ aggregation:
     aggregate_on: "NUC_MEM"
 
 structures:
+    "FBL": ["nucleoli [DFC)", "#A9D1E5"]
+    "NPM1": ["nucleoli [GC)", "#88D1E5"]
+    "SON": ["nuclear speckles", "#3292C9"]
+    "SMC1A": ["cohesins", "#306598"]
+    "HIST1H2BJ": ["histones", "#305098"]
+    "LMNB1": ["nuclear envelope", "#084AE7"]
+    "NUP153": ["nuclear pores", "#0840E7"]
+    "SEC61B": ["ER [Sec61 beta)", "#FFFFB5"]
+    "ATP2A2": ["ER [SERCA2)", "#FFFFA0"]
+    "TOMM20": ["mitochondria", "#FFD184"]
+    "SLC25A17": ["peroxisomes", "#FFD16E"]
+    "RAB5A": ["endosomes", "#FFD150"]
+    "LAMP1": ["lysosomes", "#AD952A"]
+    "ST6GAL1": ["Golgi", "#B7952A"]
+    "CETN2": ["centrioles", "#9D7000"]
+    "TUBA1B": ["microtubules", "#6B4500"]
+    "AAVS1": ["plasma membrane", "#FFD2FF"]
+    "ACTB": ["actin filaments", "#FFB1FF"]
+    "ACTN1": ["actin bundles", "#FF96FF"]
+    "MYH10": ["actomyosin bundles", "#FF82FF"]
+    "GJA1": ["gap junctions", "#A850C0"]
+    "TJP1": ["tight junctions", "#A850D4"]
+    "DSP": ["desmosomes", "#A850E8"]
+    "CTNNB1": ["adherens junctions", "#CB1CCC"]
+    "PXN": ["matrix adhesions", "#77207C"]
 
-    # >> Results are going to be ordered according to
-    # this sequence. These match the column structure_name
-    # in the manifest.
-    genes: ["FBL", "NPM1", "SON", "SMC1A", "HIST1H2BJ", "LMNB1", "NUP153", "SEC61B", "ATP2A2", "TOMM20", "SLC25A17", "RAB5A", "LAMP1",  "ST6GAL1", "CETN2", "TUBA1B", "AAVS1", "ACTB", "ACTN1", "MYH10", "GJA1", "TJP1", "DSP", "CTNNB1", "PXN"]
-    # Mapping between gene name and description
-    desc:
-        "FBL": ["nucleoli [DFC)", "#A9D1E5"]
-        "NPM1": ["nucleoli [GC)", "#88D1E5"]
-        "SON": ["nuclear speckles", "#3292C9"]
-        "SMC1A": ["cohesins", "#306598"]
-        "HIST1H2BJ": ["histones", "#305098"]
-        "LMNB1": ["nuclear envelope", "#084AE7"]
-        "NUP153": ["nuclear pores", "#0840E7"]
-        "SEC61B": ["ER [Sec61 beta)", "#FFFFB5"]
-        "ATP2A2": ["ER [SERCA2)", "#FFFFA0"]
-        "TOMM20": ["mitochondria", "#FFD184"]
-        "SLC25A17": ["peroxisomes", "#FFD16E"]
-        "RAB5A": ["endosomes", "#FFD150"]
-        "LAMP1": ["lysosomes", "#AD952A"]
-        "ST6GAL1": ["Golgi", "#B7952A"]
-        "CETN2": ["centrioles", "#9D7000"]
-        "TUBA1B": ["microtubules", "#6B4500"]
-        "AAVS1": ["plasma membrane", "#FFD2FF"]
-        "ACTB": ["actin filaments", "#FFB1FF"]
-        "ACTN1": ["actin bundles", "#FF96FF"]
-        "MYH10": ["actomyosin bundles", "#FF82FF"]
-        "GJA1": ["gap junctions", "#A850C0"]
-        "TJP1": ["tight junctions", "#A850D4"]
-        "DSP": ["desmosomes", "#A850E8"]
-        "CTNNB1": ["adherens junctions", "#CB1CCC"]
-        "PXN": ["matrix adhesions", "#77207C"]
-
-resources:
+distribute:
     # In case a (slurm) cluster is available
     cores: 30
-    nworkers: 32
+    number_of_workers: 32
     memory: "8GB"
     queue: "aics_cpu_general"
     walltime: "9-24:00:00"

@@ -16,10 +16,10 @@ from aicsimageio import AICSImage, writers
 from vtk.util.numpy_support import vtk_to_numpy as vtk2np
 from vtk.util.numpy_support import numpy_to_vtk as np2vtk
 
-from cvapipe_analysis.tools import general
+from cvapipe_analysis.tools import io
 
 
-class PlotMaker(general.LocalStagingWriter):
+class PlotMaker(io.LocalStagingIO):
     """
     Support class. Should not be instantiated directly.
 
@@ -34,9 +34,10 @@ class PlotMaker(general.LocalStagingWriter):
     df = None
     dpi = 72
 
-    def __init__(self, config):
-        super().__init__(config)
-
+    def __init__(self, control):
+        super().__init__(control)
+        self.genes = self.control.get_gene_names()
+        
     def set_dataframe(self, df, dropna=[]):
         self.df_original = df.copy()
         if dropna:
@@ -50,7 +51,7 @@ class PlotMaker(general.LocalStagingWriter):
 
     def filter_dataframe(self, filters):
         self.check_dataframe_exists()
-        self.df = self.get_filtered_dataframe(self.df_original, filters)
+        self.df = self.control.get_filtered_dataframe(self.df_original, filters)
 
     def execute(self, display=True, **kwargs):
         if "dpi" in kwargs:
@@ -70,28 +71,133 @@ class PlotMaker(general.LocalStagingWriter):
                     fname = f"{prefix}_{signature}"
                 print(fname)
                 fig.savefig(
-                    self.abs_path_local_staging / f"{self.subfolder}/{fname}.png"
+                    self.control.get_staging()/f"{self.subfolder}/{fname}.png"
                 )
                 plt.close(fig)
 
     @staticmethod
-    def get_filtered_dataframe(df, filters):
-        for k, v in filters.items():
-            values = v if isinstance(v, list) else [v]
-            df = df.loc[df[k].isin(values)]
-        return df
+    def get_correlation_matrix(df, rank):
+        n = len(rank)
+        matrix = np.empty((n, n))
+        matrix[:] = np.nan
+        names1 = df.structure1.unique()
+        names2 = df.structure2.unique()
+        for s1, name1 in enumerate(rank):
+            for s2, name2 in enumerate(rank):
+                if (name1 in names1) and (name2 in names2):
+                    indexes = df.loc[(df.structure1==name1)&(df.structure2==name2)].index
+                    matrix[s1, s2] = df.at[indexes[0], "Pearson"]
+        return matrix
 
     @staticmethod
     def get_dataframe_desc(df):
-        desc = "-".join(
-            [str(sorted(df[f].unique())) for f in ["intensity", "shapemode", "bin"]]
-        )
-        desc = (
-            desc.replace("[", "").replace("]", "").replace("'", "").replace(", ", ":")
-        )
+        desc = "-".join([str(sorted(df[f].unique()))
+                         for f in ["alias", "shape_mode", "mpId"]])
+        desc = desc.replace("[", "").replace("]", "")
+        decs = desc.replace("'", "").replace(", ", ":")
         return desc
 
+class ConcordancePlotMaker(PlotMaker):
+    """
+    Class for creating concordance heatmaps.
 
+    WARNING: This class should not depend on where
+    the local_staging folder is.
+    """
+
+    def __init__(self, config, subfolder: Optional[str] = None):
+        super().__init__(config)
+        self.subfolder = "concordance/plots" if subfolder is None else subfolder
+
+    def workflow(self):
+        self.check_and_store_parameters()
+        self.build_correlation_matrix()
+        self.make_heatmap(diagonal=self.multiple_mps)
+        if self.multiple_mps:
+            self.make_relative_heatmap()
+        else:
+            self.make_dendrogram()
+        return
+
+    def check_and_store_parameters(self):
+        mpIds = self.df.mpId.unique()
+        if len(mpIds) > 2:
+            raise ValueError(f"More than 2 map points found in the dataframe: {mpIds}")
+        aliases = self.df.alias.unique()
+        if len(aliases) > 1:
+            raise ValueError(
+                f"Multiples aliases found in the dataframe: {aliases}"
+            )
+        shape_modes = self.df.shape_mode.unique()
+        if len(shape_modes) > 1:
+            raise ValueError(
+                f"Multiples shape modes found in the dataframe: {shape_modes}"
+            )
+        self.alias = aliases[0]
+        self.shape_mode = shape_modes[0]
+        self.mpIds = mpIds
+        self.multiple_mps = len(mpIds) > 1
+        return
+    
+    def build_correlation_matrix(self):
+        matrices = []
+        for mpId in self.mpIds:
+            df_mp = self.df.loc[self.df.mpId == mpId]
+            matrices.append(self.get_correlation_matrix(df_mp, self.genes))
+        self.matrix = matrices[0]
+        if self.multiple_mps:
+            matrix_inf = np.tril(matrices[0], -1)
+            matrix_sup = np.triu(matrices[1], 1)
+            self.matrix = matrix_inf + matrix_sup
+        return
+
+    def make_heatmap(self, diagonal=False, cmap="RdBu", **kwargs):
+        ns = self.matrix.shape[0]
+        fig, ax = plt.subplots(1, 1, figsize=(8, 8), dpi=self.dpi)
+        ax.imshow(-self.matrix, cmap=cmap, vmin=-1.0, vmax=1.0)
+        ax.set_xticks(np.arange(self.matrix.shape[0]))
+        ax.set_yticks(np.arange(self.matrix.shape[0]))
+        ax.get_xaxis().set_ticklabels([])
+        ax.get_yaxis().set_ticklabels(self.control.get_structure_names())
+        for edge, spine in ax.spines.items():
+            spine.set_visible(False)
+        ax.set_xticks(np.arange(ns + 1) - 0.5, minor=True)
+        ax.set_yticks(np.arange(ns + 1) - 0.5, minor=True)
+        ax.grid(which="minor", color="w", linestyle="-", linewidth=2)
+        ax.tick_params(which="both", bottom=False, left=False)
+        if diagonal:
+            ax.plot([-0.5, ns - 0.5], [-0.5, ns - 0.5], "k-", linewidth=2)
+        ax.set_title(self.get_dataframe_desc(self.df))
+        plt.tight_layout()
+        prefix = "heatmap" if "prefix" not in kwargs else kwargs["prefix"]
+        self.figs.append((fig, f"{prefix}_" + self.get_dataframe_desc(self.df)))
+        return
+    
+    def get_dataframe_of_center_bin(self, alias, shape_mode):
+        cidx = self.control.get_center_map_point_index()
+        fltr = {"alias": alias, "shape_mode": shape_mode, "mpId": [cidx]}
+        return self.control.get_filtered_dataframe(self.df_original, fltr)
+
+    def make_relative_heatmap(self):
+        df = self.get_dataframe_of_center_bin(self.alias, self.shape_mode)
+        corr = self.get_correlation_matrix(df, self.genes)
+        self.matrix = corr - self.matrix
+        np.fill_diagonal(self.matrix, 0)
+        self.make_heatmap(diagonal=True, cmap="PRGn", prefix="heatmap_relative")
+        return
+
+    def make_dendrogram(self):
+        Z = spcluster.hierarchy.linkage(self.matrix, "average")
+        Z = spcluster.hierarchy.optimal_leaf_ordering(Z, self.matrix)
+        fig, ax = plt.subplots(1, 1, figsize=(8, 8))
+        dn = spcluster.hierarchy.dendrogram(
+            Z, labels=self.control.get_structure_names(), leaf_rotation=90
+        )
+        ax.set_title(self.get_dataframe_desc(self.df))
+        plt.tight_layout()
+        self.figs.append((fig, "dendrogram_" + self.get_dataframe_desc(self.df)))
+        return
+    
 class StereotypyPlotMaker(PlotMaker):
     """
     Class for ranking and plotting structures according
@@ -103,12 +209,8 @@ class StereotypyPlotMaker(PlotMaker):
 
     def __init__(self, config, subfolder: Optional[str] = None):
         super().__init__(config)
-        self.structures = config["structures"]["desc"]
-        if subfolder is None:
-            self.subfolder = "stereotypy/plots"
-        else:
-            self.subfolder = subfolder
         self.max_number_of_pairs = 0
+        self.subfolder = "concordance/plots" if subfolder is None else subfolder
 
     def set_max_number_of_pairs(self, n):
         self.max_number_of_pairs = n if n > 0 else 0
@@ -155,10 +257,9 @@ class StereotypyPlotMaker(PlotMaker):
     def workflow(self):
         self.make_boxplot()
 
-
-class ConcordancePlotMaker(PlotMaker):
+class ShapeSpacePlotMaker(PlotMaker):
     """
-    Class for creating concordance heatmaps.
+    Class for creating plots for shape space.
 
     WARNING: This class should not depend on where
     the local_staging folder is.
@@ -166,120 +267,143 @@ class ConcordancePlotMaker(PlotMaker):
 
     def __init__(self, config, subfolder: Optional[str] = None):
         super().__init__(config)
-        self.structures = config["structures"]["desc"]
         if subfolder is None:
-            self.subfolder = "concordance/plots"
+            self.subfolder = "shapemode/pca"
         else:
             self.subfolder = subfolder
 
-    def get_dataframe_of_center_bin(self, intensity, shapemode):
-        center_bin = int(0.5 * (len(self.config["pca"]["map_points"]) + 1))
-        return self.get_filtered_dataframe(
-            self.df_original,
-            {"intensity": intensity, "shapemode": shapemode, "bin": [center_bin]},
-        )
-
-    @staticmethod
-    def get_correlation_matrix(df, rank):
-        df_corr = (
-            df.groupby(["structure_name1", "structure_name2"])
-            .agg(["mean"])
-            .reset_index()
-        )
-        df_corr = df_corr.pivot(
-            index="structure_name1",
-            columns="structure_name2",
-            values=("Pearson", "mean"),
-        )
-        df_corr = df_corr[rank]
-        df_corr = df_corr.loc[rank]
-        matrix = df_corr.values
-        np.fill_diagonal(matrix, 1.0)
-        return matrix
-
-    def build_correlation_matrix(self):
-        bins = sorted(self.df.bin.unique())
-        if len(bins) > 2:
-            raise ValueError(f"More than 2 bin values found: {bins}")
-        matrices = []
-        for b in bins:
-            df_bin = self.df.loc[self.df.bin == b]
-            matrices.append(self.get_correlation_matrix(df_bin, self.structures))
-        self.matrix = matrices[0]
-        if len(bins) > 1:
-            matrix_inf = np.tril(matrices[0], -1)
-            matrix_sup = np.triu(matrices[1], 1)
-            self.matrix = matrix_inf + matrix_sup
-        return
-
-    def make_relative_heatmap(self):
-        df = self.get_dataframe_of_center_bin(self.intensity, self.shapemode)
-        corr = self.get_correlation_matrix(df, self.structures)
-        self.matrix = corr - self.matrix
-        np.fill_diagonal(self.matrix, 0)
-        self.make_heatmap(diagonal=True, cmap="PRGn", prefix="heatmap_relative")
-        return
-
-    def make_heatmap(self, diagonal=False, cmap="RdBu", **kwargs):
-        ns = self.matrix.shape[0]
-        fig, ax = plt.subplots(1, 1, figsize=(8, 8), dpi=self.dpi)
-        ax.imshow(-self.matrix, cmap=cmap, vmin=-1.0, vmax=1.0)
-        ax.set_xticks(np.arange(self.matrix.shape[0]))
-        ax.set_yticks(np.arange(self.matrix.shape[0]))
-        ax.get_xaxis().set_ticklabels([])
-        ax.get_yaxis().set_ticklabels([v[0] for k, v in self.structures.items()])
-        for edge, spine in ax.spines.items():
-            spine.set_visible(False)
-        ax.set_xticks(np.arange(ns + 1) - 0.5, minor=True)
-        ax.set_yticks(np.arange(ns + 1) - 0.5, minor=True)
-        ax.grid(which="minor", color="w", linestyle="-", linewidth=2)
-        ax.tick_params(which="both", bottom=False, left=False)
-        if diagonal:
-            ax.plot([-0.5, ns - 0.5], [-0.5, ns - 0.5], "k-", linewidth=2)
-        ax.set_title(self.get_dataframe_desc(self.df))
-        prefix = "heatmap" if "prefix" not in kwargs else kwargs["prefix"]
-        self.figs.append((fig, f"{prefix}_" + self.get_dataframe_desc(self.df)))
-        return
-
-    def make_dendrogram(self):
-        Z = spcluster.hierarchy.linkage(self.matrix, "average")
-        Z = spcluster.hierarchy.optimal_leaf_ordering(Z, self.matrix)
-        fig, ax = plt.subplots(1, 1, figsize=(8, 3))
-        dn = spcluster.hierarchy.dendrogram(
-            Z, labels=[v[0] for k, v in self.structures.items()], leaf_rotation=90
-        )
-        ax.set_title(self.get_dataframe_desc(self.df))
-        self.figs.append((fig, "dendrogram_" + self.get_dataframe_desc(self.df)))
-        return
-
-    def check_and_store_parameters(self):
-        bins = self.df.bin.unique()
-        if len(bins) > 2:
-            raise ValueError(f"More than 2 bins found in the dataframe: {bins}")
-        intensities = self.df.intensity.unique()
-        if len(intensities) > 1:
-            raise ValueError(
-                f"Multiples intensities found in the dataframe: {intensities}"
-            )
-        shapemodes = self.df.shapemode.unique()
-        if len(shapemodes) > 1:
-            raise ValueError(
-                f"Multiples shapemodes found in the dataframe: {shapemodes}"
-            )
-        self.intensity = intensities[0]
-        self.shapemode = shapemodes[0]
-        self.bins = bins
-        self.multiple_bins = len(bins) > 1
-        return
-
     def workflow(self):
-        self.check_and_store_parameters()
-        self.build_correlation_matrix()
-        self.make_heatmap(diagonal=self.multiple_bins)
-        if self.multiple_bins:
-            self.make_relative_heatmap()
-        else:
-            self.make_dendrogram()
+        return
+            
+    def plot_explained_variance(self, space):
+        npcs = self.control.get_number_of_shape_modes()
+        fig, ax = plt.subplots(1, 1, figsize=(8, 5), dpi=self.dpi)
+        ax.plot(100 * space.pca.explained_variance_ratio_[:npcs], "-o")
+        title = "Cum. variance: (1+2) = {0}%, Total = {1}%".format(
+            int(100 * space.pca.explained_variance_ratio_[:2].sum()),
+            int(100 * space.pca.explained_variance_ratio_[:].sum()),
+        )
+        ax.set_xlabel("Component", fontsize=18)
+        ax.set_ylabel("Explained variance (%)", fontsize=18)
+        ax.set_xticks(np.arange(npcs))
+        ax.set_xticklabels(np.arange(1, 1+npcs))
+        ax.set_title(title, fontsize=18)
+        plt.tight_layout()
+        self.figs.append((fig, "explained_variance"))
+        return
+            
+    def save_feature_importance(self, space):
+        path = f"{self.subfolder}/feature_importance.txt"
+        abs_path_txt_file = self.control.get_staging()/path
+        print(abs_path_txt_file)
+        with open(abs_path_txt_file, "w") as flog:
+            for col, sm in enumerate(self.control.iter_shape_modes()):
+                exp_var = 100*space.pca.explained_variance_ratio_[col]
+                print(f"\nExplained variance {sm}={exp_var:.1f}%", file=flog)
+                '''_PC: raw loading, _aPC: absolute loading and
+                _cPC: normalized cummulative loading'''
+                pc_name = space.axes.columns[col]
+                df_sorted = space.df_feats.sort_values(
+                    by=[pc_name.replace("_PC", "_aPC")], ascending=False
+                )
+                pca_cum_contrib = np.cumsum(
+                    df_sorted[pc_name.replace("_PC", "_aPC")].values/
+                    df_sorted[pc_name.replace("_PC", "_aPC")].sum()
+                )
+                pca_cum_thresh = np.abs(pca_cum_contrib-0.80).argmin()
+                df_sorted = df_sorted.head(n=pca_cum_thresh+1)
+                print(df_sorted[[
+                    pc_name,
+                    pc_name.replace("_PC", "_aPC"),
+                    pc_name.replace("_PC", "_cPC"),]].head(), file=flog
+                )
+        return
+
+    def plot_pairwise_correlations(self, space, off=0):
+        df = space.shape_modes
+        npts = df.shape[0]
+        cmap = plt.cm.get_cmap("tab10")
+        prange = []
+        for f in df.columns:
+            prange.append(np.percentile(df[f].values, [off, 100 - off]))
+        # Create a grid of nfxnf
+        nf = len(df.columns)
+        fig, axs = plt.subplots(nf, nf, figsize=(2*nf, 2*nf), sharex="col",
+            gridspec_kw={"hspace": 0.1, "wspace": 0.1},
+        )
+        for f1id, f1 in enumerate(df.columns):
+            yrange = []
+            for f2id, f2 in enumerate(df.columns):
+                ax = axs[f1id, f2id]
+                y = df[f1].values
+                x = df[f2].values
+                valids = np.where((
+                    (y > prange[f1id][0])&
+                    (y < prange[f1id][1])&
+                    (x > prange[f2id][0])&
+                    (x < prange[f2id][1])))
+                if f2id < f1id:
+                    xmin = x[valids].min()
+                    xmax = x[valids].max()
+                    ymin = y[valids].min()
+                    ymax = y[valids].max()
+                    yrange.append([ymin, ymax])
+                    ax.plot(x[valids], y[valids], ".", markersize=2, color="black", alpha=0.8)
+                    ax.plot([xmin, xmax], [xmin, xmax], "--")
+                    if f2id:
+                        plt.setp(ax.get_yticklabels(), visible=False)
+                        ax.tick_params(axis="y", which="both", length=0.0)
+                    if f1id < nf - 1:
+                        ax.tick_params(axis="x", which="both", length=0.0)
+                # Add annotations on upper triangle
+                elif f2id > f1id:
+                    plt.setp(ax.get_xticklabels(), visible=False)
+                    plt.setp(ax.get_yticklabels(), visible=False)
+                    ax.tick_params(axis="x", which="both", length=0.0)
+                    ax.tick_params(axis="y", which="both", length=0.0)
+                    pearson, p_pvalue = spstats.pearsonr(x, y)
+                    spearman, s_pvalue = spstats.spearmanr(x, y)
+                    ax.text(0.05, 0.8, f"Pearson: {pearson:.2f}", size=10, ha="left",
+                            transform=ax.transAxes,
+                    )
+                    ax.text(0.05, 0.6, f"P-value: {p_pvalue:.1E}", size=10, ha="left",
+                            transform=ax.transAxes,
+                    )
+                    ax.text(0.05, 0.4, f"Spearman: {spearman:.2f}", size=10, ha="left",
+                        transform=ax.transAxes,
+                    )
+                    ax.text(0.05, 0.2, f"P-value: {s_pvalue:.1E}", size=10, ha="left",
+                        transform=ax.transAxes,
+                    )
+                # Single variable distribution at diagonal
+                else:
+                    ax.set_frame_on(False)
+                    plt.setp(ax.get_yticklabels(), visible=False)
+                    ax.tick_params(axis="y", which="both", length=0.0)
+                    ax.hist(x[valids], bins=16, density=True, histtype="stepfilled",
+                            color="white", edgecolor="black", label="Complete",
+                    )
+                    ax.hist(x[valids], bins=16, density=True, histtype="stepfilled",
+                            color=cmap(0), alpha=0.2, label="Incomplete",
+                    )
+                if f1id == nf - 1:
+                    ax.set_xlabel(f2, fontsize=7)
+                if not f2id and f1id:
+                    ax.set_ylabel(f1, fontsize=7)
+            if yrange:
+                ymin = np.min([ymin for (ymin, ymax) in yrange])
+                ymax = np.max([ymax for (ymin, ymax) in yrange])
+                for f2id, f2 in enumerate(df.columns):
+                    ax = axs[f1id, f2id]
+                    if f2id < f1id:
+                        ax.set_ylim(ymin, ymax)
+
+        # Global annotation
+        fig.add_subplot(111, frameon=False)
+        plt.tick_params(labelcolor="none", top=False, bottom=False, left=False, right=False)
+        plt.title(f"Total number of points: {npts}", fontsize=24)
+
+        self.figs.append((fig, "pairwise_correlations"))
         return
 
 
@@ -298,26 +422,11 @@ class ShapeModePlotMaker(PlotMaker):
         else:
             self.subfolder = subfolder
 
-    def plot_explained_variance(self, pca):
-        npcs_to_calc = self.config["pca"]["number_of_pcs"]
-        fig, ax = plt.subplots(1, 1, figsize=(8, 5), dpi=self.dpi)
-        ax.plot(100 * pca.explained_variance_ratio_[:npcs_to_calc], "-o")
-        title = "Cum. variance: (1+2) = {0}%, Total = {1}%".format(
-            int(100 * pca.explained_variance_ratio_[:2].sum()),
-            int(100 * pca.explained_variance_ratio_[:].sum()),
-        )
-        ax.set_xlabel("Component", fontsize=18)
-        ax.set_ylabel("Explained variance (%)", fontsize=18)
-        ax.set_xticks(np.arange(npcs_to_calc))
-        ax.set_xticklabels(np.arange(1, 1 + npcs_to_calc))
-        ax.set_title(title, fontsize=18)
-        plt.tight_layout()
-        self.figs.append((fig, "explained_variance"))
+    def workflow(self):
         return
-    
+            
     def animate_contours(self, contours, prefix):
-        nbins = len(self.config["pca"]["map_points"])
-        hmin, hmax, vmin, vmax = self.config["pca"]["plot"]["limits"]
+        hmin, hmax, vmin, vmax = self.control.get_plot_limits()
         offset = 0.05 * (hmax - hmin)
 
         fig, ax = plt.subplots(1, 1, figsize=(3, 3))
@@ -326,13 +435,11 @@ class ShapeModePlotMaker(PlotMaker):
         ax.set_xlim(hmin - offset, hmax + offset)
         ax.set_ylim(vmin - offset, vmax + offset)
         ax.set_aspect("equal")
-
+        
         lines = []
         for alias, _ in contours.items():
-            for obj, value in self.config["data"]["segmentation"].items():
-                if value["alias"] == alias:
-                    break
-            (line,) = ax.plot([], [], lw=2, color=value["color"])
+            color = self.control.get_color_from_alias(alias)
+            (line,) = ax.plot([], [], lw=2, color=color)
             lines.append(line)
 
         def animate(i):
@@ -343,26 +450,26 @@ class ShapeModePlotMaker(PlotMaker):
                 line.set_data(mx, my)
             return lines
 
+        n = self.control.get_number_of_map_points()
         anim = animation.FuncAnimation(
-            fig, animate, frames=nbins, interval=100, blit=True
+            fig, animate, frames=n, interval=100, blit=True
         )
-        fname = self.abs_path_local_staging / f"{self.subfolder}/{prefix}.gif"
-        anim.save(fname, writer="imagemagick", fps=nbins)
+        fname = self.control.get_staging()/f"{self.subfolder}/{prefix}.gif"
+        anim.save(fname, writer="imagemagick", fps=n)
         plt.close("all")
         return
 
-    def load_animated_gif(self, shapemode, proj):
-        fname = self.abs_path_local_staging
-        fname = fname / f"{self.subfolder}/{shapemode}_{proj}.gif"
+    def load_animated_gif(self, shape_mode, proj):
+        fname = self.control.get_staging()/f"{self.subfolder}/{shape_mode}_{proj}.gif"
         image = AICSImage(fname).data.squeeze()
         return image
-    
-    def combine_and_save_animated_gifs(self, shapemodes):
+
+    def combine_and_save_animated_gifs(self):
         stack = []
-        for shapemode in tqdm(shapemodes):
-            imx = self.load_animated_gif(shapemode, "x")
-            imy = self.load_animated_gif(shapemode, "y")
-            imz = self.load_animated_gif(shapemode, "z")
+        for sm in tqdm(self.control.get_shape_modes()):
+            imx = self.load_animated_gif(sm, "x")
+            imy = self.load_animated_gif(sm, "y")
+            imz = self.load_animated_gif(sm, "z")
             if imx.ndim == 3:
                 imx, imy, imz = imx.T, imy.T, imz.T
             img = np.c_[imz, imy, imx]
@@ -380,11 +487,11 @@ class ShapeModePlotMaker(PlotMaker):
         for r in range(5):
             gaps[1:-1] = gaps[2:] + gaps[:-2]
         stack = stack[:, :, gaps>0,:]
-        fname = self.abs_path_local_staging / f"{self.subfolder}/combined.tif"
+        fname = self.control.get_staging()/f"{self.subfolder}/combined.tif"
         with writers.ome_tiff_writer.OmeTiffWriter(fname, overwrite_file=True) as writer:
             writer.save(stack, dimension_order='CZYX')
         return
-    
+
     @staticmethod
     def find_plane_mesh_intersection(mesh, proj):
 
@@ -398,10 +505,9 @@ class ShapeModePlotMaker(PlotMaker):
             raise Exception("Only zeros found in the plane axis.")
 
         mid = np.mean(points[:, axis])
-
-        # Set the plane a little off center to avoid undefined intersections
-        # Without this the code hangs when the mesh has any edge aligned with the
-        # projection plane
+        '''Set the plane a little off center to avoid undefined intersections.
+        Without this the code hangs when the mesh has any edge aligned with the
+        projection plane.'''
         mid += 0.75
         offset = 0.1 * np.ptp(points, axis=0).max()
 
@@ -525,93 +631,4 @@ class ShapeModePlotMaker(PlotMaker):
         writer.SetFileName(path)
         writer.SetInputConnection(windowToImageFilter.GetOutputPort())
         writer.Write()
-        return
-    
-    def plot_paired_correlations(self, df, off=0):
-        npts = df.shape[0]
-        cmap = plt.cm.get_cmap("tab10")
-        prange = []
-        for f in df.columns:
-            prange.append(np.percentile(df[f].values, [off, 100 - off]))
-        # Create a grid of nfxnf
-        nf = len(df.columns)
-        fig, axs = plt.subplots(nf, nf, figsize=(2*nf, 2*nf), sharex="col",
-            gridspec_kw={"hspace": 0.1, "wspace": 0.1},
-        )
-        for f1id, f1 in enumerate(df.columns):
-            yrange = []
-            for f2id, f2 in enumerate(df.columns):
-                ax = axs[f1id, f2id]
-                y = df[f1].values
-                x = df[f2].values
-                valids = np.where((
-                    (y > prange[f1id][0])&
-                    (y < prange[f1id][1])&
-                    (x > prange[f2id][0])&
-                    (x < prange[f2id][1])))
-                if f2id < f1id:
-                    xmin = x[valids].min()
-                    xmax = x[valids].max()
-                    ymin = y[valids].min()
-                    ymax = y[valids].max()
-                    yrange.append([ymin, ymax])
-                    ax.plot(x[valids], y[valids], ".", markersize=2, color="black", alpha=0.8)
-                    ax.plot([xmin, xmax], [xmin, xmax], "--")
-                    if f2id:
-                        plt.setp(ax.get_yticklabels(), visible=False)
-                        ax.tick_params(axis="y", which="both", length=0.0)
-                    if f1id < nf - 1:
-                        ax.tick_params(axis="x", which="both", length=0.0)
-                # Add annotations on upper triangle
-                elif f2id > f1id:
-                    plt.setp(ax.get_xticklabels(), visible=False)
-                    plt.setp(ax.get_yticklabels(), visible=False)
-                    ax.tick_params(axis="x", which="both", length=0.0)
-                    ax.tick_params(axis="y", which="both", length=0.0)
-                    pearson, p_pvalue = spstats.pearsonr(x, y)
-                    spearman, s_pvalue = spstats.spearmanr(x, y)
-                    ax.text(0.05, 0.8, f"Pearson: {pearson:.2f}", size=10, ha="left",
-                            transform=ax.transAxes,
-                    )
-                    ax.text(0.05, 0.6, f"P-value: {p_pvalue:.1E}", size=10, ha="left",
-                            transform=ax.transAxes,
-                    )
-                    ax.text(0.05, 0.4, f"Spearman: {spearman:.2f}", size=10, ha="left",
-                        transform=ax.transAxes,
-                    )
-                    ax.text(0.05, 0.2, f"P-value: {s_pvalue:.1E}", size=10, ha="left",
-                        transform=ax.transAxes,
-                    )
-                # Single variable distribution at diagonal
-                else:
-                    ax.set_frame_on(False)
-                    plt.setp(ax.get_yticklabels(), visible=False)
-                    ax.tick_params(axis="y", which="both", length=0.0)
-                    ax.hist(x[valids], bins=16, density=True, histtype="stepfilled",
-                            color="white", edgecolor="black", label="Complete",
-                    )
-                    ax.hist(x[valids], bins=16, density=True, histtype="stepfilled",
-                            color=cmap(0), alpha=0.2, label="Incomplete",
-                    )
-                if f1id == nf - 1:
-                    ax.set_xlabel(f2, fontsize=7)
-                if not f2id and f1id:
-                    ax.set_ylabel(f1, fontsize=7)
-            if yrange:
-                ymin = np.min([ymin for (ymin, ymax) in yrange])
-                ymax = np.max([ymax for (ymin, ymax) in yrange])
-                for f2id, f2 in enumerate(df.columns):
-                    ax = axs[f1id, f2id]
-                    if f2id < f1id:
-                        ax.set_ylim(ymin, ymax)
-
-        # Global annotation
-        fig.add_subplot(111, frameon=False)
-        plt.tick_params(labelcolor="none", top=False, bottom=False, left=False, right=False)
-        plt.title(f"Total number of points: {npts}", fontsize=24)
-
-        self.figs.append((fig, "paired_correlations"))
-        return
-    
-    def workflow(self):
         return
