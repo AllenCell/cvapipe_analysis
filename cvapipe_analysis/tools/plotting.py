@@ -187,7 +187,11 @@ class ConcordancePlotMaker(PlotMaker):
         return
 
     def make_dendrogram(self):
-        Z = spcluster.hierarchy.linkage(self.matrix, "average")
+        try:
+            Z = spcluster.hierarchy.linkage(self.matrix, "average")
+        except Exception as ex:
+            print(f"Can't generate the dendrogram. Possible NaN in matrix: {ex}")
+            return
         Z = spcluster.hierarchy.optimal_leaf_ordering(Z, self.matrix)
         fig, ax = plt.subplots(1, 1, figsize=(8, 8))
         dn = spcluster.hierarchy.dendrogram(
@@ -321,13 +325,15 @@ class ShapeSpacePlotMaker(PlotMaker):
 
     def plot_pairwise_correlations(self, space, off=0):
         df = space.shape_modes
+        nf = len(df.columns)
+        if nf < 2:
+            return
         npts = df.shape[0]
         cmap = plt.cm.get_cmap("tab10")
         prange = []
         for f in df.columns:
             prange.append(np.percentile(df[f].values, [off, 100 - off]))
         # Create a grid of nfxnf
-        nf = len(df.columns)
         fig, axs = plt.subplots(nf, nf, figsize=(2*nf, 2*nf), sharex="col",
             gridspec_kw={"hspace": 0.1, "wspace": 0.1},
         )
