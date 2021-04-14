@@ -59,6 +59,16 @@ class Preprocessing(Step):
                 df = df.drop(columns=['Outlier'])
                 log.info(f"Shape of data without outliers: {df.shape}")
             
+            # Remove rows for which any feature is nan
+            aliases = control.get_aliases_for_pca()
+            columns = [f for f in df.columns if any(w in f for w in aliases)]
+            columns = [c for c in columns if "transform" not in c]
+            df_na = df.loc[df[columns].isna().any(axis=1)]
+            if len(df_na):
+                print(df_na.head())
+                print(f"{len(df_na)} rows found with NaN values.")
+                df = df.loc[~df.index.isin(df_na.index)]
+
             log.info(f"Saving manifest...")
             self.manifest = df
             manifest_path = self.step_local_staging_dir/'manifest.csv'

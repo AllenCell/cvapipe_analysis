@@ -37,21 +37,12 @@ class PlotMaker(io.LocalStagingIO):
     def __init__(self, control):
         super().__init__(control)
         self.genes = self.control.get_gene_names()
-        
+
     def set_dataframe(self, df, dropna=[]):
         self.df_original = df.copy()
         if dropna:
             self.df_original = self.df_original.dropna(subset=dropna)
         self.df = self.df_original
-
-    def check_dataframe_exists(self):
-        if self.df is None:
-            raise ValueError("Please set a dataframe first.")
-        return True
-
-    def filter_dataframe(self, filters):
-        self.check_dataframe_exists()
-        self.df = self.control.get_filtered_dataframe(self.df_original, filters)
 
     def execute(self, display=True, **kwargs):
         if "dpi" in kwargs:
@@ -69,11 +60,19 @@ class PlotMaker(io.LocalStagingIO):
                 fname = signature
                 if prefix is not None:
                     fname = f"{prefix}_{signature}"
-                print(fname)
                 fig.savefig(
                     self.control.get_staging()/f"{self.subfolder}/{fname}.png"
                 )
                 plt.close(fig)
+
+    def check_dataframe_exists(self):
+        if self.df is None:
+            raise ValueError("Please set a dataframe first.")
+        return True
+
+    def filter_dataframe(self, filters):
+        self.check_dataframe_exists()
+        self.df = self.control.get_filtered_dataframe(self.df_original, filters)
 
     @staticmethod
     def get_correlation_matrix(df, rank):
@@ -91,10 +90,8 @@ class PlotMaker(io.LocalStagingIO):
 
     @staticmethod
     def get_dataframe_desc(df):
-        desc = "-".join([str(sorted(df[f].unique()))
-                         for f in ["alias", "shape_mode", "mpId"]])
-        desc = desc.replace("[", "").replace("]", "")
-        decs = desc.replace("'", "").replace(", ", ":")
+        desc = "-".join([str(sorted(df[f].unique())) for f in ["alias", "shape_mode", "mpId"]])
+        desc = desc.replace("[", "").replace("]", "").replace("'", "")
         return desc
 
 class ConcordancePlotMaker(PlotMaker):
@@ -110,6 +107,7 @@ class ConcordancePlotMaker(PlotMaker):
         self.subfolder = "concordance/plots" if subfolder is None else subfolder
 
     def workflow(self):
+        self.check_dataframe_exists()
         self.check_and_store_parameters()
         self.build_correlation_matrix()
         self.make_heatmap(diagonal=self.multiple_mps)
@@ -187,7 +185,11 @@ class ConcordancePlotMaker(PlotMaker):
         return
 
     def make_dendrogram(self):
-        Z = spcluster.hierarchy.linkage(self.matrix, "average")
+        try:
+            Z = spcluster.hierarchy.linkage(self.matrix, "average")
+        except Exception as ex:
+            print(f"Can't generate the dendrogram. Possible NaN in matrix: {ex}")
+            return
         Z = spcluster.hierarchy.optimal_leaf_ordering(Z, self.matrix)
         fig, ax = plt.subplots(1, 1, figsize=(8, 8))
         dn = spcluster.hierarchy.dendrogram(
@@ -210,21 +212,23 @@ class StereotypyPlotMaker(PlotMaker):
     def __init__(self, config, subfolder: Optional[str] = None):
         super().__init__(config)
         self.max_number_of_pairs = 0
-        self.subfolder = "concordance/plots" if subfolder is None else subfolder
+        self.subfolder = "stereotypy/plots" if subfolder is None else subfolder
 
     def set_max_number_of_pairs(self, n):
         self.max_number_of_pairs = n if n > 0 else 0
 
+    def workflow(self):
+        self.make_boxplot()
+
     def make_boxplot(self):
-        self.check_dataframe_exists()
         labels = []
+        self.check_dataframe_exists()
         fig, ax = plt.subplots(1, 1, figsize=(7, 8), dpi=self.dpi)
-        for sid, sname in enumerate(reversed(self.structures.keys())):
-            df_s = self.df.loc[self.df.structure_name == sname]
+        for sid, gene in enumerate(reversed(self.control.get_gene_names())):
+            df_s = self.df.loc[self.df.structure == gene]
             if self.max_number_of_pairs > 0:
                 df_s = df_s.sample(n=np.min([len(df_s), self.max_number_of_pairs]))
-            npairs = len(df_s)
-            y = np.random.normal(size=npairs, loc=sid, scale=0.1)
+            y = np.random.normal(size=len(df_s), loc=sid, scale=0.1)
             ax.scatter(df_s.Pearson, y, s=1, c="k", alpha=0.1)
             box = ax.boxplot(
                 df_s.Pearson,
@@ -241,9 +245,9 @@ class StereotypyPlotMaker(PlotMaker):
                     "markersize": 5,
                 },
             )
-            label = f"{self.structures[sname][0]} (N={npairs:04d})"
+            label = f"{self.control.get_structure_name(gene)} (N={len(df_s):04d})"
             labels.append(label)
-            box["boxes"][0].set(facecolor=self.structures[sname][1])
+            box["boxes"][0].set(facecolor=self.control.get_gene_color(gene))
             box["medians"][0].set(color="black")
         ax.set_yticklabels(labels)
         ax.set_xlim(-0.2, 1.0)
@@ -252,10 +256,6 @@ class StereotypyPlotMaker(PlotMaker):
         ax.grid(True)
         plt.tight_layout()
         self.figs.append((fig, self.get_dataframe_desc(self.df)))
-        return
-
-    def workflow(self):
-        self.make_boxplot()
 
 class ShapeSpacePlotMaker(PlotMaker):
     """
@@ -321,13 +321,15 @@ class ShapeSpacePlotMaker(PlotMaker):
 
     def plot_pairwise_correlations(self, space, off=0):
         df = space.shape_modes
+        nf = len(df.columns)
+        if nf < 2:
+            return
         npts = df.shape[0]
         cmap = plt.cm.get_cmap("tab10")
         prange = []
         for f in df.columns:
             prange.append(np.percentile(df[f].values, [off, 100 - off]))
         # Create a grid of nfxnf
-        nf = len(df.columns)
         fig, axs = plt.subplots(nf, nf, figsize=(2*nf, 2*nf), sharex="col",
             gridspec_kw={"hspace": 0.1, "wspace": 0.1},
         )
@@ -405,7 +407,6 @@ class ShapeSpacePlotMaker(PlotMaker):
 
         self.figs.append((fig, "pairwise_correlations"))
         return
-
 
 class ShapeModePlotMaker(PlotMaker):
     """

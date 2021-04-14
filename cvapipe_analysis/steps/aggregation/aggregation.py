@@ -37,7 +37,7 @@ class Aggregation(Step):
             space.execute(df)
             variables = control.get_variables_values_for_aggregation()
             df_agg = space.get_aggregated_df(variables)
-            
+
             if distribute:
 
                 distributor = cluster.AggregationDistributor(control)
