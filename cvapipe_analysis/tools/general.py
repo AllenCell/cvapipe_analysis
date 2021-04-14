@@ -1,22 +1,23 @@
-import os
 import json
 import yaml
 from pathlib import Path
 from datetime import datetime
 from contextlib import contextmanager
-
 from cvapipe_analysis.tools import controller
+
 
 def load_config_file():
     with open('config.yaml', 'r') as f:
-        config = yaml.load(f, Loader=yaml.FullLoader)    
+        config = yaml.load(f, Loader=yaml.FullLoader)
     return config
+
 
 def save_config_file(config, path_to_folder):
     path_to_folder = Path(path_to_folder)
-    with open(path_to_folder/'parameters.yaml', 'w') as f:
+    with open(path_to_folder / 'parameters.yaml', 'w') as f:
         yaml.dump(config, f)
     return
+
 
 def create_workflow_file_from_config():
     config = load_config_file()
@@ -24,8 +25,10 @@ def create_workflow_file_from_config():
     with open('workflow_config.json', 'w') as fj:
         json.dump({'project_local_staging_dir': local_staging}, fj)
 
+
 def get_date_time():
     return datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+
 
 @contextmanager
 def configuration(path_to_folder=None):

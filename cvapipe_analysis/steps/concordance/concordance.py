@@ -14,6 +14,7 @@ from .concordance_tools import ConcordanceCalculator
 
 log = logging.getLogger(__name__)
 
+
 class Concordance(Step):
     def __init__(
         self,
@@ -23,7 +24,7 @@ class Concordance(Step):
         super().__init__(direct_upstream_tasks=direct_upstream_tasks, config=config)
 
     @log_run_params
-    def run(self, distribute: Optional[bool]=False, **kwargs):
+    def run(self, distribute: Optional[bool] = False, **kwargs):
 
         with general.configuration(self.step_local_staging_dir) as control:
 
@@ -44,13 +45,14 @@ class Concordance(Step):
                 distributor = cluster.ConcordanceDistributor(control)
                 distributor.set_data(df_agg)
                 distributor.distribute()
-                log.info(f"Multiple jobs have been launched. Please come back when the calculation is complete.")
-                
+                log.info(
+                    f"Multiple jobs have been launched. Please come back when the calculation is complete.")
+
                 return None
 
             calculator = ConcordanceCalculator(control)
             with concurrent.futures.ProcessPoolExecutor(control.get_ncores()) as executor:
-                executor.map(calculator.execute, [row for _,row in df_agg.iterrows()])
+                executor.map(calculator.execute, [row for _, row in df_agg.iterrows()])
 
             log.info(f"Loading results...")
 
@@ -63,8 +65,10 @@ class Concordance(Step):
             for alias in tqdm(control.get_aliases_to_parameterize()):
                 for shape_mode in control.get_shape_modes():
                     mpId = control.get_center_map_point_index()
-                    pmaker.filter_dataframe({'alias': alias, 'shape_mode': shape_mode, 'mpId': [mpId]})
+                    pmaker.filter_dataframe(
+                        {'alias': alias, 'shape_mode': shape_mode, 'mpId': [mpId]})
                     pmaker.execute(display=False)
                     mpIds = control.get_extreme_opposite_map_point_indexes()
-                    pmaker.filter_dataframe({'alias': alias, 'shape_mode': shape_mode, 'mpId': mpIds})
+                    pmaker.filter_dataframe(
+                        {'alias': alias, 'shape_mode': shape_mode, 'mpId': mpIds})
                     pmaker.execute(display=False)

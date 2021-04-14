@@ -1,11 +1,9 @@
-import os
 import vtk
 import math
 import operator
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
-from pathlib import Path
 from typing import Optional
 from functools import reduce
 import matplotlib.pyplot as plt
@@ -15,7 +13,6 @@ from scipy import cluster as spcluster
 from aicsimageio import AICSImage, writers
 from vtk.util.numpy_support import vtk_to_numpy as vtk2np
 from vtk.util.numpy_support import numpy_to_vtk as np2vtk
-
 from cvapipe_analysis.tools import io
 
 
@@ -37,6 +34,9 @@ class PlotMaker(io.LocalStagingIO):
     def __init__(self, control):
         super().__init__(control)
         self.genes = self.control.get_gene_names()
+
+    def workflow(self):
+        pass
 
     def set_dataframe(self, df, dropna=[]):
         self.df_original = df.copy()
@@ -61,7 +61,7 @@ class PlotMaker(io.LocalStagingIO):
                 if prefix is not None:
                     fname = f"{prefix}_{signature}"
                 fig.savefig(
-                    self.control.get_staging()/f"{self.subfolder}/{fname}.png"
+                    self.control.get_staging() / f"{self.subfolder}/{fname}.png"
                 )
                 plt.close(fig)
 
@@ -84,15 +84,18 @@ class PlotMaker(io.LocalStagingIO):
         for s1, name1 in enumerate(rank):
             for s2, name2 in enumerate(rank):
                 if (name1 in names1) and (name2 in names2):
-                    indexes = df.loc[(df.structure1==name1)&(df.structure2==name2)].index
+                    indexes = df.loc[(df.structure1 == name1) &
+                                     (df.structure2 == name2)].index
                     matrix[s1, s2] = df.at[indexes[0], "Pearson"]
         return matrix
 
     @staticmethod
     def get_dataframe_desc(df):
-        desc = "-".join([str(sorted(df[f].unique())) for f in ["alias", "shape_mode", "mpId"]])
+        desc = "-".join([str(sorted(df[f].unique()))
+                         for f in ["alias", "shape_mode", "mpId"]])
         desc = desc.replace("[", "").replace("]", "").replace("'", "")
         return desc
+
 
 class ConcordancePlotMaker(PlotMaker):
     """
@@ -136,7 +139,7 @@ class ConcordancePlotMaker(PlotMaker):
         self.mpIds = mpIds
         self.multiple_mps = len(mpIds) > 1
         return
-    
+
     def build_correlation_matrix(self):
         matrices = []
         for mpId in self.mpIds:
@@ -157,7 +160,7 @@ class ConcordancePlotMaker(PlotMaker):
         ax.set_yticks(np.arange(self.matrix.shape[0]))
         ax.get_xaxis().set_ticklabels([])
         ax.get_yaxis().set_ticklabels(self.control.get_structure_names())
-        for edge, spine in ax.spines.items():
+        for _, spine in ax.spines.items():
             spine.set_visible(False)
         ax.set_xticks(np.arange(ns + 1) - 0.5, minor=True)
         ax.set_yticks(np.arange(ns + 1) - 0.5, minor=True)
@@ -170,7 +173,7 @@ class ConcordancePlotMaker(PlotMaker):
         prefix = "heatmap" if "prefix" not in kwargs else kwargs["prefix"]
         self.figs.append((fig, f"{prefix}_" + self.get_dataframe_desc(self.df)))
         return
-    
+
     def get_dataframe_of_center_bin(self, alias, shape_mode):
         cidx = self.control.get_center_map_point_index()
         fltr = {"alias": alias, "shape_mode": shape_mode, "mpId": [cidx]}
@@ -192,14 +195,15 @@ class ConcordancePlotMaker(PlotMaker):
             return
         Z = spcluster.hierarchy.optimal_leaf_ordering(Z, self.matrix)
         fig, ax = plt.subplots(1, 1, figsize=(8, 8))
-        dn = spcluster.hierarchy.dendrogram(
+        _ = spcluster.hierarchy.dendrogram(
             Z, labels=self.control.get_structure_names(), leaf_rotation=90
         )
         ax.set_title(self.get_dataframe_desc(self.df))
         plt.tight_layout()
         self.figs.append((fig, "dendrogram_" + self.get_dataframe_desc(self.df)))
         return
-    
+
+
 class StereotypyPlotMaker(PlotMaker):
     """
     Class for ranking and plotting structures according
@@ -257,6 +261,7 @@ class StereotypyPlotMaker(PlotMaker):
         plt.tight_layout()
         self.figs.append((fig, self.get_dataframe_desc(self.df)))
 
+
 class ShapeSpacePlotMaker(PlotMaker):
     """
     Class for creating plots for shape space.
@@ -274,7 +279,7 @@ class ShapeSpacePlotMaker(PlotMaker):
 
     def workflow(self):
         return
-            
+
     def plot_explained_variance(self, space):
         npcs = self.control.get_number_of_shape_modes()
         fig, ax = plt.subplots(1, 1, figsize=(8, 5), dpi=self.dpi)
@@ -286,19 +291,19 @@ class ShapeSpacePlotMaker(PlotMaker):
         ax.set_xlabel("Component", fontsize=18)
         ax.set_ylabel("Explained variance (%)", fontsize=18)
         ax.set_xticks(np.arange(npcs))
-        ax.set_xticklabels(np.arange(1, 1+npcs))
+        ax.set_xticklabels(np.arange(1, 1 + npcs))
         ax.set_title(title, fontsize=18)
         plt.tight_layout()
         self.figs.append((fig, "explained_variance"))
         return
-            
+
     def save_feature_importance(self, space):
         path = f"{self.subfolder}/feature_importance.txt"
-        abs_path_txt_file = self.control.get_staging()/path
+        abs_path_txt_file = self.control.get_staging() / path
         print(abs_path_txt_file)
         with open(abs_path_txt_file, "w") as flog:
             for col, sm in enumerate(self.control.iter_shape_modes()):
-                exp_var = 100*space.pca.explained_variance_ratio_[col]
+                exp_var = 100 * space.pca.explained_variance_ratio_[col]
                 print(f"\nExplained variance {sm}={exp_var:.1f}%", file=flog)
                 '''_PC: raw loading, _aPC: absolute loading and
                 _cPC: normalized cummulative loading'''
@@ -307,15 +312,15 @@ class ShapeSpacePlotMaker(PlotMaker):
                     by=[pc_name.replace("_PC", "_aPC")], ascending=False
                 )
                 pca_cum_contrib = np.cumsum(
-                    df_sorted[pc_name.replace("_PC", "_aPC")].values/
+                    df_sorted[pc_name.replace("_PC", "_aPC")].values /
                     df_sorted[pc_name.replace("_PC", "_aPC")].sum()
                 )
-                pca_cum_thresh = np.abs(pca_cum_contrib-0.80).argmin()
-                df_sorted = df_sorted.head(n=pca_cum_thresh+1)
+                pca_cum_thresh = np.abs(pca_cum_contrib - 0.80).argmin()
+                df_sorted = df_sorted.head(n=pca_cum_thresh + 1)
                 print(df_sorted[[
                     pc_name,
                     pc_name.replace("_PC", "_aPC"),
-                    pc_name.replace("_PC", "_cPC"),]].head(), file=flog
+                    pc_name.replace("_PC", "_cPC"), ]].head(), file=flog
                 )
         return
 
@@ -330,9 +335,9 @@ class ShapeSpacePlotMaker(PlotMaker):
         for f in df.columns:
             prange.append(np.percentile(df[f].values, [off, 100 - off]))
         # Create a grid of nfxnf
-        fig, axs = plt.subplots(nf, nf, figsize=(2*nf, 2*nf), sharex="col",
-            gridspec_kw={"hspace": 0.1, "wspace": 0.1},
-        )
+        fig, axs = plt.subplots(nf, nf, figsize=(2 * nf, 2 * nf), sharex="col",
+                                gridspec_kw={"hspace": 0.1, "wspace": 0.1},
+                                )
         for f1id, f1 in enumerate(df.columns):
             yrange = []
             for f2id, f2 in enumerate(df.columns):
@@ -340,9 +345,9 @@ class ShapeSpacePlotMaker(PlotMaker):
                 y = df[f1].values
                 x = df[f2].values
                 valids = np.where((
-                    (y > prange[f1id][0])&
-                    (y < prange[f1id][1])&
-                    (x > prange[f2id][0])&
+                    (y > prange[f1id][0]) &
+                    (y < prange[f1id][1]) &
+                    (x > prange[f2id][0]) &
                     (x < prange[f2id][1])))
                 if f2id < f1id:
                     xmin = x[valids].min()
@@ -350,7 +355,8 @@ class ShapeSpacePlotMaker(PlotMaker):
                     ymin = y[valids].min()
                     ymax = y[valids].max()
                     yrange.append([ymin, ymax])
-                    ax.plot(x[valids], y[valids], ".", markersize=2, color="black", alpha=0.8)
+                    ax.plot(x[valids], y[valids], ".",
+                            markersize=2, color="black", alpha=0.8)
                     ax.plot([xmin, xmax], [xmin, xmax], "--")
                     if f2id:
                         plt.setp(ax.get_yticklabels(), visible=False)
@@ -367,16 +373,16 @@ class ShapeSpacePlotMaker(PlotMaker):
                     spearman, s_pvalue = spstats.spearmanr(x, y)
                     ax.text(0.05, 0.8, f"Pearson: {pearson:.2f}", size=10, ha="left",
                             transform=ax.transAxes,
-                    )
+                            )
                     ax.text(0.05, 0.6, f"P-value: {p_pvalue:.1E}", size=10, ha="left",
                             transform=ax.transAxes,
-                    )
+                            )
                     ax.text(0.05, 0.4, f"Spearman: {spearman:.2f}", size=10, ha="left",
-                        transform=ax.transAxes,
-                    )
+                            transform=ax.transAxes,
+                            )
                     ax.text(0.05, 0.2, f"P-value: {s_pvalue:.1E}", size=10, ha="left",
-                        transform=ax.transAxes,
-                    )
+                            transform=ax.transAxes,
+                            )
                 # Single variable distribution at diagonal
                 else:
                     ax.set_frame_on(False)
@@ -384,10 +390,10 @@ class ShapeSpacePlotMaker(PlotMaker):
                     ax.tick_params(axis="y", which="both", length=0.0)
                     ax.hist(x[valids], bins=16, density=True, histtype="stepfilled",
                             color="white", edgecolor="black", label="Complete",
-                    )
+                            )
                     ax.hist(x[valids], bins=16, density=True, histtype="stepfilled",
                             color=cmap(0), alpha=0.2, label="Incomplete",
-                    )
+                            )
                 if f1id == nf - 1:
                     ax.set_xlabel(f2, fontsize=7)
                 if not f2id and f1id:
@@ -402,11 +408,13 @@ class ShapeSpacePlotMaker(PlotMaker):
 
         # Global annotation
         fig.add_subplot(111, frameon=False)
-        plt.tick_params(labelcolor="none", top=False, bottom=False, left=False, right=False)
+        plt.tick_params(labelcolor="none", top=False,
+                        bottom=False, left=False, right=False)
         plt.title(f"Total number of points: {npts}", fontsize=24)
 
         self.figs.append((fig, "pairwise_correlations"))
         return
+
 
 class ShapeModePlotMaker(PlotMaker):
     """
@@ -425,7 +433,7 @@ class ShapeModePlotMaker(PlotMaker):
 
     def workflow(self):
         return
-            
+
     def animate_contours(self, contours, prefix):
         hmin, hmax, vmin, vmax = self.control.get_plot_limits()
         offset = 0.05 * (hmax - hmin)
@@ -436,7 +444,7 @@ class ShapeModePlotMaker(PlotMaker):
         ax.set_xlim(hmin - offset, hmax + offset)
         ax.set_ylim(vmin - offset, vmax + offset)
         ax.set_aspect("equal")
-        
+
         lines = []
         for alias, _ in contours.items():
             color = self.control.get_color_from_alias(alias)
@@ -455,13 +463,13 @@ class ShapeModePlotMaker(PlotMaker):
         anim = animation.FuncAnimation(
             fig, animate, frames=n, interval=100, blit=True
         )
-        fname = self.control.get_staging()/f"{self.subfolder}/{prefix}.gif"
+        fname = self.control.get_staging() / f"{self.subfolder}/{prefix}.gif"
         anim.save(fname, writer="imagemagick", fps=n)
         plt.close("all")
         return
 
     def load_animated_gif(self, shape_mode, proj):
-        fname = self.control.get_staging()/f"{self.subfolder}/{shape_mode}_{proj}.gif"
+        fname = self.control.get_staging() / f"{self.subfolder}/{shape_mode}_{proj}.gif"
         image = AICSImage(fname).data.squeeze()
         return image
 
@@ -485,10 +493,10 @@ class ShapeModePlotMaker(PlotMaker):
         stack = np.concatenate([stack[:, :-1], stack[:, ::-1]], axis=1)
         # Reduce the empty space between images
         gaps = stack.min(axis=(0, 1, 3)) != 255
-        for r in range(5):
+        for _ in range(5):
             gaps[1:-1] = gaps[2:] + gaps[:-2]
-        stack = stack[:, :, gaps>0,:]
-        fname = self.control.get_staging()/f"{self.subfolder}/combined.tif"
+        stack = stack[:, :, gaps > 0, :]
+        fname = self.control.get_staging() / f"{self.subfolder}/combined.tif"
         with writers.ome_tiff_writer.OmeTiffWriter(fname, overwrite_file=True) as writer:
             writer.save(stack, dimension_order='CZYX')
         return
@@ -605,7 +613,7 @@ class ShapeModePlotMaker(PlotMaker):
                 contours[dim][alias] = []
                 for mesh in meshes:
                     coords = ShapeModePlotMaker.find_plane_mesh_intersection(mesh, proj)
-                    if swapxy_on_zproj and dim=='z':
+                    if swapxy_on_zproj and dim == 'z':
                         coords = coords[:, ::-1]
                     contours[dim][alias].append(coords)
         return contours
