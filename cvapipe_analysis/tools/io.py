@@ -1,18 +1,15 @@
 import os
-import sys
 import vtk
 import yaml
-import json
 import errno
 import concurrent
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
 from pathlib import Path
-from datetime import datetime
 from aicsshparam import shtools
-from contextlib import contextmanager
 from aicsimageio import AICSImage, writers
+
 
 class LocalStagingIO:
     """
@@ -25,7 +22,10 @@ class LocalStagingIO:
     may break if you move saved files from the places
     their are saved.
     """
+
     def __init__(self, control):
+        self.row = None
+        self.subfolder = None
         self.control = control
 
     def get_single_cell_images(self, row, return_stack=False):
@@ -37,7 +37,7 @@ class LocalStagingIO:
             if imtype in row:
                 path = row[imtype]
                 if str(self.control.get_staging()) not in path:
-                    path = self.control.get_staging()/f"loaddata/{row[imtype]}"
+                    path = self.control.get_staging() / f"loaddata/{row[imtype]}"
                 img = AICSImage(path).data.squeeze()
                 imgs.append(img)
         imgs = np.vstack(imgs)
@@ -51,7 +51,7 @@ class LocalStagingIO:
         return imgs_dict
 
     def get_abs_path_to_step_manifest(self, step):
-        return self.control.get_staging()/f"{step}/manifest.csv"
+        return self.control.get_staging() / f"{step}/manifest.csv"
 
     def load_step_manifest(self, step, clean=False):
         df = pd.read_csv(
@@ -66,17 +66,17 @@ class LocalStagingIO:
     def read_map_point_mesh(self, alias):
         row = self.row
         path = f"shapemode/avgshape/{alias}_{row.shape_mode}_{row.mpId}.vtk"
-        path = self.control.get_staging()/path
+        path = self.control.get_staging() / path
         if not path.is_file():
             raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), path)
         reader = vtk.vtkPolyDataReader()
         reader.SetFileName(str(path))
         reader.Update()
         return reader.GetOutput()
-    
+
     def read_parameterized_intensity(self, index, return_intensity_names=False):
         path = f"parameterization/representations/{index}.tif"
-        path = self.control.get_staging()/path
+        path = self.control.get_staging() / path
         if not path.is_file():
             raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), path)
         code = AICSImage(path)
@@ -88,7 +88,7 @@ class LocalStagingIO:
 
     def read_agg_parameterized_intensity(self, row):
         path = f"aggregation/repsagg/{self.get_aggrep_file_name(row)}"
-        path = self.control.get_staging()/path
+        path = self.control.get_staging() / path
         if not path.is_file():
             raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), path)
         code = AICSImage(path)
@@ -100,23 +100,13 @@ class LocalStagingIO:
         the concordance results are loaded. Further investigation is needed
         here'''
         path_to_output_folder = self.control.get_staging() / self.subfolder
-        files = [path_to_output_folder/f for f in os.listdir(path_to_output_folder)]
+        files = [path_to_output_folder / f for f in os.listdir(path_to_output_folder)]
         with concurrent.futures.ProcessPoolExecutor(self.control.get_ncores()) as executor:
             df = pd.concat(
                 tqdm(executor.map(self.load_csv_file_as_dataframe, files), total=len(files)),
                 axis=0, ignore_index=True)
         return df
-    
-    def get_output_file_path(self):
-        path = f"{self.subfolder}/{self.get_output_file_name()}"
-        return self.control.get_staging()/path
 
-    def check_output_exist(self):
-        path_to_output_file = self.get_output_file_path()
-        if path_to_output_file.is_file():
-            return path_to_output_file
-        return None
-    
     @staticmethod
     def write_ome_tif(path, img, channel_names=None, image_name=None):
         path = Path(path)
@@ -140,9 +130,10 @@ class LocalStagingIO:
         df = None
         try:
             df = pd.read_csv(fpath)
-        except: pass
+        except:
+            pass
         return df
-    
+
     @staticmethod
     def get_prefix_from_row(row):
         fname = []
@@ -159,38 +150,35 @@ class LocalStagingIO:
                     val = str(val)
                 fname.append(val)
         return "-".join(fname)
-    
+
     @staticmethod
     def get_aggrep_file_name(row):
         return f"{row.aggtype}-{row.alias}-{row.structure}-{row.shape_mode}-{row.mpId}.tif"
 
-    @staticmethod
-    def get_output_file_name(row):
-        values = []
-        for f in ['aggtype', 'intensity', 'structure_name', 'shapemode', 'bin']:
-            if f in row:
-                values.append(str(row[f]))
-        return "-".join(values)
-    
+
 class DataProducer(LocalStagingIO):
     """
     Functionalities for steps that perform calculations
     in a per row fashion.
-    
-    Derived classes should implement:
-        def __init__(self, control)
-        def workflow(self, row)
-        def get_output_file_name(row):
-        def save(self)
-    
+
     WARNING: All classes are assumed to know the whole
     structure of directories inside the local_staging
     folder and this is hard coded. Therefore, classes
     may break if you move saved files from the places
     their are saved.
     """
+
     def __init__(self, control):
         super().__init__(control)
+
+    def workflow(self):
+        pass
+
+    def get_output_file_name(self):
+        pass
+
+    def save(self):
+        return None
 
     def set_row(self, row):
         self.row = row
@@ -198,7 +186,7 @@ class DataProducer(LocalStagingIO):
             self.CellIds = self.row.CellIds
             if isinstance(self.CellIds, str):
                 self.CellIds = eval(self.CellIds)
-    
+
     def execute(self, row):
         computed = False
         self.set_row(row)
@@ -213,7 +201,17 @@ class DataProducer(LocalStagingIO):
                 path_to_output_file = None
         self.status(row.name, path_to_output_file, computed)
         return path_to_output_file
-        
+
+    def get_output_file_path(self):
+        path = f"{self.subfolder}/{self.get_output_file_name()}"
+        return self.control.get_staging() / path
+
+    def check_output_exist(self):
+        path_to_output_file = self.get_output_file_path()
+        if path_to_output_file.is_file():
+            return path_to_output_file
+        return None
+
     def load_single_cell_data(self):
         self.data, self.channels = self.get_single_cell_images(
             self.row, return_stack="True")
@@ -226,16 +224,15 @@ class DataProducer(LocalStagingIO):
             alias_ref = self.control.get_alignment_reference_alias()
             if alias_ref is None:
                 raise ValueError("Specify a reference alias for alignment.")
-            chn = self.channels.index(self.control.get_channel_from_alias(alias_ref))            
+            chn = self.channels.index(self.control.get_channel_from_alias(alias_ref))
             ref = self.data[chn]
             unq = self.control.make_alignment_unique()
             _, self.angle = shtools.align_image_2d(ref, unq)
             self.data_aligned = shtools.apply_image_alignment_2d(self.data, self.angle)
         return
-    
+
     @staticmethod
     def correlate_representations(rep1, rep2):
         pcor = np.corrcoef(rep1.flatten(), rep2.flatten())
         # Returns Nan if rep1 or rep2 is empty.
-        return pcor[0,1]
-
+        return pcor[0, 1]
