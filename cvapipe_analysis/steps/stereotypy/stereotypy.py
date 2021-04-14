@@ -11,7 +11,7 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 
-from cvapipe_analysis.tools import general, cluster, shapespace, plotting
+from cvapipe_analysis.tools import io, general, cluster, shapespace, plotting
 from .stereotypy_tools import StereotypyCalculator
 
 import pdb;
@@ -34,48 +34,32 @@ class Stereotypy(Step):
         **kwargs
     ):
 
-        with general.configuration(self.step_local_staging_dir) as config:
-    
-            # Make necessary folders
+        with general.configuration(self.step_local_staging_dir) as control:
+
             for folder in ['values', 'plots']:
                 save_dir = self.step_local_staging_dir / folder
                 save_dir.mkdir(parents=True, exist_ok=True)
 
-            # Create all combinations of parameters to calculate stereotypy
-            space = shapespace.ShapeSpace(config)
-            space.load_shape_space_axes()
-            df_agg = pd.DataFrame()
-            for shapemode in space.iter_shapemodes(config):
-                space.set_active_axis(shapemode, digitize=True)
-                for b in space.iter_bins(config):
-                    space.set_active_bin(b)
-                    for struct in space.iter_structures(config):
-                        space.set_active_structure(struct)
-                        df_tmp = space.iter_param_values_as_dataframe(
-                            config, [
-                                ('aggtype', ['avg']),
-                                ('intensity', space.iter_intensities),
-                                ('structure_name', [struct]),
-                                ('shapemode', [shapemode]),
-                                ('bin', [b]),
-                                ('CellIds', [space.get_active_cellids()])
-                            ]
-                        )
-                        df_agg = df_agg.append(df_tmp, ignore_index=True)
+            device = io.LocalStagingIO(control)
+            df = device.load_step_manifest("preprocessing")
+            space = shapespace.ShapeSpace(control)
+            space.execute(df)
+            variables = control.get_variables_values_for_aggregation()
+            df_agg = space.get_aggregated_df(variables, True)
 
             if distribute:
 
-                nworkers = config['resources']['nworkers']            
+                nworkers = control['resources']['nworkers']            
                 distributor = cluster.StereotypyDistributor(df_agg, nworkers)
-                distributor.distribute(config, log)
+                distributor.distribute(control, log)
 
                 log.info(f"Multiple jobs have been launched. Please come back when the calculation is complete.")            
                 return None
 
-            calculator = StereotypyCalculator(config)    
+            calculator = StereotypyCalculator(control)
             for index, row in tqdm(df_agg.iterrows(), total=len(df_agg)):
                 '''Concurrent processes inside. Do not use concurrent here.'''
-                df_agg.loc[index,'PathToStereotypyFile'] = calculator.execute(row)
+                calculator.execute(row)
 
             log.info(f"Loading results...")
 
@@ -83,17 +67,12 @@ class Stereotypy(Step):
 
             log.info(f"Generating plots...")
 
-            space  = shapespace.ShapeSpaceBasic(config)
-            for intensity in space.iter_intensities(config):
-                pmaker = plotting.StereotypyPlotMaker(config)
-                pmaker.set_dataframe(df_results)
-                pmaker.filter_dataframe({'intensity': intensity, 'shapemode': 'DNA_MEM_PC1', 'bin': 5})
-                pmaker.execute(display=False)
-                pmaker.set_max_number_of_pairs(300)
-                pmaker.execute(display=False, prefix='N300')
+            pmaker = plotting.StereotypyPlotMaker(control)
+            pmaker.set_dataframe(df_results)
+            for alias in tqdm(control.get_aliases_to_parameterize()):
+                for shape_mode in control.get_shape_modes():
+                    mpId = control.get_center_map_point_index()
+                    pmaker.filter_dataframe({'alias': alias, 'shape_mode': shape_mode, 'mpId': [mpId]})
+                    pmaker.execute(display=False)
 
-            self.manifest = df_agg
-            manifest_path = self.step_local_staging_dir / 'manifest.csv'
-            self.manifest.to_csv(manifest_path)
 
-        return manifest_path

@@ -68,5 +68,3 @@ class Concordance(Step):
                     mpIds = control.get_extreme_opposite_map_point_indexes()
                     pmaker.filter_dataframe({'alias': alias, 'shape_mode': shape_mode, 'mpId': mpIds})
                     pmaker.execute(display=False)
-
-        return

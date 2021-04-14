@@ -120,7 +120,7 @@ class LocalStagingIO:
     @staticmethod
     def write_ome_tif(path, img, channel_names=None, image_name=None):
         path = Path(path)
-        dims = [['X','Y','Z','C','T'][d] for d in range(img.ndim)]
+        dims = [['X', 'Y', 'Z', 'C', 'T'][d] for d in range(img.ndim)]
         dims = ''.join(dims[::-1])
         name = path.stem if image_name is None else image_name
         with writers.ome_tiff_writer.OmeTiffWriter(path, overwrite_file=True) as writer:

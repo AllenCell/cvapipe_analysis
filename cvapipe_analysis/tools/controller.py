@@ -187,8 +187,10 @@ class Controller:
         return [k for k in self.config['structures'].keys()]
     def get_structure_names(self):
         return [v[0] for k, v in self.config['structures'].items()]
-    
-    
+    def get_structure_name(self, gene):
+        return self.config["structures"][gene][0]
+    def get_gene_color(self, gene):
+        return self.config["structures"][gene][1]
     
     @staticmethod
     def get_ncores():
