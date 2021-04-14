@@ -1,15 +1,12 @@
 import os
-import json
-import dask
 import shutil
 import subprocess
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
 from pathlib import Path
-from typing import NamedTuple, Optional, Union, List, Dict
-
 import cvapipe_analysis
+
 
 class Distributor:
     """
@@ -27,25 +24,27 @@ class Distributor:
     """
 
     def __init__(self, control):
+        self.jobs = []
         self.control = control
+        self.rel_path_to_python_file = None
+        self.stepfolders = ['log', 'dataframes']
         self.nworkers = control.get_distributed_number_of_workers()
         self.abs_path_to_distribute = control.get_staging() / ".distribute"
-        self.abs_path_to_script_as_str = str(self.abs_path_to_distribute/"jobs.sh")
-        self.abs_path_jobs_file_as_str = str(self.abs_path_to_distribute/"jobs.txt")
-        self.abs_path_to_cvapipe = Path(os.path.abspath(cvapipe_analysis.__file__)).parents[1]
-        self.jobs = []
-        self.stepfolders = ['log', 'dataframes']
+        self.abs_path_to_script_as_str = str(self.abs_path_to_distribute / "jobs.sh")
+        self.abs_path_jobs_file_as_str = str(self.abs_path_to_distribute / "jobs.txt")
+        self.abs_path_to_cvapipe = Path(
+            os.path.abspath(cvapipe_analysis.__file__)).parents[1]
 
     def set_data(self, df):
         self.df = df
         self.nrows = len(df)
-        self.chunk_size = round(0.5+self.nrows/self.nworkers)
-        
+        self.chunk_size = round(0.5 + self.nrows / self.nworkers)
+
     def set_chunk_size(self, n):
         self.chunk_size = n
 
     def get_next_chunk(self):
-        for chunk, df_chunk in self.df.groupby(np.arange(self.nrows)//self.chunk_size):
+        for chunk, df_chunk in self.df.groupby(np.arange(self.nrows) // self.chunk_size):
             yield chunk, df_chunk
 
     def get_abs_path_to_python_file_as_str(self):
@@ -54,10 +53,11 @@ class Distributor:
 
     def clean_distribute_folder(self):
         for folder in self.stepfolders:
-            path_subfolder = self.abs_path_to_distribute/folder
+            path_subfolder = self.abs_path_to_distribute / folder
             try:
                 shutil.rmtree(str(path_subfolder))
-            except: pass
+            except:
+                pass
             path_subfolder.mkdir(parents=True, exist_ok=True)
         return
 
@@ -69,12 +69,14 @@ class Distributor:
         python__env_path_as_str = crtl.get_distributed_python_env_as_str()
         with open(self.abs_path_jobs_file_as_str, "w") as fs:
             for job in self.jobs:
-                abs_path_to_dataframe = str(self.abs_path_to_distribute/f"dataframes/{job}.csv")
-                print(f"{python__env_path_as_str} {self.get_abs_path_to_python_file_as_str()} --csv {abs_path_to_dataframe}", file=fs)
+                abs_path_to_dataframe = str(
+                    self.abs_path_to_distribute / f"dataframes/{job}.csv")
+                print(
+                    f"{python__env_path_as_str} {self.get_abs_path_to_python_file_as_str()} --csv {abs_path_to_dataframe}", file=fs)
 
     def write_script_file(self):
         crtl = self.control
-        abs_path_output_folder = self.abs_path_to_distribute/"log"
+        abs_path_output_folder = self.abs_path_to_distribute / "log"
         with open(self.abs_path_to_script_as_str, "w") as fs:
             print("#!/bin/bash", file=fs)
             print("#SBATCH --partition aics_cpu_general", file=fs)
@@ -83,7 +85,8 @@ class Distributor:
             print(f"#SBATCH --output {abs_path_output_folder}/%A_%a.out", file=fs)
             print(f"#SBATCH --error {abs_path_output_folder}/%A_%a.err", file=fs)
             print(f"#SBATCH --array=1-{len(self.jobs)}", file=fs)
-            print(f"srun $(head -n $SLURM_ARRAY_TASK_ID {self.abs_path_jobs_file_as_str} | tail -n 1)", file=fs)
+            print(
+                f"srun $(head -n $SLURM_ARRAY_TASK_ID {self.abs_path_jobs_file_as_str} | tail -n 1)", file=fs)
         return
 
     def execute(self):
@@ -93,7 +96,7 @@ class Distributor:
         print(f"Submitting {len(self.jobs)} cvapipe_analysis jobs...")
         submission = 'sbatch ' + self.abs_path_to_script_as_str
         process = subprocess.Popen(submission, stdout=subprocess.PIPE, shell=True)
-        (out, err) = process.communicate()
+        process.communicate()
         return
 
     def distribute(self):
@@ -102,31 +105,37 @@ class Distributor:
         print(f"\nDistributing dataframe of shape: {self.df.shape}")
         print(f"in chunks of size {self.chunk_size}.\n")
         for chunk, df_chunk in self.get_next_chunk():
-            abs_path_to_dataframe = self.abs_path_to_distribute/f"dataframes/{chunk}.csv"
+            abs_path_to_dataframe = self.abs_path_to_distribute / \
+                f"dataframes/{chunk}.csv"
             df_chunk.to_csv(abs_path_to_dataframe)
             self.append_job(chunk)
         self.execute()
         return
+
 
 class FeaturesDistributor(Distributor):
     def __init__(self, control):
         super().__init__(control)
         self.rel_path_to_python_file = "cvapipe_analysis/steps/compute_features/compute_features_tools.py"
 
+
 class ParameterizationDistributor(Distributor):
     def __init__(self, control):
         super().__init__(control)
         self.rel_path_to_python_file = "cvapipe_analysis/steps/parameterization/parameterization_tools.py"
+
 
 class AggregationDistributor(Distributor):
     def __init__(self, control):
         super().__init__(control)
         self.rel_path_to_python_file = "cvapipe_analysis/steps/aggregation/aggregation_tools.py"
 
+
 class StereotypyDistributor(Distributor):
     def __init__(self, control):
         super().__init__(control)
         self.rel_path_to_python_file = "cvapipe_analysis/steps/stereotypy/stereotypy_tools.py"
+
 
 class ConcordanceDistributor(Distributor):
     def __init__(self, control):
