@@ -1,15 +1,8 @@
-import os
-import sys
 import yaml
-import json
-import concurrent
 import numpy as np
-import pandas as pd
-from tqdm import tqdm
+import multiprocessing
 from pathlib import Path
-from datetime import datetime
 from aicsimageio import AICSImage
-from contextlib import contextmanager
         
 class Controller:
     """
@@ -194,7 +187,7 @@ class Controller:
     
     @staticmethod
     def get_ncores():
-        return len(os.sched_getaffinity(0))
+        return multiprocessing.cpu_count()
     def get_distributed_python_env_as_str(self):
         path = Path(self.distribute_section['python_env'])/"bin/python"
         return str(path)
