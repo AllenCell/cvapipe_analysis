@@ -15,7 +15,6 @@ from aicscytoparam import cytoparam
 from aicsimageio import AICSImage, writers
 from typing import Dict, List, Optional, Union
 from aics_dask_utils import DistributedHandler
-from vtk.util.numpy_support import vtk_to_numpy, numpy_to_vtk
 import concurrent
 
 from cvapipe_analysis.tools import general, io, cluster
@@ -61,7 +60,7 @@ class StereotypyCalculator(io.DataProducer):
 
     def shuffle_target_cellids(self):
         if len(self.CellIds) < 2:
-            raise RunTimeError(f"Not enough cells to compute stereotypy.")
+            raise RuntimeError(f"Not enough cells to compute stereotypy.")
         self.CellIdsTarget = self.CellIds.copy()
         while True:
             random.shuffle(self.CellIdsTarget)
