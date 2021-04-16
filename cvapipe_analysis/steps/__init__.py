@@ -8,6 +8,7 @@ from .parameterization import Parameterization
 from .aggregation import Aggregation
 from .stereotypy import Stereotypy
 from .concordance import Concordance
+from .cellpack import Cellpack
 
 __all__ = [
     "LoadData",
@@ -18,5 +19,6 @@ __all__ = [
     "Parameterization",
     "Aggregation",
     "Stereotypy",
-    "Concordance"
+    "Concordance",
+    "Cellpack"
 ]
