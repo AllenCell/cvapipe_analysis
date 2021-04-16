@@ -27,15 +27,11 @@ class Preprocessing(Step):
         with general.configuration(self.step_local_staging_dir) as control:
             
             device = io.LocalStagingIO(control)
-            df_meta = device.load_step_manifest("loaddata", clean=True)
-            log.info(f"Shape of metadata: {df_meta.shape}")
-            df_features = device.load_step_manifest("computefeatures")
-            log.info(f"Shape of features data: {df_features.shape}")
-            df = pd.concat([df_meta,df_features], axis=1)
-            log.info(f"Concatenated manifest: {df.shape}")
+            df = device.load_step_manifest("computefeatures")
+            log.info(f"Shape of manifest: {df.shape}")
             
             if control.remove_mitotics():
-                
+
                 if "cell_stage" not in df.columns:
                     raise ValueError("Column cell_stage not found.")
                 df = df.loc[df.cell_stage=='M0']
@@ -53,7 +49,7 @@ class Preprocessing(Step):
                 else:
                     log.info("Computing outliers...")
                     df_outliers = outliers_removal(df=df, output_dir=path_to_outliers_folder, log=log)
-                    df_outliers.to_csv(manifest_outliers_path)
+                    df_outliers.to_csv(path_to_df_outliers)
                 df.loc[df_outliers.index, 'Outlier'] = df_outliers['Outlier']
                 df = df.loc[df.Outlier == 'No']
                 df = df.drop(columns=['Outlier'])

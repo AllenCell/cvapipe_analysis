@@ -6,8 +6,8 @@ from contextlib import contextmanager
 from cvapipe_analysis.tools import controller
 
 
-def load_config_file():
-    with open('config.yaml', 'r') as f:
+def load_config_file(path: Path=Path("./")):
+    with open(path/'config.yaml', 'r') as f:
         config = yaml.load(f, Loader=yaml.FullLoader)
     return config
 

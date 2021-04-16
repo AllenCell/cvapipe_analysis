@@ -6,9 +6,9 @@ from skimage import measure as skmeasure
 from aicsimageio import AICSImage, writers
 from typing import Dict, List, Optional, Union
 
-from cvapipe_analysis.tools import general
+from cvapipe_analysis.tools import io
 
-class ObjectCollector(general.DataProducer):
+class ObjectCollector(io.DataProducer):
     """
     Desc
     

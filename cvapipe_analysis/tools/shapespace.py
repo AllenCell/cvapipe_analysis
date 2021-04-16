@@ -1,10 +1,10 @@
-import vtk
 import itertools
 import numpy as np
 import pandas as pd
-from tqdm import tqdm
+from typing import List
 from pathlib import Path
 from sklearn.decomposition import PCA
+
 
 class ShapeSpaceBasic():
     """
@@ -274,4 +274,10 @@ class ShapeSpace(ShapeSpaceBasic):
         df = df.unstack(level=-1)
         df.to_html(self.control.get_staging()/path)
         return
-                
+
+class ShapeSpaceMapper():
+
+    def __init__(self, space: ShapeSpace, stagings: List[Path]):
+        self.space = space
+        self.stagings = stagings
+        self.control = space.control
