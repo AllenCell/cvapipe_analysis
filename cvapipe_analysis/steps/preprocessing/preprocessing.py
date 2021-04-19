@@ -50,6 +50,8 @@ class Preprocessing(Step):
                     log.info("Computing outliers...")
                     df_outliers = outliers_removal(df=df, output_dir=path_to_outliers_folder, log=log)
                     df_outliers.to_csv(path_to_df_outliers)
+
+                df_outliers = df_outliers.loc[df.index]
                 df.loc[df_outliers.index, 'Outlier'] = df_outliers['Outlier']
                 df = df.loc[df.Outlier == 'No']
                 df = df.drop(columns=['Outlier'])
