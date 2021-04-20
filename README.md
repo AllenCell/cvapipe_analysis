@@ -54,9 +54,20 @@ cvapipe_analysis computefeatures run
 
 This step extract single-cell features, including cell, nuclear and intracellular volumes and other basic features. Here we also use `aics-shparam` [(link)](https://github.com/AllenCell/aics-shparam) to compute the spherical harmonics coefficients for cell and nuclear shape. This step depends on step 1.
 
-This step saves the features in the file `local_staging/computefeatures/manifest.raw`.
+This step saves the features in the file `local_staging/computefeatures/manifest.csv`.
 
-### 3. Compute shapemodes
+### 3. Pre-processing dataset
+```
+cvapipe_analysis preprocessing run
+```
+
+This step removes outliers and mitotic cells from the single cell dataset. This step saves results in the file `local_staging/preprocessing/manifest.csv` and
+
+**Folder: `local_staging/shapemode/outliers/`**
+
+- `xx.png`: Diagnostic plots for outlier detection.
+
+### 4. Compute shapemodes
 ```
 cvapipe_analysis shapemode run
 ```
@@ -65,50 +76,29 @@ Here we implement a few pre-processing steps. First, all mitotic cells are remov
 
 A couple of output files are produced on this step:
 
-**Folder: `local_staging/shapemode/`**
-
-- `manifest.csv`: Dataframe with mitotic and outlier cells removed. All cells in this dataframe are used as input for PCA.
-- `shapemode.csv`: DataFrame with path to all animated GIFs and VTK mesh files produced in this step.
-
-**Folder: `local_staging/shapemode/tables/`**
-
-- `main_summary.csv`: Number of cells stratifyed by cell line, workflow, imaging mode and fov position.
-- `outliers_summary.csv`: Number of cells identifyed as outlier in each cell line.
-- `cell_stage_summary.csv`: Number of cells at different stages of cell cycle.
-
-Views of tables above are also saved as JPG files in the same folder.
-
-**Folder: `local_staging/shapemode/outliers/`**
-
-- `manifest_outliers.csv`: Dataframe with cells flagged as outlier or not.
-- `xx.png`: Diagnostic plots for outlier detection.
-
 **Folder: `local_staging/shapemode/pca/`**
 
-- `correlations_xx.png`: Correlation plots between principal components.
-- `pca_xx.jpg`: Explained variance by each principal component.
+- `explained_variance.png`: Explained variance by each principal component.
+- `feature_importance.txt`: Importance of first few features of each principal component.
 
 **Folder: `local_staging/shapemode/avgcell/`**
 
 - `xx.vtk`: vtkPolyData files corresponding to 3D cell and nuclear meshes. We recommend [Paraview](https://www.paraview.org) to open this files.
 - `xx.gif`: Animated GIF illustrating cell and nuclear shape modes from 3 different projections.
+- `combined.tif`: Multichannel TIF that combines all animated GIFs in the same image.
 
-### 4. Create parameterized intensity representation
+### 5. Create parameterized intensity representation
 ```
 cvapipe_analysis parameterization run
 ```
 
 Here we use `aics-cytoparam` [(link)](https://github.com/AllenCell/aics-cytoparam) to create parameterization for all the single-cell data. This steps depends on step 2.
 
-**Folder: `local_staging/parameterization/`**
-
-- `manifest.csv`: Dataframe with the paths to parameterized intensity representation of each cell.
-
 **Folder: `local_staging/parameterization/representations/`**
 
 - `xx.tif`: Multichannels TIFF image with the cell representation.
 
-### 5. Create aggregated parameterized intensity representations
+### 6. Create aggregated parameterized intensity representations
 ```
 cvapipe_analysis aggregation run
 ```
@@ -134,16 +124,11 @@ cvapipe_analysis stereotypy run
 
 This calculates the extent to which a structure’s individual location varied. This step depends on step 4.
 
-**Folder: `local_staging/stereotypy/`**
+**Folder: `local_staging/stereotypy/values`**
 
-- `manifest.csv`: Manifest with combinations of parameters used for stereotypy calculation and path to CSVs resultsing for the calculation.
+- `*.csv*`: Stereotypy values.
 
-
-**Folder: `local_staging/stereotypy/values/`**
-
-- `avg-GFP-FBL-DNA_MEM_PC1-1`: Example of resulting file. Dataframe with the Pearson correlation values between parameterized intensity representation of all FBL tagged cells in the first bin of shape mode 1.
-
-**Folder: `local_staging/stereotypy/plots/`**
+**Folder: `local_staging/stereotypy/plots`**
 
 - Resulting plots.
 
@@ -154,13 +139,9 @@ cvapipe_analysis concordance run
 
 This calculates the extent to which the structure localized relative to all the other cellular structures. This step depends on step 5.
 
-**Folder: `local_staging/concordance/`**
-
-- `manifest.csv`: Manifest with combinations of parameters used for concordance calculation and path to CSVs resultsing for the calculation.
-
 **Folder: `local_staging/concordance/values/`**
 
-- `avg-GFP-FBL-NPM1-DNA_MEM_PC1-1`: Example of resulting file. Dataframe with the Pearson correlation values between aggregated parameterized intensity representations of first bin of shape mode 1.
+- `*.csv*`: Concordance values
 
 **Folder: `local_staging/concordance/plots/`**
 
@@ -168,7 +149,17 @@ This calculates the extent to which the structure localized relative to all the 
 
 ## Running the pipeline on your own data
 
-In progress...
+You need to specify the format of your data using a `manifest.csv` file. Each row of this file corresponds to a cell in your dataset and the file is requred to have the following columns:
+
+`CellId`: Unique ID of the cell. Example: `AB98765`.
+
+`structure_name`: FP structure tagged in the cell. Add something like "NA" if you don't have anything tagged for the cell. Example: `TOMM20`.
+
+`crop_raw`: Full path to the multichannel single cell raw image.
+
+`crop_seg`: Full path to the multichannel single cell segmentation.
+
+`name_dict`: Dictionary that specifies the names of each channel in the two images above. Example: `"{'crop_raw': ['dna_dye', 'membrane', 'gfp'], 'crop_seg': ['dna_seg', 'cell_seg', 'gfp_seg', 'gfp_seg2']}"`. In this case, your `crop_raw` images must have 3 channels once this is the number of names you provide in `name_dict`. Similarly `crop_seg` must have 4 channels.
 
 ## Running the pipeline on a cluster with `sbatch` capabilities
 
