@@ -1,6 +1,5 @@
 import os
 import vtk
-import yaml
 import errno
 import concurrent
 import numpy as np

@@ -1,16 +1,12 @@
-import vtk
 import concurrent
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
-from pathlib import Path
 from aicsshparam import shtools
-import matplotlib.pyplot as plt
-from typing import Dict, List, Optional, Union
 from vtk.util.numpy_support import numpy_to_vtk as np2vtk
 from vtk.util.numpy_support import vtk_to_numpy as vtk2np
 
-from cvapipe_analysis.tools import io, cluster, shapespace, plotting
+from cvapipe_analysis.tools import io, shapespace, plotting
 
 class ShapeModeCalculator(io.DataProducer):
     """

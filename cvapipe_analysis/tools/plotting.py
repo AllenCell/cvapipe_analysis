@@ -2,7 +2,6 @@ import vtk
 import math
 import operator
 import numpy as np
-import pandas as pd
 from tqdm import tqdm
 from typing import Optional
 from functools import reduce
@@ -12,7 +11,6 @@ from scipy import stats as spstats
 from scipy import cluster as spcluster
 from aicsimageio import AICSImage, writers
 from vtk.util.numpy_support import vtk_to_numpy as vtk2np
-from vtk.util.numpy_support import numpy_to_vtk as np2vtk
 from cvapipe_analysis.tools import io
 
 
@@ -687,6 +685,8 @@ class ShapeSpaceMapperPlotMaker(PlotMaker):
                 axs[2, 1].hist(df[sm2], **argshs, color=cmap(idx),
                                alpha=0.8, orientation='horizontal')
                 axs[2, 0].scatter(df[sm1], df[sm2], s=5, color=cmap(idx), label=ds)
+                axs[2, 0].axhline(y=0.0, color='k', linestyle='--')
+                axs[2, 0].axvline(x=0.0, color='k', linestyle='--')
             axs[2, 0].set_xlabel(sm1, fontsize=14)
             axs[2, 0].set_ylabel(sm2, fontsize=14)
             groups, labels = axs[2, 0].get_legend_handles_labels()

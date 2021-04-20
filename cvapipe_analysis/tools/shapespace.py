@@ -2,10 +2,8 @@ import itertools
 import numpy as np
 import pandas as pd
 from typing import List
-from pathlib import Path
 from sklearn.decomposition import PCA
 
-from cvapipe_analysis.tools import io
 
 class ShapeSpaceBasic():
     """
