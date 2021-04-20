@@ -5,6 +5,7 @@ from typing import List
 from pathlib import Path
 from sklearn.decomposition import PCA
 
+from cvapipe_analysis.tools import io
 
 class ShapeSpaceBasic():
     """
@@ -57,45 +58,6 @@ class ShapeSpaceBasic():
         df_tmp = df_tmp.loc[df_tmp.extreme == False]
         df_tmp = df_tmp.drop(columns=["extreme"])
         return df_tmp
-        
-    '''
-    #TODO: move these to controller
-    @staticmethod
-    def iter_intensities(config):
-        for intensity in config['parameterization']['intensities'].keys():
-            yield intensity
-
-    @staticmethod
-    def iter_aggtype(config):
-        for agg in config['aggregation']['type']:
-            yield agg
-
-    @staticmethod
-    def iter_structures(config):
-        for s in config['structures']['desc'].keys():
-            yield s
-
-    
-
-    @staticmethod
-    def iter_param_values_as_dataframe(config, iters, no_equals=None):
-        df = []
-        combinations = []
-        for _, it in iters:
-            # accepts either a list or an iterator function
-            iterator = it if isinstance(it, list) else it(config)
-            combinations.append([v for v in iterator])
-        for combination in itertools.product(*combinations):
-            row = {}
-            for (itname, _), value in zip(iters, combination):
-                row[itname] = value
-            df.append(row)
-        df = pd.DataFrame(df)
-        if no_equals is not None:
-            for itname1, itname2 in no_equals:
-                df = df.loc[df[itname1]!=df[itname2]]
-        return df.reset_index(drop=True)
-    '''
 
 class ShapeSpace(ShapeSpaceBasic):
     """
@@ -125,24 +87,27 @@ class ShapeSpace(ShapeSpaceBasic):
         self.calculate_feature_importance()
         pct = self.control.get_removal_pct()
         self.shape_modes = self.remove_extreme_points(self.axes, pct)
-
-    ############
-    # AXES
-    ############
         
     def calculate_pca(self):
         self.df_pca = self.df[self.features]
         matrix_of_features = self.df_pca.values.copy()
         pca = PCA(self.control.get_number_of_shape_modes())
         pca = pca.fit(matrix_of_features)
-        matrix_of_features_transform = pca.transform(matrix_of_features)
-        self.axes = pd.DataFrame(
-            data=matrix_of_features_transform,
-            columns=[f for f in self.control.iter_shape_modes()])
+        axes = pca.transform(matrix_of_features)
+        self.axes = pd.DataFrame(axes, columns=self.control.get_shape_modes())
         self.axes.index = self.df_pca.index
         self.pca = pca
         self.sort_pca_axes()
         return
+
+    def transform(self, df):
+        for f in self.features:
+            if f not in df.columns:
+                raise ValueError(f"Column {f} not found in the input.")
+        axes = self.pca.transform(df[self.features].values)
+        axes = pd.DataFrame(axes, columns=self.control.get_shape_modes())
+        axes.index = df.index
+        return axes
 
     def sort_pca_axes(self):
         ranker = self.control.get_alias_for_sorting_pca_axes()
@@ -170,10 +135,6 @@ class ShapeSpace(ShapeSpaceBasic):
         df_feats = df_feats.set_index("features", drop=True)
         self.df_feats = df_feats
         return
-
-    ############
-    # SHAPE MODES
-    ############
     
     def set_active_shape_mode(self, shape_mode, digitize):
         if shape_mode not in self.shape_modes.columns:
@@ -277,7 +238,30 @@ class ShapeSpace(ShapeSpaceBasic):
 
 class ShapeSpaceMapper():
 
-    def __init__(self, space: ShapeSpace, stagings: List[Path]):
+    def __init__(self, space: ShapeSpace):
         self.space = space
-        self.stagings = stagings
         self.control = space.control
+
+    def workflow(self):
+        self.result = self.space.axes
+        self.result["dataset"] = "base"
+        for dsname, ds in self.datasets.items():
+            df = pd.read_csv(ds["path"]/"preprocessing/manifest.csv", index_col="CellId")
+            print(f"{dsname} loaded. {df.shape}")
+            axes = self.space.transform(df)
+            axes["dataset"] = dsname
+            self.result = pd.concat([self.result, axes])
+        self.normalization()
+        self.result = self.result.reset_index().set_index(["dataset", "CellId"])
+
+    def normalization(self):
+        if self.normalize:
+            for sm in self.control.get_shape_modes():
+                df_base = self.result.loc[self.result.dataset=="base"]
+                self.result[sm] /= df_base[sm].values.std()
+
+    def map(self, stagings: List[pd.DataFrame], normalize:bool=False):
+        self.datasets = dict([(p.name, {"path": p}) for p in stagings])
+        self.normalize = normalize
+        self.workflow()
+

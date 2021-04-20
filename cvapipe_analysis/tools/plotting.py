@@ -58,11 +58,11 @@ class PlotMaker(io.LocalStagingIO):
                 fig.show()
             else:
                 fname = signature
+                save_dir = self.control.get_staging()/self.subfolder
+                save_dir.mkdir(parents=True, exist_ok=True)
                 if prefix is not None:
                     fname = f"{prefix}_{signature}"
-                fig.savefig(
-                    self.control.get_staging() / f"{self.subfolder}/{fname}.png"
-                )
+                fig.savefig(save_dir/f"{fname}.png")
                 plt.close(fig)
 
     def check_dataframe_exists(self):
@@ -105,8 +105,8 @@ class ConcordancePlotMaker(PlotMaker):
     the local_staging folder is.
     """
 
-    def __init__(self, config, subfolder: Optional[str] = None):
-        super().__init__(config)
+    def __init__(self, control, subfolder: Optional[str] = None):
+        super().__init__(control)
         self.subfolder = "concordance/plots" if subfolder is None else subfolder
 
     def workflow(self):
@@ -213,8 +213,8 @@ class StereotypyPlotMaker(PlotMaker):
     the local_staging folder is.
     """
 
-    def __init__(self, config, subfolder: Optional[str] = None):
-        super().__init__(config)
+    def __init__(self, control, subfolder: Optional[str] = None):
+        super().__init__(control)
         self.max_number_of_pairs = 0
         self.subfolder = "stereotypy/plots" if subfolder is None else subfolder
 
@@ -270,8 +270,8 @@ class ShapeSpacePlotMaker(PlotMaker):
     the local_staging folder is.
     """
 
-    def __init__(self, config, subfolder: Optional[str] = None):
-        super().__init__(config)
+    def __init__(self, control, subfolder: Optional[str] = None):
+        super().__init__(control)
         if subfolder is None:
             self.subfolder = "shapemode/pca"
         else:
@@ -424,8 +424,8 @@ class ShapeModePlotMaker(PlotMaker):
     the local_staging folder is.
     """
 
-    def __init__(self, config, subfolder: Optional[str] = None):
-        super().__init__(config)
+    def __init__(self, control, subfolder: Optional[str] = None):
+        super().__init__(control)
         if subfolder is None:
             self.subfolder = "shapemode/avgshape"
         else:
@@ -641,3 +641,57 @@ class ShapeModePlotMaker(PlotMaker):
         writer.SetInputConnection(windowToImageFilter.GetOutputPort())
         writer.Write()
         return
+
+
+class ShapeSpaceMapperPlotMaker(PlotMaker):
+    """
+    Class for creating plots for shape space mapper.
+
+    WARNING: This class should not depend on where
+    the local_staging folder is.
+    """
+
+    def __init__(self, control, subfolder: Optional[str] = None):
+        super().__init__(control)
+        if subfolder is None:
+            self.subfolder = "shapemode/mapping"
+        else:
+            self.subfolder = subfolder
+
+    def workflow(self):
+        self.check_dataframe_exists()
+        self.plot_mapping()
+        return
+
+    def plot_mapping(self):
+        nplots = len(self.df.columns)-1
+        cmap = plt.cm.get_cmap("tab10")
+        argshs = {"bins": 32, "density": True, "histtype": "stepfilled"}
+        argsbp = {"vert": False, "showfliers": False, "patch_artist": True}
+        grid = {"hspace": 0.0, "wspace": 0.0, 'height_ratios': [
+            1, 0.5, 3], 'width_ratios': [3, 1]}
+        for sm1, sm2 in tqdm(zip(self.df.columns[:-1], self.df.columns[1:]), total=nplots):
+            fig, axs = plt.subplots(3, 2, figsize=(9, 6), gridspec_kw=grid, sharex="col", sharey="row"
+                                    )
+            for idx in [(0, 0), (0, 1), (1, 0), (1, 1), (2, 1)]:
+                axs[idx].axis("off")
+            for idx, (ds, df) in enumerate(self.df.groupby(level="dataset", sort=False)):
+                axs[0, 0].hist(df[sm1], **argshs, edgecolor="black", fc=[0] * 4, lw=2)
+                axs[0, 0].hist(df[sm1], **argshs, color=cmap(idx), alpha=0.8)
+                box = axs[1, 0].boxplot(
+                    df[sm1], positions=[-idx], widths=[0.6], **argsbp)
+                box["boxes"][0].set_facecolor(cmap(idx))
+                box["medians"][0].set_color("black")
+                axs[2, 1].hist(df[sm2], **argshs, edgecolor="black",
+                               fc=[0] * 4, orientation='horizontal', lw=2)
+                axs[2, 1].hist(df[sm2], **argshs, color=cmap(idx),
+                               alpha=0.8, orientation='horizontal')
+                axs[2, 0].scatter(df[sm1], df[sm2], s=5, color=cmap(idx), label=ds)
+            axs[2, 0].set_xlabel(sm1, fontsize=14)
+            axs[2, 0].set_ylabel(sm2, fontsize=14)
+            groups, labels = axs[2, 0].get_legend_handles_labels()
+            legend = plt.legend(groups, labels, title="Dataset", bbox_to_anchor=(1.05, 1), loc='upper left')
+            for lh in legend.legendHandles:
+                lh.set_sizes([50])
+            plt.tight_layout()
+            self.figs.append((fig, f"mapping_{sm1}_{sm2}"))

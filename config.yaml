@@ -13,7 +13,7 @@ data:
     cell:
         channel: "membrane_segmentation"
         alias: "MEM"
-        color: "#3AADA7"
+        color: "#F200FF"
     structure:
         channel: "struct_segmentation_roof"
         alias: "STR"
