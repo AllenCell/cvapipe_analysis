@@ -29,6 +29,14 @@ cd cvapipe_analysis
 pip install -e .
 ```
 
+## Types of usage
+
+This package can be ran to reproduce main results from shown in [1] or to generate similar results to your own data. However, before applying to your dataset, we highly recommend you to first run it for reproducibility in our test dataset to understand how the package works.
+
+## The YAML configuration file
+
+TBD
+
 ## Running the pipeline to reproduce the paper
 
 This analysis is currently not configured to run as a workflow. Please run steps individually.
@@ -117,7 +125,7 @@ This step generates aggregation of multiple cells representations and morph them
 
 - `avg-SEG-TUBA1B-DNA_MEM_PC4-B5.tif`: Same as above but the representation has been morphed into the cell shape corresponding to bin number 5 of shape mode 4.
 
-### 6. Stereotypy analysis
+### 7. Stereotypy analysis
 ```
 cvapipe_analysis stereotypy run
 ```
@@ -132,7 +140,7 @@ This calculates the extent to which a structure’s individual location varied. 
 
 - Resulting plots.
 
-### 7. Concordance analysis
+### 8. Concordance analysis
 ```
 cvapipe_analysis concordance run
 ```
@@ -160,6 +168,12 @@ You need to specify the format of your data using a `manifest.csv` file. Each ro
 `crop_seg`: Full path to the multichannel single cell segmentation.
 
 `name_dict`: Dictionary that specifies the names of each channel in the two images above. Example: `"{'crop_raw': ['dna_dye', 'membrane', 'gfp'], 'crop_seg': ['dna_seg', 'cell_seg', 'gfp_seg', 'gfp_seg2']}"`. In this case, your `crop_raw` images must have 3 channels once this is the number of names you provide in `name_dict`. Similarly `crop_seg` must have 4 channels.
+
+Once you have this manifest file created, you are ready to start using `cvapipe_analysis`. To do so, you should run the step `loaddata` with the additional flag `--csv path_to_manifest`, where `path_to_manifest` is the full path to the manifest file that you created:
+
+`cvapipe_analysis loaddata run --csv path_to_manifest`
+
+All the other steps can be ran without modifications.
 
 ## Running the pipeline on a cluster with `sbatch` capabilities
 
