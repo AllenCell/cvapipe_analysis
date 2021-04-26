@@ -1,3 +1,4 @@
+from numpy.core.shape_base import _concatenate_shapes
 import vtk
 import math
 import operator
@@ -60,7 +61,7 @@ class PlotMaker(io.LocalStagingIO):
                 save_dir.mkdir(parents=True, exist_ok=True)
                 if prefix is not None:
                     fname = f"{prefix}_{signature}"
-                fig.savefig(save_dir/f"{fname}.png")
+                fig.savefig(save_dir/f"{fname}.png", facecolor="white")
                 plt.close(fig)
 
     def check_dataframe_exists(self):
@@ -658,17 +659,33 @@ class ShapeSpaceMapperPlotMaker(PlotMaker):
 
     def workflow(self):
         self.check_dataframe_exists()
-        self.plot_mapping()
+        self.plot_mapping_1d()
         return
 
-    def plot_mapping(self):
-        nplots = len(self.df.columns)-1
+    def plot_mapping_1d(self):
+        df_base = self.df.loc["base"]
         cmap = plt.cm.get_cmap("tab10")
+        shape_modes = self.control.get_shape_modes()
+        for idx, (ds, df) in enumerate(self.df.groupby(level="dataset", sort=False)):
+            if ds != "base":
+                fig, axs = plt.subplots(len(shape_modes),1, figsize=(5,1*len(shape_modes)), sharex=True, gridspec_kw={"hspace": 0.5})
+                for sm, ax in zip(shape_modes, axs):
+                    ax.hist(df_base[sm], bins=32, density=True, alpha=0.5, fc=cmap(0))
+                    ax.hist(df[sm],bins=32, density=True, alpha=0.5, fc=cmap(idx))
+                    ax.set_xlabel(sm, fontsize=14)
+                    ax.set_xlim(-5, 5)
+                plt.suptitle(ds, fontsize=18)
+                plt.tight_layout()
+                self.figs.append((fig, f"mapping_{ds}"))
+
+    def plot_mapping_2d(self):
+        cmap = plt.cm.get_cmap("tab10")
+        shape_modes = self.control.get_shape_modes()
         argshs = {"bins": 32, "density": True, "histtype": "stepfilled"}
         argsbp = {"vert": False, "showfliers": False, "patch_artist": True}
         grid = {"hspace": 0.0, "wspace": 0.0, 'height_ratios': [
             1, 0.5, 3], 'width_ratios': [3, 1]}
-        for sm1, sm2 in tqdm(zip(self.df.columns[:-1], self.df.columns[1:]), total=nplots):
+        for sm1, sm2 in tqdm(zip(shape_modes[:-1], shape_modes[1:]), total=len(shape_modes)):
             fig, axs = plt.subplots(3, 2, figsize=(9, 6), gridspec_kw=grid, sharex="col", sharey="row"
                                     )
             for idx in [(0, 0), (0, 1), (1, 0), (1, 1), (2, 1)]:

@@ -3,12 +3,14 @@ import numpy as np
 import pandas as pd
 from typing import List
 from sklearn.decomposition import PCA
+from scipy import spatial as spspatial
 
+from cvapipe_analysis.tools import plotting
 
 class ShapeSpaceBasic():
     """
     Basic functionalities of shape space that does
-    not require loading the manifest from mshapemode
+    not require loading the manifest from shapemode
     step.
 
     WARNING: All classes are assumed to know the whole
@@ -180,7 +182,7 @@ class ShapeSpace(ShapeSpaceBasic):
 
     def browse(self, constraints):
         '''Limits the shape space in a specific region and
-        returns the cells ids in that regions (shape mode and
+        returns the cell ids in that region (shape mode and
         map point index). Can also constrain by structure
         name and then only cell ids of the same structure will
         be returned.'''
@@ -201,7 +203,7 @@ class ShapeSpace(ShapeSpaceBasic):
             sid = self.df.loc[self.df.structure_name==val].index
             df = df.loc[df.index.isin(sid)]
             if not len(df):
-                print(f"No {val} cells found at mpId.")
+                print(f"No {val} cells found.")
                 return []
         return df.index.values.tolist()
 
@@ -236,30 +238,71 @@ class ShapeSpace(ShapeSpaceBasic):
 
 class ShapeSpaceMapper():
 
+    normalize = True
+    full_base_dataset = False
+
     def __init__(self, space: ShapeSpace):
         self.space = space
         self.control = space.control
-
-    def workflow(self):
-        self.result = self.space.axes
-        self.result["dataset"] = "base"
-        for dsname, ds in self.datasets.items():
-            df = pd.read_csv(ds["path"]/"preprocessing/manifest.csv", index_col="CellId")
-            print(f"{dsname} loaded. {df.shape}")
-            axes = self.space.transform(df)
-            axes["dataset"] = dsname
-            self.result = pd.concat([self.result, axes])
-        self.normalization()
-        self.result = self.result.reset_index().set_index(["dataset", "CellId"])
-
+        self.pmaker = plotting.ShapeSpaceMapperPlotMaker(space.control)
+        
     def normalization(self):
         if self.normalize:
             for sm in self.control.get_shape_modes():
                 df_base = self.result.loc[self.result.dataset=="base"]
                 self.result[sm] /= df_base[sm].values.std()
 
-    def map(self, stagings: List[pd.DataFrame], normalize:bool=False):
+    def set_normalization_off(self):
+        self.normalize = False
+
+    def use_full_base_dataset(self):
+        self.full_base_dataset = True
+
+    def map(self, stagings: List[pd.DataFrame]):
         self.datasets = dict([(p.name, {"path": p}) for p in stagings])
-        self.normalize = normalize
         self.workflow()
+
+    def workflow(self):
+        self.result = self.space.axes if self.full_base_dataset else self.space.shape_modes
+        self.result["structure_name"] = self.space.df.loc[self.result.index, "structure_name"]
+        self.merge_transformed_datasets()
+        self.create_nn_mapping()
+        self.pmaker.set_dataframe(self.result)
+        self.pmaker.execute(display=False)
+
+    def merge_transformed_datasets(self):
+        self.result["dataset"] = "base"
+        for dsname, ds in self.datasets.items():
+            df = pd.read_csv(ds["path"]/"preprocessing/manifest.csv", index_col="CellId")
+            print(f"{dsname} loaded. {df.shape}")
+            
+            axes = self.space.transform(df)
+            axes["dataset"] = dsname
+            axes["structure_name"] = df["structure_name"]
+            self.result = pd.concat([self.result, axes])
+
+        self.normalization()
+        self.result = self.result.reset_index().set_index(
+            ["dataset", "structure_name", "CellId"])
+
+    def create_nn_mapping(self):
+        """ Calculates the distance to nearest neighbor and nearest
+        neighbor with same structure."""
+        df_map = self.result.copy()
+        for ds in self.datasets:
+            df_X = self.result.loc["base"]
+            df_Y = self.result.loc[ds]
+            dist = spspatial.distance.cdist(df_X.values, df_Y.values).min(axis=0)
+            indexes = df_Y.index.to_frame()
+            indexes.insert(0, "dataset", ds)            
+            df_map.loc[pd.MultiIndex.from_frame(indexes), "DistThresh"] = np.median(dist)
+            for (ds, sname), df_Y in self.result.groupby(level=["dataset", "structure_name"]):
+                if ds != "base":
+                    df_X = self.result.loc[("base", sname)]
+                    dist = spspatial.distance.cdist(df_X.values, df_Y.values)
+                    df_map.loc[df_Y.index, "Dist"] = dist.min(axis=0)
+                    df_map.loc[df_Y.index, "NNCellId"] = df_X.index[dist.argmin(axis=0)]
+        df_map.NNCellId = df_map.fillna(-1).NNCellId.astype(np.int64)
+        self.result = df_map
+        self.result.reset_index().set_index(["dataset", "CellId"])
 
