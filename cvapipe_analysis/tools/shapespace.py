@@ -240,6 +240,7 @@ class ShapeSpaceMapper():
 
     normalize = True
     full_base_dataset = False
+    allow_similar_cellids_off = True
 
     def __init__(self, space: ShapeSpace):
         self.space = space
@@ -257,6 +258,9 @@ class ShapeSpaceMapper():
 
     def use_full_base_dataset(self):
         self.full_base_dataset = True
+
+    def allow_similar_cellid(self):
+        self.allow_similar_cellids_off = False
 
     def map(self, stagings: List[pd.DataFrame]):
         self.datasets = dict([(p.name, {"path": p}) for p in stagings])
@@ -285,6 +289,15 @@ class ShapeSpaceMapper():
         self.result = self.result.reset_index().set_index(
             ["dataset", "structure_name", "CellId"])
 
+    def drop_rows_with_similar_cellid(self, df_X, df_Y):
+        if self.allow_similar_cellids_off:
+            index_names = [n for n in df_X.index.names]
+            df_X = df_X.copy().reset_index()
+            df_Y = df_Y.copy().reset_index()
+            df_X = df_X.loc[~df_X.CellId.isin(df_Y.CellId)]
+            df_X = df_X.set_index(index_names)
+        return df_X
+
     def create_nn_mapping(self):
         """ Calculates the distance to nearest neighbor and nearest
         neighbor with same structure."""
@@ -292,13 +305,15 @@ class ShapeSpaceMapper():
         for ds in self.datasets:
             df_X = self.result.loc["base"]
             df_Y = self.result.loc[ds]
+            df_X = self.drop_rows_with_similar_cellid(df_X, df_Y)
             dist = spspatial.distance.cdist(df_X.values, df_Y.values).min(axis=0)
             indexes = df_Y.index.to_frame()
             indexes.insert(0, "dataset", ds)            
             df_map.loc[pd.MultiIndex.from_frame(indexes), "DistThresh"] = np.median(dist)
             for (ds, sname), df_Y in self.result.groupby(level=["dataset", "structure_name"]):
                 if ds != "base":
-                    df_X = self.result.loc[("base", sname)]
+                    df_X = self.result.loc[("base", sname)]#TODO: indexing past lexsort depth
+                    df_X = self.drop_rows_with_similar_cellid(df_X, df_Y)
                     dist = spspatial.distance.cdist(df_X.values, df_Y.values)
                     df_map.loc[df_Y.index, "Dist"] = dist.min(axis=0)
                     df_map.loc[df_Y.index, "NNCellId"] = df_X.index[dist.argmin(axis=0)]
