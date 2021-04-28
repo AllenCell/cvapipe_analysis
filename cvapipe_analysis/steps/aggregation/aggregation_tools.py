@@ -34,8 +34,8 @@ class Aggregator(io.DataProducer):
     places their are saved.
     """
 
-    def __init__(self, config):
-        super().__init__(config)
+    def __init__(self, control):
+        super().__init__(control)
         self.subfolder = 'aggregation/aggmorph'
 
     def workflow(self):
