@@ -31,7 +31,7 @@ def find_closest_cells(
     loc_2d = np.expand_dims(location, 0)
     dists = np.squeeze(cdist(df[dist_cols], loc_2d, metric))
     dist_col = f"{metric} distance to location"
-    loc_str = ", ".join([f"{loc:.1f}" for loc in location])
+    loc_str = ", ".join([f"{loc:.3f}" for loc in location])
     df_dists = pd.DataFrame({dist_col: dists, "location": [loc_str] * len(df)})
 
     df_ids_and_dims = df[[id_col, *dist_cols]]
