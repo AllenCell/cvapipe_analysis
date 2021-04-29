@@ -4,6 +4,7 @@ import quilt3
 import pandas as pd
 from tqdm import tqdm
 from pathlib import Path
+from aicsfiles import FileManagementSystem
 
 from cvapipe_analysis.tools import io
 
@@ -35,8 +36,10 @@ class DataLoader(io.LocalStagingIO):
         super().__init__(control)
 
     def load(self, parameters):
-        if 'csv' in parameters:
+        if "csv" in parameters:
             return self.load_data_from_csv(parameters)
+        if "fmsid" in parameters:
+            return self.load_data_from_fms(parameters)
         return self.download_quilt_data('test' in parameters)
 
     def download_quilt_data(self, test=False):
@@ -76,6 +79,15 @@ class DataLoader(io.LocalStagingIO):
         self.is_dataframe_valid(df)
         df = df[self.required_df_columns].set_index('CellId', drop=True)
         self.create_symlinks(df)
+        return df
+
+    # TODO: Merge this upstream LocalStagingIO?
+    def load_data_from_fms(self, parameters):
+        fms = FileManagementSystem()
+        record = fms.find_one_by_id(parameters["fmsid"])
+        df = pd.read_csv(record.path)
+        self.is_dataframe_valid(df)
+        df = df[self.required_df_columns].set_index('CellId', drop=True)
         return df
 
     @staticmethod

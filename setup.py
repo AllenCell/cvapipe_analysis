@@ -66,6 +66,7 @@ requirements = [
     "xvfbwrapper==0.2.9",
     "aicsshparam>=0.1.1",
     "aicscytoparam>=0.1.2",
+    "aicsfiles==5.0.0.dev12",
     "vtk==9.0.1",
     "quilt3",
     "ffmpeg",
