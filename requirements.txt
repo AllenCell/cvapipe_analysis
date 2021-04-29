@@ -1,0 +1,5 @@
+--index-url https://artifactory.corp.alleninstitute.org/artifactory/api/pypi/pypi-virtual/simple
+--extra-index-url https://artifactory.corp.alleninstitute.org/artifactory/api/pypi/pypi-snapshot-local/simple
+--trusted-host artifactory.corp.alleninstitute.org
+-e .[all]
+

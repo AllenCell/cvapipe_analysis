@@ -2,32 +2,28 @@ appName: cvapipe_analysis
 
 project:
     # Sufix to append to local_staging
-    local_staging: "/allen/aics/assay-dev/MicroscopyOtherData/Viana/projects/cvapipe_analysis/local_staging_full"
+    local_staging: "/allen/aics/assay-dev/MicroscopyOtherData/Viana/projects/cvapipe_analysis/local_staging_goldilocks"
     overwrite: on
 
 data:
     nucleus:
-        channel: "dna_segmentation"
+        channel: "crop_seg"
         alias: "NUC"
         color: "#3AADA7"
-    cell:
-        channel: "membrane_segmentation"
-        alias: "MEM"
+    nucleus_raw:
+        channel: "crop_raw"
+        alias: "NUCRAW"
         color: "#F200FF"
-    structure:
-        channel: "struct_segmentation_roof"
-        alias: "STR"
-        color: "#000000"
 
 features:
-    aliases: ["NUC", "MEM", "STR"]
+    aliases: ["NUC"]
     # SHE - Spherical harmonics expansion
     SHE:
         alignment:
             align: on
             unique: off
-            reference: "cell"
-        aliases: ["NUC", "MEM"]
+            reference: "nucleus"
+        aliases: ["NUC"]
         # Size of Gaussian kernal used to smooth the
         # images before SHE coefficients calculation
         sigma: 2
@@ -36,14 +32,14 @@ features:
         lmax: 16
 
 preprocessing:
-    remove_mitotics: on
-    remove_outliers: on
+    remove_mitotics: off
+    remove_outliers: off
 
 shapespace:
     # Specify the a set of aliases here
-    aliases: ["NUC", "MEM"]
+    aliases: ["NUC"]
     # Sort shape modes by volume of
-    sorter: "MEM"
+    sorter: "NUC"
     # Percentage of exteme points to be removed
     removal_pct: 1.0
     # Number of principal components to be calculated

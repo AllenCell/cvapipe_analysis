@@ -8,6 +8,7 @@ from tqdm import tqdm
 from pathlib import Path
 from aicsshparam import shtools
 from aicsimageio import AICSImage, writers
+from aicsfiles import FileManagementSystem
 
 
 class LocalStagingIO:
@@ -28,26 +29,14 @@ class LocalStagingIO:
         self.control = control
 
     def get_single_cell_images(self, row, return_stack=False):
-        imgs = []
-        imtypes = [k for k in eval(row.name_dict).keys()]
-        channel_names = [v for k, v in eval(row.name_dict).items()]
-        channel_names = [ch for names in channel_names for ch in names]
-        for imtype in imtypes:
-            if imtype in row:
-                path = row[imtype]
-                if str(self.control.get_staging()) not in path:
-                    path = self.control.get_staging() / f"loaddata/{row[imtype]}"
-                img = AICSImage(path).data.squeeze()
-                imgs.append(img)
-        imgs = np.vstack(imgs)
+        #TODO: should be able to load crop_raw too.
+        fms = FileManagementSystem()
+        record = fms.find_one_by_id(row["crop_seg_fms_id"])
+        reader = AICSImage(record.path)
+        img = reader.get_image_data('CZYX', S=0, T=0)
         if return_stack:
-            return imgs, channel_names
-        imgs_dict = {}
-        for imtype in imtypes:
-            if imtype in row:
-                for ch, img in zip(channel_names, imgs):
-                    imgs_dict[ch] = img
-        return imgs_dict
+            return img, ["crop_seg"]
+        return {"crop_seg": img}
 
     def get_abs_path_to_step_manifest(self, step):
         return self.control.get_staging() / f"{step}/manifest.csv"
@@ -106,6 +95,33 @@ class LocalStagingIO:
                 axis=0, ignore_index=True)
         return df
 
+    def load_data_from_csv(self, parameters, use_fms=False):
+        if use_fms:
+            fms = FileManagementSystem()
+            fmsid = parameters['fmsid']
+            record = fms.find_one_by_id(fmsid)
+            if record is None:
+                raise ValueError(f"Record {fmsid} not found on FMS.")
+            path = record.path
+        else:
+            path = Path(parameters['csv'])
+            if not path.is_file():
+                raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), path)
+        return pd.read_csv(path)
+
+    @staticmethod
+    def get_direct_path_from_column(row, col):
+        return Path(row[col])
+
+    @staticmethod
+    def get_path_from_fms_id(row, col):
+        fms = FileManagementSystem()
+        fmsid = row[f"{col}_fms_id"]
+        record = fms.find_one_by_id(fmsid)
+        if record is None:
+            raise ValueError(f"Record {fmsid} not found on FMS.")
+        return Path(record.path)
+
     @staticmethod
     def write_ome_tif(path, img, channel_names=None, image_name=None):
         path = Path(path)
@@ -123,15 +139,6 @@ class LocalStagingIO:
         if output is not None:
             msg = "COMPLETE" if computed else "SKIP"
         print(f"Index {idx} {msg}. Output: {output}")
-
-    @staticmethod
-    def load_csv_file_as_dataframe(fpath):
-        df = None
-        try:
-            df = pd.read_csv(fpath)
-        except:
-            pass
-        return df
 
     @staticmethod
     def get_prefix_from_row(row):
