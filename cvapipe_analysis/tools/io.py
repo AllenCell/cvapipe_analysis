@@ -87,15 +87,16 @@ class LocalStagingIO:
         ''' Not sure this function is producing a column named index when
         the concordance results are loaded. Further investigation is needed
         here'''
-        path_to_output_folder = self.control.get_staging() / self.subfolder
-        files = [path_to_output_folder / f for f in os.listdir(path_to_output_folder)]
+        path = self.control.get_staging() / self.subfolder
+        files = [{"csv": path/f} for f in os.listdir(path)]
         with concurrent.futures.ProcessPoolExecutor(self.control.get_ncores()) as executor:
             df = pd.concat(
-                tqdm(executor.map(self.load_csv_file_as_dataframe, files), total=len(files)),
+                tqdm(executor.map(self.load_data_from_csv, files), total=len(files)),
                 axis=0, ignore_index=True)
         return df
 
-    def load_data_from_csv(self, parameters, use_fms=False):
+    @staticmethod
+    def load_data_from_csv(parameters, use_fms=False):
         if use_fms:
             fms = FileManagementSystem()
             fmsid = parameters['fmsid']
