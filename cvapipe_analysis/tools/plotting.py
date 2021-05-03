@@ -4,6 +4,7 @@ import math
 import operator
 import numpy as np
 from tqdm import tqdm
+from pathlib import Path
 from typing import Optional
 from functools import reduce
 import matplotlib.pyplot as plt
@@ -51,13 +52,16 @@ class PlotMaker(io.LocalStagingIO):
         self.save(display, prefix)
         self.figs = []
 
-    def save(self, display=True, prefix=None):
+    def save(self, display=True, prefix=None, full_path_provided=False):
         for (fig, signature) in self.figs:
             if display:
                 fig.show()
             else:
                 fname = signature
-                save_dir = self.control.get_staging()/self.subfolder
+                if hasattr(self, "full_path_provided") and self.full_path_provided:
+                    save_dir = self.output_folder
+                else:
+                    save_dir = self.control.get_staging()/self.subfolder
                 save_dir.mkdir(parents=True, exist_ok=True)
                 if prefix is not None:
                     fname = f"{prefix}_{signature}"
@@ -650,12 +654,11 @@ class ShapeSpaceMapperPlotMaker(PlotMaker):
     the local_staging folder is.
     """
 
-    def __init__(self, control, subfolder: Optional[str] = None):
+    full_path_provided = True # See explanation in ShapeSpaceMapper.
+
+    def __init__(self, control, save_dir):
         super().__init__(control)
-        if subfolder is None:
-            self.subfolder = "shapemode/mapping"
-        else:
-            self.subfolder = subfolder
+        self.output_folder = Path(save_dir) / "mapping"
 
     def workflow(self):
         self.check_dataframe_exists()

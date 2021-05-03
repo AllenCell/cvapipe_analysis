@@ -81,9 +81,7 @@ class ShapeModeCalculator(io.DataProducer):
         mps = self.control.get_map_points()
         coords = [m*self.space.get_active_scale() for m in mps]
         matrix = self.get_coordinates_matrix(coords, int(shape_mode[-1])-1)
-        # Inverse PCA here: PCA coords -> shcoeffs
-        df_inv = pd.DataFrame(self.space.pca.inverse_transform(matrix))
-        df_inv.columns = self.space.features
+        df_inv = self.space.invert(matrix)
         df_inv['shape_mode'] = shape_mode
         df_inv['mpId'] = np.arange(1, 1+len(mps))
         return df_inv

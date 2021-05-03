@@ -2,10 +2,13 @@ import itertools
 import numpy as np
 import pandas as pd
 from typing import List
+from pathlib import Path
+from aicsshparam import shtools
 from sklearn.decomposition import PCA
 from scipy import spatial as spspatial
 
 from cvapipe_analysis.tools import plotting
+from cvapipe_analysis.steps.shapemode.shapemode_tools import ShapeModeCalculator
 
 class ShapeSpaceBasic():
     """
@@ -108,6 +111,14 @@ class ShapeSpace(ShapeSpaceBasic):
         axes = pd.DataFrame(axes, columns=self.control.get_shape_modes())
         axes.index = df.index
         return axes
+
+    def invert(self, pcs):
+        """Matrix has shape NxM, where N is the number of
+        samples and M is the number of shape modes."""
+        # Inverse PCA here: PCA coords -> shcoeffs
+        df = pd.DataFrame(self.pca.inverse_transform(pcs))
+        df.columns = self.features
+        return df
 
     def sort_pca_axes(self):
         ranker = self.control.get_alias_for_sorting_pca_axes()
@@ -237,20 +248,25 @@ class ShapeSpace(ShapeSpaceBasic):
         return
 
 class ShapeSpaceMapper():
+    """This class does not follow the design of io.DataProducer
+    because its use requires mixing local_staging folder. For this
+    reason we leave up to the user to coordinate IO functionalities.
+    More importantly, where results are saved."""
 
     normalize = True
     full_base_dataset = False
     allow_similar_cellids_off = True
 
-    def __init__(self, space: ShapeSpace):
+    def __init__(self, space: ShapeSpace, output_folder: Path):
         self.space = space
         self.control = space.control
-        self.pmaker = plotting.ShapeSpaceMapperPlotMaker(space.control)
-        
+        self.output = Path(output_folder)
+        self.pmaker = plotting.ShapeSpaceMapperPlotMaker(space.control, self.output)
+
     def normalization(self):
         if self.normalize:
             for sm in self.control.get_shape_modes():
-                df_base = self.result.loc[self.result.dataset=="base"]
+                df_base = self.result.loc["base"]
                 self.result[sm] /= df_base[sm].values.std()
 
     def set_normalization_off(self):
@@ -270,6 +286,8 @@ class ShapeSpaceMapper():
         self.result = self.space.axes if self.full_base_dataset else self.space.shape_modes
         self.result["structure_name"] = self.space.df.loc[self.result.index, "structure_name"]
         self.merge_transformed_datasets()
+        self.reconstruct_datasets_mean_cell()
+        self.normalization()
         self.create_nn_mapping()
         self.pmaker.set_dataframe(self.result)
         self.pmaker.execute(display=False)
@@ -278,16 +296,15 @@ class ShapeSpaceMapper():
         self.result["dataset"] = "base"
         for dsname, ds in self.datasets.items():
             df = pd.read_csv(ds["path"]/"preprocessing/manifest.csv", index_col="CellId")
-            print(f"{dsname} loaded. {df.shape}")
-            
+            print(f"{dsname} loaded. {df.shape}")            
             axes = self.space.transform(df)
             axes["dataset"] = dsname
             axes["structure_name"] = df["structure_name"]
             self.result = pd.concat([self.result, axes])
-
-        self.normalization()
-        self.result = self.result.reset_index().set_index(
-            ["dataset", "structure_name", "CellId"])
+        self.result = self.result.reset_index().set_index([
+            "dataset",
+            "structure_name",
+            "CellId"])
 
     def drop_rows_with_similar_cellid(self, df_X, df_Y):
         if self.allow_similar_cellids_off:
@@ -297,6 +314,19 @@ class ShapeSpaceMapper():
             df_X = df_X.loc[~df_X.CellId.isin(df_Y.CellId)]
             df_X = df_X.set_index(index_names)
         return df_X
+
+    def reconstruct_datasets_mean_cell(self):
+        lrec = 2*self.control.get_lmax()
+        output = self.output / "avgshape"
+        output.mkdir(parents=True, exist_ok=True)
+        for ds in [k for k in self.datasets] + ["base"]:
+            matrix = self.result.loc[ds].values.mean(axis=0, keepdims=True)
+            df = self.space.invert(matrix)
+            row = df.loc[df.index[0]]
+            for alias in self.control.get_aliases_for_pca():
+                mesh = ShapeModeCalculator.get_mesh_from_series(row, alias, lrec)
+                fname = output / f"{ds}_{alias}.vtk"
+                shtools.save_polydata(mesh, str(fname))
 
     def create_nn_mapping(self):
         """ Calculates the distance to nearest neighbor and nearest
