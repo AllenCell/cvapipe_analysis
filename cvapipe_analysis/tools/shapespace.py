@@ -305,6 +305,7 @@ class ShapeSpaceMapper():
             "dataset",
             "structure_name",
             "CellId"])
+        self.result.sort_index(inplace=True)
 
     def drop_rows_with_similar_cellid(self, df_X, df_Y):
         if self.allow_similar_cellids_off:
@@ -342,7 +343,7 @@ class ShapeSpaceMapper():
             df_map.loc[pd.MultiIndex.from_frame(indexes), "DistThresh"] = np.median(dist)
             for (ds, sname), df_Y in self.result.groupby(level=["dataset", "structure_name"]):
                 if ds != "base":
-                    df_X = self.result.loc[("base", sname)]#TODO: indexing past lexsort depth
+                    df_X = self.result.loc[("base", sname)]
                     df_X = self.drop_rows_with_similar_cellid(df_X, df_Y)
                     dist = spspatial.distance.cdist(df_X.values, df_Y.values)
                     df_map.loc[df_Y.index, "Dist"] = dist.min(axis=0)
