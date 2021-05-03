@@ -42,8 +42,6 @@ class ComputeFeatures(Step):
 
                 return None
 
-            df = df.sample(n=100)
-
             calculator = FeatureCalculator(control)
             with concurrent.futures.ProcessPoolExecutor(control.get_ncores()) as executor:
                 executor.map(calculator.execute, [row for _,row in df.iterrows()])
