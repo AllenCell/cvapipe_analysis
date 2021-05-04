@@ -68,10 +68,7 @@ class LocalStagingIO:
         path = self.control.get_staging() / path
         if not path.is_file():
             raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), path)
-        reader = vtk.vtkPolyDataReader()
-        reader.SetFileName(str(path))
-        reader.Update()
-        return reader.GetOutput()
+        return self.read_vtk_polydata(path)
 
     def read_parameterized_intensity(self, index, return_intensity_names=False):
         path = f"parameterization/representations/{index}.tif"
@@ -116,6 +113,13 @@ class LocalStagingIO:
             writer.save(
                 img, dimension_order=dims, image_name=name, channel_names=channel_names)
         return
+
+    @staticmethod
+    def read_vtk_polydata(path: Path):
+        reader = vtk.vtkPolyDataReader()
+        reader.SetFileName(str(path))
+        reader.Update()
+        return reader.GetOutput()
 
     @staticmethod
     def status(idx, output, computed):

@@ -6,7 +6,7 @@ from aicsshparam import shtools
 from vtk.util.numpy_support import numpy_to_vtk as np2vtk
 from vtk.util.numpy_support import vtk_to_numpy as vtk2np
 
-from cvapipe_analysis.tools import io, shapespace, plotting
+from cvapipe_analysis.tools import io, shapespace, plotting, viz
 
 class ShapeModeCalculator(io.DataProducer):
     """
@@ -140,7 +140,7 @@ class ShapeModeCalculator(io.DataProducer):
             for alias in self.control.get_aliases_for_pca():
                 self.meshes[sm][alias] = []
                 for _, row in df_sm.iterrows():
-                    mesh = self.get_mesh_from_series(row, alias, lrec)
+                    mesh = viz.MeshToolKit.get_mesh_from_series(row, alias, lrec)
                     if f'{alias}_dx' in self.df_coeffs.columns:
                         dr_mean = row[[f'{alias}_d{u}' for u in ['x', 'y', 'z']]]
                         mesh = self.translate_mesh_points(mesh, dr_mean.values)
@@ -162,25 +162,6 @@ class ShapeModeCalculator(io.DataProducer):
         coords = vtk2np(mesh.GetPoints().GetData())
         coords += np.array(r, dtype=np.float32).reshape(1,3)
         mesh.GetPoints().SetData(np2vtk(coords))
-        return mesh
-
-    @staticmethod
-    def get_mesh_from_series(row, alias, lmax):
-        coeffs = np.zeros((2, lmax, lmax), dtype=np.float32)
-        for l in range(lmax):
-            for m in range(l + 1):
-                try:
-                    # Cosine SHE coefficients
-                    coeffs[0, l, m] = row[
-                        [f for f in row.keys() if f"{alias}_shcoeffs_L{l}M{m}C" in f]
-                    ]
-                    # Sine SHE coefficients
-                    coeffs[1, l, m] = row[
-                        [f for f in row.keys() if f"{alias}_shcoeffs_L{l}M{m}S" in f]
-                    ]
-                # If a given (l,m) pair is not found, it is assumed to be zero
-                except: pass
-        mesh, _ = shtools.get_reconstruction_from_coeffs(coeffs)
         return mesh
 
     @staticmethod

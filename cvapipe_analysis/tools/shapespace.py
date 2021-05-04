@@ -7,8 +7,7 @@ from aicsshparam import shtools
 from sklearn.decomposition import PCA
 from scipy import spatial as spspatial
 
-from cvapipe_analysis.tools import plotting
-from cvapipe_analysis.steps.shapemode.shapemode_tools import ShapeModeCalculator
+from . import plotting, viz
 
 class ShapeSpaceBasic():
     """
@@ -296,7 +295,7 @@ class ShapeSpaceMapper():
         self.result["dataset"] = "base"
         for dsname, ds in self.datasets.items():
             df = pd.read_csv(ds["path"]/"preprocessing/manifest.csv", index_col="CellId")
-            print(f"{dsname} loaded. {df.shape}")            
+            print(f"\t{dsname} loaded. {df.shape}")            
             axes = self.space.transform(df)
             axes["dataset"] = dsname
             axes["structure_name"] = df["structure_name"]
@@ -325,7 +324,7 @@ class ShapeSpaceMapper():
             df = self.space.invert(matrix)
             row = df.loc[df.index[0]]
             for alias in self.control.get_aliases_for_pca():
-                mesh = ShapeModeCalculator.get_mesh_from_series(row, alias, lrec)
+                mesh = viz.MeshToolKit.get_mesh_from_series(row, alias, lrec)
                 fname = output / f"{ds}_{alias}.vtk"
                 shtools.save_polydata(mesh, str(fname))
 
