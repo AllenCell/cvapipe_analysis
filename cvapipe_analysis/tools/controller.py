@@ -166,6 +166,9 @@ class Controller:
     def get_plot_limits(self):
         return self.space_section['plot']['limits']
 
+    def get_plot_frame(self):
+        return self.space_section['plot']['frame']
+
     def swapxy_on_zproj(self):
         return self.space_section['plot']['swapxy_on_zproj']
 
@@ -234,6 +237,12 @@ class Controller:
 
     def get_gene_color(self, gene):
         return self.config["structures"][gene][1]
+
+    def get_optimal_seg_contrast(self, gene):
+        return eval(self.config["structures"][gene][2])["seg"]
+
+    def get_optimal_raw_contrast(self, gene):
+        return eval(self.config["structures"][gene][2])["raw"]
 
     @staticmethod
     def get_ncores():

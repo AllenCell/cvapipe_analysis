@@ -447,6 +447,8 @@ class ShapeModePlotMaker(PlotMaker):
         ax.set_xlim(hmin - offset, hmax + offset)
         ax.set_ylim(vmin - offset, vmax + offset)
         ax.set_aspect("equal")
+        if not self.control.get_plot_frame:
+            ax.axis("off")
 
         lines = []
         for alias, _ in contours.items():
@@ -495,7 +497,7 @@ class ShapeModePlotMaker(PlotMaker):
         stack = np.concatenate(stack[:], axis=-2)[:3]
         stack = np.concatenate([stack[:, :-1], stack[:, ::-1]], axis=1)
         # Reduce the empty space between images
-        gaps = stack.min(axis=(0, 1, 3)) != 255
+        gaps = stack.min(axis=(0, 1, 3)) < 125
         for _ in range(5):
             gaps[1:-1] = gaps[2:] + gaps[:-2]
         stack = stack[:, :, gaps > 0, :]
