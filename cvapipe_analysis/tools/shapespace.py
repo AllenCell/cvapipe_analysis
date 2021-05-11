@@ -277,7 +277,10 @@ class ShapeSpaceMapper():
     def allow_similar_cellid(self):
         self.allow_similar_cellids_off = False
 
-    def map(self, stagings: List[pd.DataFrame]):
+    def map(self, stagings: List[Path]):
+        for p in stagings:
+            if p == self.control.get_staging():
+                raise RuntimeError("Input and base dataset are the same.")
         self.datasets = dict([(p.name, {"path": p}) for p in stagings])
         self.workflow()
 
@@ -334,8 +337,12 @@ class ShapeSpaceMapper():
         df_map = self.result.copy()
         for ds in self.datasets:
             df_X = self.result.loc["base"]
+            nx_ini = len(df_X)
             df_Y = self.result.loc[ds]
+            ny_ini = len(df_Y)
             df_X = self.drop_rows_with_similar_cellid(df_X, df_Y)
+            nx_end = len(df_X)
+            print(f"\t{ds}: Ny={ny_ini}, Nx={nx_ini} -> Nx={nx_end}.")
             dist = spspatial.distance.cdist(df_X.values, df_Y.values).min(axis=0)
             indexes = df_Y.index.to_frame()
             indexes.insert(0, "dataset", ds)            
