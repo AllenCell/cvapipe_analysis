@@ -447,7 +447,7 @@ class ShapeModePlotMaker(PlotMaker):
         ax.set_xlim(hmin - offset, hmax + offset)
         ax.set_ylim(vmin - offset, vmax + offset)
         ax.set_aspect("equal")
-        if not self.control.get_plot_frame:
+        if not self.control.get_plot_frame():
             ax.axis("off")
 
         lines = []
