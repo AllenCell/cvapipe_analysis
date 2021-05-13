@@ -252,6 +252,7 @@ class ShapeSpaceMapper():
     reason we leave up to the user to coordinate IO functionalities.
     More importantly, where results are saved."""
 
+    grouping = None
     normalize = True
     full_base_dataset = False
     allow_similar_cellids_off = True
@@ -277,6 +278,9 @@ class ShapeSpaceMapper():
     def allow_similar_cellid(self):
         self.allow_similar_cellids_off = False
 
+    def set_grouping(self, grouping):
+        self.pmaker.set_grouping(grouping)
+
     def map(self, stagings: List[Path]):
         for p in stagings:
             if p == self.control.get_staging():
@@ -292,7 +296,7 @@ class ShapeSpaceMapper():
         self.normalization()
         self.create_nn_mapping()
         self.pmaker.set_dataframe(self.result)
-        self.pmaker.execute(display=False)
+        self.pmaker.execute(display=False, grouping=self.grouping)
 
     def merge_transformed_datasets(self):
         self.result["dataset"] = "base"
@@ -336,19 +340,8 @@ class ShapeSpaceMapper():
         neighbor with same structure."""
         df_map = self.result.copy()
         for ds in self.datasets:
-            df_X = self.result.loc["base"]
-            nx_ini = len(df_X)
-            df_Y = self.result.loc[ds]
-            ny_ini = len(df_Y)
-            df_X = self.drop_rows_with_similar_cellid(df_X, df_Y)
-            nx_end = len(df_X)
-            print(f"\t{ds}: Ny={ny_ini}, Nx={nx_ini} -> Nx={nx_end}.")
-            dist = spspatial.distance.cdist(df_X.values, df_Y.values).min(axis=0)
-            indexes = df_Y.index.to_frame()
-            indexes.insert(0, "dataset", ds)            
-            df_map.loc[pd.MultiIndex.from_frame(indexes), "DistThresh"] = np.median(dist)
-            for (ds, sname), df_Y in self.result.groupby(level=["dataset", "structure_name"]):
-                if ds != "base":
+            for (aa, sname), df_Y in self.result.groupby(level=["dataset", "structure_name"]):
+                if aa != "base":
                     df_X = self.result.loc[("base", sname)]
                     df_X = self.drop_rows_with_similar_cellid(df_X, df_Y)
                     dist = spspatial.distance.cdist(df_X.values, df_Y.values)
@@ -357,4 +350,3 @@ class ShapeSpaceMapper():
         df_map.NNCellId = df_map.fillna(-1).NNCellId.astype(np.int64)
         self.result = df_map
         self.result.reset_index().set_index(["dataset", "CellId"])
-

@@ -1,8 +1,8 @@
-from numpy.core.shape_base import _concatenate_shapes
 import vtk
 import math
 import operator
 import numpy as np
+import pandas as pd
 from tqdm import tqdm
 from pathlib import Path
 from typing import Optional
@@ -656,6 +656,7 @@ class ShapeSpaceMapperPlotMaker(PlotMaker):
     the local_staging folder is.
     """
 
+    grouping = None
     full_path_provided = True # See explanation in ShapeSpaceMapper.
 
     def __init__(self, control, save_dir):
@@ -664,8 +665,13 @@ class ShapeSpaceMapperPlotMaker(PlotMaker):
 
     def workflow(self):
         self.check_dataframe_exists()
+        self.plot_distance_vs_ncells()
         self.plot_mapping_1d()
+        self.plot_nn_distance_distributions()
         return
+
+    def set_grouping(self, grouping):
+        self.grouping = grouping
 
     def plot_mapping_1d(self):
         df_base = self.df.loc["base"]
@@ -717,3 +723,46 @@ class ShapeSpaceMapperPlotMaker(PlotMaker):
                 lh.set_sizes([50])
             plt.tight_layout()
             self.figs.append((fig, f"mapping_{sm1}_{sm2}"))
+
+    def plot_nn_distance_distributions(self):
+        if self.grouping is None:
+            return
+        cmap = plt.cm.get_cmap("tab10")
+        hargs = {"bins": 32, "linewidth": 3, "density": True, "histtype": "step"}
+        for idx, (ds, df) in enumerate(self.df.groupby(level="dataset", sort=False)):
+            if ds != "base":
+                fig, ax = plt.subplots(1,1, figsize=(5,4))
+                ax.hist(df.Dist, bins=32, density=True, alpha=0.5, fc="black", label="All")
+                # ax.axvline(df.DistThresh.values[0], color="black")
+                for gid, (group, snames) in enumerate(self.grouping.items()):
+                    str_available = df.index.get_level_values(level="structure_name")
+                    df_group = df.loc[(ds, [s for s in snames if s in str_available]), ]
+                    ax.hist(df_group.Dist, **hargs, edgecolor=cmap(gid), label=group)
+                ax.set_xlabel("NN Distance", fontsize=14)
+                ax.set_xlim(0, 8)
+                plt.suptitle(ds, fontsize=14)
+                plt.legend()
+                plt.tight_layout()
+                self.figs.append((fig, f"nndist_{ds}"))
+
+    def plot_distance_vs_ncells(self):
+        for idx, (ds, df) in enumerate(self.df.groupby(level="dataset", sort=False)):
+            if ds != "base":
+                grid = {'height_ratios': [6, 1]}
+                fig, (ax, lg) = plt.subplots(2,1, figsize=(8,4), gridspec_kw=grid)
+                for sid, sname in enumerate(self.control.get_gene_names()):
+                    y = df.loc[(ds, sname), "Dist"].values
+                    ax.plot([y.size, y.size], [np.median(y)-y.std(), np.median(y)+y.std()], color="black", alpha=0.5)
+                    ax.scatter(y.size, np.median(y), s=50, color=self.control.get_gene_color(sname))
+                    lg.scatter(sid, 1, color=self.control.get_gene_color(sname), s=50)
+                lg.set_yticks([])
+                lg.set_xticks(np.arange(len(self.control.get_gene_names())))
+                lg.set_xticklabels(self.control.get_gene_names(), rotation=90)
+                for k in lg.spines:
+                    lg.spines[k].set_visible(False)
+                ax.set_ylim(1, 5)
+                ax.set_ylabel("NN Distance (units of std)", fontsize=12)
+                ax.set_xlabel("Number of cells", fontsize=14)
+                plt.suptitle(ds, fontsize=14)
+                plt.tight_layout()
+                self.figs.append((fig, f"nndist_ncells_{ds}"))
