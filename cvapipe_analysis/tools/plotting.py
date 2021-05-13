@@ -752,6 +752,7 @@ class ShapeSpaceMapperPlotMaker(PlotMaker):
                 fig, (ax, lg) = plt.subplots(2,1, figsize=(8,4), gridspec_kw=grid)
                 for sid, sname in enumerate(self.control.get_gene_names()):
                     y = df.loc[(ds, sname), "Dist"].values
+                    ax.axhline(y=1.0, color="black", alpha=0.2, linestyle="--")
                     ax.plot([y.size, y.size], [np.median(y)-y.std(), np.median(y)+y.std()], color="black", alpha=0.5)
                     ax.scatter(y.size, np.median(y), s=50, color=self.control.get_gene_color(sname))
                     lg.scatter(sid, 1, color=self.control.get_gene_color(sname), s=50)
@@ -760,7 +761,7 @@ class ShapeSpaceMapperPlotMaker(PlotMaker):
                 lg.set_xticklabels(self.control.get_gene_names(), rotation=90)
                 for k in lg.spines:
                     lg.spines[k].set_visible(False)
-                ax.set_ylim(1, 5)
+                ax.set_ylim(0, 2)
                 ax.set_ylabel("NN Distance (units of std)", fontsize=12)
                 ax.set_xlabel("Number of cells", fontsize=14)
                 plt.suptitle(ds, fontsize=14)
