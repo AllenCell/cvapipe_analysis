@@ -673,21 +673,35 @@ class ShapeSpaceMapperPlotMaker(PlotMaker):
     def set_grouping(self, grouping):
         self.grouping = grouping
 
+    @staticmethod
+    def comparative_hists(df1, df2, title):
+        nc = len(df1.columns)
+        args = {"bins": 32, "density": True}
+        fig, axs = plt.subplots(nc,1, figsize=(4,2*nc), sharex=True, gridspec_kw={"hspace": 0.5})
+        for sm, ax in zip(df1.columns, axs):
+            ax.hist(df1[sm], **args, alpha=0.5, fc="black")
+            ax.hist(df2[sm], **args, histtype="step", linewidth=3, edgecolor="black")
+            ax.set_xlabel(sm, fontsize=14)
+            ax.set_ylim(0, 1)
+            ax.set_xlim(-5, 5)
+        plt.suptitle(title, fontsize=18)
+        plt.tight_layout()
+        return fig
+
     def plot_mapping_1d(self):
         df_base = self.df.loc["base"]
-        cmap = plt.cm.get_cmap("tab10")
-        shape_modes = self.control.get_shape_modes()
-        for idx, (ds, df) in enumerate(self.df.groupby(level="dataset", sort=False)):
-            if ds != "base":
-                fig, axs = plt.subplots(len(shape_modes),1, figsize=(5,1*len(shape_modes)), sharex=True, gridspec_kw={"hspace": 0.5})
-                for sm, ax in zip(shape_modes, axs):
-                    ax.hist(df_base[sm], bins=32, density=True, alpha=0.5, fc=cmap(0))
-                    ax.hist(df[sm],bins=32, density=True, alpha=0.5, fc=cmap(idx))
-                    ax.set_xlabel(sm, fontsize=14)
-                    ax.set_xlim(-5, 5)
-                plt.suptitle(ds, fontsize=18)
-                plt.tight_layout()
-                self.figs.append((fig, f"mapping_{ds}"))
+        sms = self.control.get_shape_modes()
+        for dsname, df in self.df.groupby(level="dataset", sort=False):
+            if dsname != "base":
+                fig = self.comparative_hists(df_base[sms], df[sms], dsname)
+                self.figs.append((fig, f"mapping_{dsname}"))
+                # Same plots for matching pairs
+                ds_ids = df.loc[df.Match==True].index
+                NNCellIds = df.loc[ds_ids].NNCellId.values
+                bs_ids = [(sname, nnid) for ((_, sname, _), nnid) in zip(ds_ids, NNCellIds)]
+                bs_ids = pd.MultiIndex.from_tuples(bs_ids).drop_duplicates()
+                fig = self.comparative_hists(df_base.loc[bs_ids, sms], df.loc[ds_ids, sms], dsname)
+                self.figs.append((fig, f"mapping_{dsname}_match"))
 
     def plot_mapping_2d(self):
         cmap = plt.cm.get_cmap("tab10")
