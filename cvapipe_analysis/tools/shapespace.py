@@ -254,6 +254,7 @@ class ShapeSpaceMapper():
 
     grouping = None
     normalize = True
+    distance_threshold = None
     full_base_dataset = False
     allow_similar_cellids_off = True
 
@@ -272,6 +273,9 @@ class ShapeSpaceMapper():
     def set_normalization_off(self):
         self.normalize = False
 
+    def set_distance_threshold(self, value):
+        self.distance_threshold = value
+
     def use_full_base_dataset(self):
         self.full_base_dataset = True
 
@@ -285,6 +289,8 @@ class ShapeSpaceMapper():
         for p in stagings:
             if p == self.control.get_staging():
                 raise RuntimeError("Input and base dataset are the same.")
+        if self.distance_threshold is None:
+            raise ValueError("Please specify a distance threshold.")
         self.datasets = dict([(p.name, {"path": p}) for p in stagings])
         self.workflow()
 
@@ -295,8 +301,12 @@ class ShapeSpaceMapper():
         self.reconstruct_datasets_mean_cell()
         self.normalization()
         self.create_nn_mapping()
+        self.flag_close_pairs()
         self.pmaker.set_dataframe(self.result)
         self.pmaker.execute(display=False, grouping=self.grouping)
+
+    def flag_close_pairs(self):
+        self.result["Match"] = self.result.Dist < self.distance_threshold
 
     def merge_transformed_datasets(self):
         self.result["dataset"] = "base"
