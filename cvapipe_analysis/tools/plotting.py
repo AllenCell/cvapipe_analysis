@@ -484,16 +484,13 @@ class ShapeModePlotMaker(PlotMaker):
             imx = self.load_animated_gif(sm, "x")
             imy = self.load_animated_gif(sm, "y")
             imz = self.load_animated_gif(sm, "z")
-            if imx.ndim == 3:
-                imx, imy, imz = imx.T, imy.T, imz.T
             img = np.c_[imz, imy, imx]
-            img = np.swapaxes(img, 0, 1)
+            print(img.shape)
+            if imx.ndim == 3:
+                img = np.expand_dims(img, 0)
+            img = np.swapaxes(img, 0, 1)# mpID -> Z
             stack.append(img)
         stack = np.array(stack)
-        # Here we deal with RGBA vs grayscale images
-        if stack.ndim == 4:
-            stack = np.expand_dims(stack, axis=1)
-            stack = np.repeat(stack, 4, axis=1)
         stack = np.concatenate(stack[:], axis=-2)[:3]
         stack = np.concatenate([stack[:, :-1], stack[:, ::-1]], axis=1)
         # Reduce the empty space between images
@@ -677,7 +674,8 @@ class ShapeSpaceMapperPlotMaker(PlotMaker):
     def comparative_hists(df1, df2, title):
         nc = len(df1.columns)
         args = {"bins": 32, "density": True}
-        fig, axs = plt.subplots(nc,1, figsize=(4,2*nc), sharex=True, gridspec_kw={"hspace": 0.5})
+        fig, axs = plt.subplots(nc, 1, figsize=(4,2*nc), sharex=True, gridspec_kw={"hspace": 0.5})
+        axs = [axs] if len(axs)==1 else axs
         for sm, ax in zip(df1.columns, axs):
             ax.hist(df1[sm], **args, alpha=0.5, fc="black")
             ax.hist(df2[sm], **args, histtype="step", linewidth=3, edgecolor="black")
