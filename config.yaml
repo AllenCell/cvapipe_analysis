@@ -1,22 +1,25 @@
 appName: cvapipe_analysis
 
 project:
-    # Sufix to append to local_staging
-    local_staging: "/allen/aics/assay-dev/MicroscopyOtherData/Viana/projects/cvapipe_analysis/local_staging_full"
-    overwrite: on
+    local_staging: "/allen/aics/assay-dev/MicroscopyOtherData/Viana/projects/cvapipe_analysis/local_staging_full_edges_matched"
+    overwrite: off
 
 data:
-    nucleus:
-        channel: "dna_segmentation"
-        alias: "NUC"
-        color: "#3AADA7"
     cell:
-        channel: "membrane_segmentation"
         alias: "MEM"
+        channel: "membrane_segmentation"
         color: "#F200FF"
+    nucleus:
+        alias: "NUC"
+        channel: "dna_segmentation"
+        color: "#3AADA7"
     structure:
-        channel: "struct_segmentation_roof"
         alias: "STR"
+        channel: "struct_segmentation_roof"
+        color: "#000000"
+    raw-structure:
+        alias: "RAWSTR"
+        channel: "structure"
         color: "#000000"
 
 features:
@@ -36,8 +39,12 @@ features:
         lmax: 16
 
 preprocessing:
-    remove_mitotics: on
-    remove_outliers: on
+    remove_mitotics: off
+    remove_outliers: off
+    filtering:
+        filter: off
+        csv: "/allen/aics/assay-dev/MicroscopyOtherData/Viana/projects/variance-paper-reply/source/manifest.csv"
+        specs: {"dataset": ["base"], "local_staging_m3": [True]}
 
 shapespace:
     # Specify the a set of aliases here
@@ -47,10 +54,11 @@ shapespace:
     # Percentage of exteme points to be removed
     removal_pct: 1.0
     # Number of principal components to be calculated
-    number_of_shape_modes: 8
+    number_of_shape_modes: 1
     # Map points
-    map_points: [-2.0, -1.5, -1.0, -0.5, 0.0, 0.5, 1.0, 1.5, 2.0]
+    map_points: [0.0]
     plot:
+        frame: on
         swapxy_on_zproj: off
         # limits of x and y axies in the animated GIFs
         limits: [-150, 150, -80, 80]
@@ -65,36 +73,36 @@ aggregation:
     type: ['avg']
 
 structures:
-    "FBL": ["nucleoli [DFC)", "#A9D1E5"]
-    "NPM1": ["nucleoli [GC)", "#88D1E5"]
-    "SON": ["nuclear speckles", "#3292C9"]
-    "SMC1A": ["cohesins", "#306598"]
-    "HIST1H2BJ": ["histones", "#305098"]
-    "LMNB1": ["nuclear envelope", "#084AE7"]
-    "NUP153": ["nuclear pores", "#0840E7"]
-    "SEC61B": ["ER [Sec61 beta)", "#FFFFB5"]
-    "ATP2A2": ["ER [SERCA2)", "#FFFFA0"]
-    "TOMM20": ["mitochondria", "#FFD184"]
-    "SLC25A17": ["peroxisomes", "#FFD16E"]
-    "RAB5A": ["endosomes", "#FFD150"]
-    "LAMP1": ["lysosomes", "#AD952A"]
-    "ST6GAL1": ["Golgi", "#B7952A"]
-    "CETN2": ["centrioles", "#9D7000"]
-    "TUBA1B": ["microtubules", "#6B4500"]
-    "AAVS1": ["plasma membrane", "#FFD2FF"]
-    "ACTB": ["actin filaments", "#FFB1FF"]
-    "ACTN1": ["actin bundles", "#FF96FF"]
-    "MYH10": ["actomyosin bundles", "#FF82FF"]
-    "GJA1": ["gap junctions", "#A850C0"]
-    "TJP1": ["tight junctions", "#A850D4"]
-    "DSP": ["desmosomes", "#A850E8"]
-    "CTNNB1": ["adherens junctions", "#CB1CCC"]
-    "PXN": ["matrix adhesions", "#77207C"]
+    "FBL": ["nucleoli [DFC)", "#A9D1E5", "{'raw': (960, 3500), 'seg': (70,255)}"]
+    "NPM1": ["nucleoli [GC)", "#88D1E5", "{'raw': (1000, 9000), 'seg': (70,255)}"]
+    "SON": ["nuclear speckles", "#3292C9", "{'raw': (370, 1100), 'seg': (0,150)}"]
+    "SMC1A": ["cohesins", "#306598", "{'raw': (450, 700), 'seg': (0,20)}"]
+    "HIST1H2BJ": ["histones", "#305098", "{'raw': (400, 3000), 'seg': (0,255)}"]
+    "LMNB1": ["nuclear envelope", "#084AE7", "{'raw': (400,1600), 'seg': (0,150)}"]
+    "NUP153": ["nuclear pores", "#0840E7", "{'raw': (400, 700), 'seg': (0,30)}"]
+    "SEC61B": ["ER [Sec61 beta)", "#FFFFB5", "{'raw': (400,1000), 'seg': (0,150)}"]
+    "ATP2A2": ["ER [SERCA2)", "#FFFFA0", "{'raw': (400,700), 'seg': (0,20)}"]
+    "TOMM20": ["mitochondria", "#FFD184", "{'raw': (400,700), 'seg': (0,70)}"]
+    "SLC25A17": ["peroxisomes", "#FFD16E", "{'raw': (400,550), 'seg': (100,150)}"]
+    "RAB5A": ["endosomes", "#FFD150", "{'raw': (400,550), 'seg': (0,60)}"]
+    "LAMP1": ["lysosomes", "#AD952A", "{'raw': (400,760), 'seg': (0,60)}"]
+    "ST6GAL1": ["Golgi", "#B7952A", "{'raw': (400,500), 'seg': (0,70)}"]
+    "CETN2": ["centrioles", "#9D7000", "{'raw': (400,600), 'seg': (0,25)}"]
+    "TUBA1B": ["microtubules", "#6B4500", "{'raw': (1200,3200), 'seg': (0,70)}"]
+    "AAVS1": ["plasma membrane", "#FFD2FF", "{'raw': (400,2000), 'seg': (30,80)}"]
+    "ACTB": ["actin filaments", "#FFB1FF", "{'raw': (490,1490), 'seg': (0,150)}"]
+    "ACTN1": ["actin bundles", "#FF96FF", "{'raw': (440,790), 'seg': (0,70)}"]
+    "MYH10": ["actomyosin bundles", "#FF82FF", "{'raw': (600,1100), 'seg': (0,70)}"]
+    "GJA1": ["gap junctions", "#A850C0", "{'raw': (260,2680), 'seg': (0,120)}"]
+    "TJP1": ["tight junctions", "#A850D4", "{'raw': (250,1500), 'seg': (0,120)}"]
+    "DSP": ["desmosomes", "#A850E8", "{'raw': (390,540), 'seg': (0,30)}"]
+    "CTNNB1": ["adherens junctions", "#CB1CCC", "{'raw': (400,880), 'seg': (0,70)}"]
+    "PXN": ["matrix adhesions", "#77207C", "{'raw': (410,470), 'seg': (0,70)}"]
 
 distribute:
     # In case a (slurm) cluster is available
     cores: 30
-    number_of_workers: 32
+    number_of_workers: 12
     memory: "8GB"
     queue: "aics_cpu_general"
     walltime: "9-24:00:00"

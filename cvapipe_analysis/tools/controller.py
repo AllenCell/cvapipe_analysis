@@ -81,6 +81,15 @@ class Controller:
     def remove_outliers(self):
         return self.config['preprocessing']['remove_outliers']
 
+    def is_filtering_on(self):
+        return self.config["preprocessing"]["filtering"]["filter"]
+
+    def get_filtering_csv(self):
+        return self.config["preprocessing"]["filtering"]["csv"]
+
+    def get_filtering_specs(self):
+        return self.config["preprocessing"]["filtering"]["specs"]
+
     def get_aliases_for_feature_extraction(self):
         return self.features_section['aliases']
 
