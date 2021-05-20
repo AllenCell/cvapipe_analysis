@@ -8,7 +8,8 @@ from typing import Dict, List, Optional, Union
 
 import pandas as pd
 from cvapipe_analysis.tools import io, general
-from .preprocessing_tools import outliers_removal
+from .outliers_tools import outliers_removal
+from .filtering_tools import filtering
 
 log = logging.getLogger(__name__)
 
@@ -22,7 +23,12 @@ class Preprocessing(Step):
         super().__init__(direct_upstream_tasks=direct_upstream_tasks, config=config)
 
     @log_run_params
-    def run(self, debug: bool = False, **kwargs):
+    def run(
+        self,
+        filter = None,
+        debug: bool=False,
+        **kwargs
+        ):
         
         with general.configuration(self.step_local_staging_dir) as control:
             
@@ -57,6 +63,10 @@ class Preprocessing(Step):
                 df = df.drop(columns=['Outlier'])
                 log.info(f"Shape of data without outliers: {df.shape}")
             
+            if control.is_filtering_on():
+
+                df = filtering(df, control)
+
             # Remove rows for which any feature is nan
             aliases = control.get_aliases_for_pca()
             columns = [f for f in df.columns if any(w in f for w in aliases)]
