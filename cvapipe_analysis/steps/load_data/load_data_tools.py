@@ -22,7 +22,6 @@ class DataLoader(io.LocalStagingIO):
 
     package_name = "aics/hipsc_single_cell_image_dataset"
     registry = "s3://allencell"
-    subfolder = 'loaddata'
     required_df_columns = [
         'CellId',
         'structure_name',
@@ -33,6 +32,7 @@ class DataLoader(io.LocalStagingIO):
 
     def __init__(self, control):
         super().__init__(control)
+        self.subfolder = 'loaddata'
 
     def load(self, parameters):
         if 'csv' in parameters:
@@ -59,7 +59,7 @@ class DataLoader(io.LocalStagingIO):
 
     def create_symlinks(self, df):
         for col in ['crop_raw', 'crop_seg']:
-            abs_path_data_folder = self.control.get_staging()/f"{self.subfolder}"
+            abs_path_data_folder = self.control.get_staging()/self.subfolder
             (abs_path_data_folder/col).mkdir(parents=True, exist_ok=True)
         for index, row in tqdm(df.iterrows(), total=len(df)):
             idx = str(uuid.uuid4())[:8]
