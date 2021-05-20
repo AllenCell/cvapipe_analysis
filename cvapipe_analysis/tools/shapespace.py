@@ -174,7 +174,8 @@ class ShapeSpace(ShapeSpaceBasic):
         self.active_scale = values.std()
         values /= self.active_scale
         bin_centers = self.control.get_map_points()
-        binw = 0.5*np.diff(bin_centers).mean()
+        # Line below handle single bins
+        binw = 0.5*np.diff(bin_centers).mean() if len(bin_centers) > 1 else 1
         bin_edges = np.unique([(b-binw, b+binw) for b in bin_centers])
         bin_edges[0] = -np.inf
         bin_edges[-1] = np.inf
@@ -307,11 +308,20 @@ class ShapeSpaceMapper():
 
     def flag_close_pairs(self):
         self.result["Match"] = self.result.Dist < self.distance_threshold
+        for dsname, df_ds in self.result.groupby(level=["dataset"]):
+            if dsname != "base":
+                self.result[dsname] = False
+                df = df_ds.loc[df_ds.Dist<self.distance_threshold]
+                indices = [("base", s, i) for i, (_, s, _) in zip(df.NNCellId, df.index)]
+                self.result.loc[indices, dsname] = True
 
     def merge_transformed_datasets(self):
         self.result["dataset"] = "base"
         for dsname, ds in self.datasets.items():
-            df = pd.read_csv(ds["path"]/"preprocessing/manifest.csv", index_col="CellId")
+            """Read from computefeatures bc the map procedure can eventualy
+            writes backinto preprocessing as datasets are filtered after
+            mapping."""
+            df = pd.read_csv(ds["path"]/"computefeatures/manifest.csv", index_col="CellId")
             print(f"\t{dsname} loaded. {df.shape}")            
             axes = self.space.transform(df)
             axes["dataset"] = dsname
@@ -349,14 +359,13 @@ class ShapeSpaceMapper():
         """ Calculates the distance to nearest neighbor and nearest
         neighbor with same structure."""
         df_map = self.result.copy()
-        for ds in self.datasets:
-            for (aa, sname), df_Y in self.result.groupby(level=["dataset", "structure_name"]):
-                if aa != "base":
-                    df_X = self.result.loc[("base", sname)]
-                    df_X = self.drop_rows_with_similar_cellid(df_X, df_Y)
-                    dist = spspatial.distance.cdist(df_X.values, df_Y.values)
-                    df_map.loc[df_Y.index, "Dist"] = dist.min(axis=0)
-                    df_map.loc[df_Y.index, "NNCellId"] = df_X.index[dist.argmin(axis=0)]
+        for (ds, sname), df_Y in self.result.groupby(level=["dataset", "structure_name"]):
+            if ds != "base":
+                df_X = self.result.loc[("base", sname)]
+                df_X = self.drop_rows_with_similar_cellid(df_X, df_Y)
+                dist = spspatial.distance.cdist(df_X.values, df_Y.values)
+                df_map.loc[df_Y.index, "Dist"] = dist.min(axis=0)
+                df_map.loc[df_Y.index, "NNCellId"] = df_X.index[dist.argmin(axis=0)]
         df_map.NNCellId = df_map.fillna(-1).NNCellId.astype(np.int64)
         self.result = df_map
         self.result.reset_index().set_index(["dataset", "CellId"])
