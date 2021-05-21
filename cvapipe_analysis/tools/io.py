@@ -22,10 +22,10 @@ class LocalStagingIO:
     their are saved.
     """
 
-    def __init__(self, control):
+    def __init__(self, control, subfolder=None):
         self.row = None
-        self.subfolder = None
         self.control = control
+        self.subfolder = subfolder
 
     def get_single_cell_images(self, row, return_stack=False):
         imgs = []

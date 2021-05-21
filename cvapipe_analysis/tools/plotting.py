@@ -12,7 +12,7 @@ from matplotlib import animation
 from scipy import stats as spstats
 from scipy import cluster as spcluster
 from aicsimageio import AICSImage, writers
-from vtk.util.numpy_support import vtk_to_numpy as vtk2np
+from vtk.util import numpy_support as vtknp
 from cvapipe_analysis.tools import io
 
 
@@ -510,7 +510,7 @@ class ShapeModePlotMaker(PlotMaker):
         axis = [a for a in [0, 1, 2] if a not in proj][0]
 
         # Get all mesh points
-        points = vtk2np(mesh.GetPoints().GetData())
+        points = vtknp.vtk_to_numpy(mesh.GetPoints().GetData())
 
         if not np.abs(points[:, axis]).sum():
             raise Exception("Only zeros found in the plane axis.")
@@ -518,9 +518,15 @@ class ShapeModePlotMaker(PlotMaker):
         mid = np.mean(points[:, axis])
         '''Set the plane a little off center to avoid undefined intersections.
         Without this the code hangs when the mesh has any edge aligned with the
-        projection plane.'''
+        projection plane. Also add a little of noisy to the coordinates to
+        help with the same problem.'''
         mid += 0.75
         offset = 0.1 * np.ptp(points, axis=0).max()
+        EPS = 1e-2
+        coords = vtknp.vtk_to_numpy(mesh.GetPoints().GetData())
+        delta = EPS*np.min(coords.ptp(axis=0))
+        coords = coords + delta*(0.5-np.random.rand(coords.size)).reshape(coords.shape)
+        mesh.GetPoints().SetData(vtknp.numpy_to_vtk(coords))
 
         # Create a vtkPlaneSource
         plane = vtk.vtkPlaneSource()
@@ -573,7 +579,7 @@ class ShapeModePlotMaker(PlotMaker):
         intersection = intersection.GetOutput()
 
         # Get coordinates of intersecting points
-        points = vtk2np(intersection.GetPoints().GetData())
+        points = vtknp.vtk_to_numpy(intersection.GetPoints().GetData())
 
         # Sorting points clockwise
         # This has been discussed here:
