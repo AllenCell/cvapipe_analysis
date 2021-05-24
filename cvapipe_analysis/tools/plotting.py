@@ -504,7 +504,7 @@ class ShapeModePlotMaker(PlotMaker):
         return
 
     @staticmethod
-    def find_plane_mesh_intersection(mesh, proj):
+    def find_plane_mesh_intersection(mesh, proj, use_vtk_for_intersection=True):
 
         # Find axis orthogonal to the projection of interest
         axis = [a for a in [0, 1, 2] if a not in proj][0]
@@ -515,78 +515,80 @@ class ShapeModePlotMaker(PlotMaker):
         if not np.abs(points[:, axis]).sum():
             raise Exception("Only zeros found in the plane axis.")
 
-        mid = np.mean(points[:, axis])
-        '''Set the plane a little off center to avoid undefined intersections.
-        Without this the code hangs when the mesh has any edge aligned with the
-        projection plane. Also add a little of noisy to the coordinates to
-        help with the same problem.'''
-        mid += 0.75
-        offset = 0.1 * np.ptp(points, axis=0).max()
-        EPS = 1e-2
-        coords = vtknp.vtk_to_numpy(mesh.GetPoints().GetData())
-        delta = EPS*np.min(coords.ptp(axis=0))
-        coords = coords + delta*(0.5-np.random.rand(coords.size)).reshape(coords.shape)
-        mesh.GetPoints().SetData(vtknp.numpy_to_vtk(coords))
+        if use_vtk_for_intersection:
 
-        # Create a vtkPlaneSource
-        plane = vtk.vtkPlaneSource()
-        plane.SetXResolution(4)
-        plane.SetYResolution(4)
-        if axis == 0:
-            plane.SetOrigin(
-                mid, points[:, 1].min() - offset, points[:, 2].min() - offset
-            )
-            plane.SetPoint1(
-                mid, points[:, 1].min() - offset, points[:, 2].max() + offset
-            )
-            plane.SetPoint2(
-                mid, points[:, 1].max() + offset, points[:, 2].min() - offset
-            )
-        if axis == 1:
-            plane.SetOrigin(
-                points[:, 0].min() - offset, mid, points[:, 2].min() - offset
-            )
-            plane.SetPoint1(
-                points[:, 0].min() - offset, mid, points[:, 2].max() + offset
-            )
-            plane.SetPoint2(
-                points[:, 0].max() + offset, mid, points[:, 2].min() - offset
-            )
-        if axis == 2:
-            plane.SetOrigin(
-                points[:, 0].min() - offset, points[:, 1].min() - offset, mid
-            )
-            plane.SetPoint1(
-                points[:, 0].min() - offset, points[:, 1].max() + offset, mid
-            )
-            plane.SetPoint2(
-                points[:, 0].max() + offset, points[:, 1].min() - offset, mid
-            )
-        plane.Update()
-        plane = plane.GetOutput()
+            mid = np.mean(points[:, axis])
+            '''Set the plane a little off center to avoid undefined intersections.
+            Without this the code hangs when the mesh has any edge aligned with the
+            projection plane. Also add a little of noisy to the coordinates to
+            help with the same problem.'''
+            mid += 0.75
+            offset = 0.1 * np.ptp(points, axis=0).max()
 
-        # Trangulate the plane
-        triangulate = vtk.vtkTriangleFilter()
-        triangulate.SetInputData(plane)
-        triangulate.Update()
-        plane = triangulate.GetOutput()
+            # Create a vtkPlaneSource
+            plane = vtk.vtkPlaneSource()
+            plane.SetXResolution(4)
+            plane.SetYResolution(4)
+            if axis == 0:
+                plane.SetOrigin(
+                    mid, points[:, 1].min() - offset, points[:, 2].min() - offset
+                )
+                plane.SetPoint1(
+                    mid, points[:, 1].min() - offset, points[:, 2].max() + offset
+                )
+                plane.SetPoint2(
+                    mid, points[:, 1].max() + offset, points[:, 2].min() - offset
+                )
+            if axis == 1:
+                plane.SetOrigin(
+                    points[:, 0].min() - offset, mid, points[:, 2].min() - offset
+                )
+                plane.SetPoint1(
+                    points[:, 0].min() - offset, mid, points[:, 2].max() + offset
+                )
+                plane.SetPoint2(
+                    points[:, 0].max() + offset, mid, points[:, 2].min() - offset
+                )
+            if axis == 2:
+                plane.SetOrigin(
+                    points[:, 0].min() - offset, points[:, 1].min() - offset, mid
+                )
+                plane.SetPoint1(
+                    points[:, 0].min() - offset, points[:, 1].max() + offset, mid
+                )
+                plane.SetPoint2(
+                    points[:, 0].max() + offset, points[:, 1].min() - offset, mid
+                )
+            plane.Update()
+            plane = plane.GetOutput()
 
-        # Calculate intersection
-        intersection = vtk.vtkIntersectionPolyDataFilter()
-        intersection.SetInputData(0, mesh)
-        intersection.SetInputData(1, plane)
-        intersection.Update()
-        intersection = intersection.GetOutput()
+            # Trangulate the plane
+            triangulate = vtk.vtkTriangleFilter()
+            triangulate.SetInputData(plane)
+            triangulate.Update()
+            plane = triangulate.GetOutput()
 
-        # Get coordinates of intersecting points
-        points = vtknp.vtk_to_numpy(intersection.GetPoints().GetData())
+            # Calculate intersection
+            intersection = vtk.vtkIntersectionPolyDataFilter()
+            intersection.SetInputData(0, mesh)
+            intersection.SetInputData(1, plane)
+            intersection.Update()
+            intersection = intersection.GetOutput()
+
+            # Get coordinates of intersecting points
+            points = vtknp.vtk_to_numpy(intersection.GetPoints().GetData())
+            coords = points[:, proj]
+
+        else:
+            
+            valids = np.where((points[:,axis] > -2.5)&(points[:,axis] < 2.5))
+            coords = points[valids[0]][:,proj]
 
         # Sorting points clockwise
         # This has been discussed here:
         # https://stackoverflow.com/questions/51074984/sorting-according-to-clockwise-point-coordinates/51075469
         # but seems not to be very efficient. Better version is proposed here:
         # https://stackoverflow.com/questions/57566806/how-to-arrange-the-huge-list-of-2d-coordinates-in-a-clokwise-direction-in-python
-        coords = points[:, proj]
         center = tuple(
             map(
                 operator.truediv,
