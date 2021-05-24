@@ -1,36 +1,24 @@
 appName: cvapipe_analysis
 
 project:
-    local_staging: "/allen/aics/assay-dev/MicroscopyOtherData/Viana/projects/cvapipe_analysis/local_staging_full_edges_matched"
+    local_staging: "/allen/aics/assay-dev/MicroscopyOtherData/Viana/projects/cvapipe_analysis/local_staging_goldilock"
     overwrite: off
 
 data:
-    cell:
-        alias: "MEM"
-        channel: "membrane_segmentation"
-        color: "#F200FF"
     nucleus:
         alias: "NUC"
-        channel: "dna_segmentation"
+        channel: "crop_seg"
         color: "#3AADA7"
-    structure:
-        alias: "STR"
-        channel: "struct_segmentation_roof"
-        color: "#000000"
-    raw-structure:
-        alias: "RAWSTR"
-        channel: "structure"
-        color: "#000000"
 
 features:
-    aliases: ["NUC", "MEM", "STR"]
+    aliases: ["NUC"]
     # SHE - Spherical harmonics expansion
     SHE:
         alignment:
             align: on
             unique: off
-            reference: "cell"
-        aliases: ["NUC", "MEM"]
+            reference: "nucleus"
+        aliases: ["NUC"]
         # Size of Gaussian kernal used to smooth the
         # images before SHE coefficients calculation
         sigma: 2
@@ -43,8 +31,8 @@ preprocessing:
     remove_outliers: off
     filtering:
         filter: off
-        csv: "/allen/aics/assay-dev/MicroscopyOtherData/Viana/projects/variance-paper-reply/source/manifest.csv"
-        specs: {"dataset": ["base"], "local_staging_m3": [True]}
+        csv: "/allen/aics/assay-dev/MicroscopyOtherData/Viana/projects/cvapipe_analysis/local_staging_goldilock/loaddata/manifest.csv"
+        specs: {"track_type": ["F"]}
 
 shapespace:
     # Specify the a set of aliases here
@@ -54,9 +42,9 @@ shapespace:
     # Percentage of exteme points to be removed
     removal_pct: 1.0
     # Number of principal components to be calculated
-    number_of_shape_modes: 1
+    number_of_shape_modes: 8
     # Map points
-    map_points: [0.0]
+    map_points: [-2.0, -1.5, -1.0, -0.5, 0.0, 0.5, 1.0, 1.5, 2.0]
     plot:
         frame: on
         swapxy_on_zproj: off
