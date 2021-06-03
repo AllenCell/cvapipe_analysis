@@ -1,24 +1,32 @@
 appName: cvapipe_analysis
 
 project:
-    local_staging: "/allen/aics/assay-dev/MicroscopyOtherData/Viana/projects/cvapipe_analysis/local_staging_goldilock"
+    local_staging: "/allen/aics/assay-dev/MicroscopyOtherData/Viana/projects/cvapipe_analysis/local_staging_full"
     overwrite: off
 
 data:
+    cell:
+        alias: MEM
+        channel: membrane_segmentation
+        color: '#3AADA7'
     nucleus:
-        alias: "NUC"
-        channel: "crop_seg"
-        color: "#3AADA7"
+        alias: NUC
+        channel: dna_segmentation
+        color: '#3AADA7'
+    structure:
+        alias: STR
+        channel: struct_segmentation_roof
+        color: '#000000'
 
 features:
-    aliases: ["NUC"]
+    aliases: ["NUC", "MEM", "STR"]
     # SHE - Spherical harmonics expansion
     SHE:
         alignment:
             align: on
             unique: off
-            reference: "nucleus"
-        aliases: ["NUC"]
+            reference: "cell"
+        aliases: ["NUC", "MEM"]
         # Size of Gaussian kernal used to smooth the
         # images before SHE coefficients calculation
         sigma: 2
@@ -69,7 +77,7 @@ structures:
     "LMNB1": ["nuclear envelope", "#084AE7", "{'raw': (400,1600), 'seg': (0,150)}"]
     "NUP153": ["nuclear pores", "#0840E7", "{'raw': (400, 700), 'seg': (0,30)}"]
     "SEC61B": ["ER [Sec61 beta)", "#FFFFB5", "{'raw': (400,1000), 'seg': (0,150)}"]
-    "ATP2A2": ["ER [SERCA2)", "#FFFFA0", "{'raw': (400,700), 'seg': (0,20)}"]
+    "ATP2A2": ["ER [SERCA2)", "#FFFFA0", "{'raw': (400,700), 'seg': (0,100)}"]
     "TOMM20": ["mitochondria", "#FFD184", "{'raw': (400,700), 'seg': (0,70)}"]
     "SLC25A17": ["peroxisomes", "#FFD16E", "{'raw': (400,550), 'seg': (100,150)}"]
     "RAB5A": ["endosomes", "#FFD150", "{'raw': (400,550), 'seg': (0,60)}"]
@@ -84,7 +92,7 @@ structures:
     "GJA1": ["gap junctions", "#A850C0", "{'raw': (260,2680), 'seg': (0,120)}"]
     "TJP1": ["tight junctions", "#A850D4", "{'raw': (250,1500), 'seg': (0,120)}"]
     "DSP": ["desmosomes", "#A850E8", "{'raw': (390,540), 'seg': (0,30)}"]
-    "CTNNB1": ["adherens junctions", "#CB1CCC", "{'raw': (400,880), 'seg': (0,70)}"]
+    "CTNNB1": ["adherens junctions", "#CB1CCC", "{'raw': (400,880), 'seg': (0,150)}"]
     "PXN": ["matrix adhesions", "#77207C", "{'raw': (410,470), 'seg': (0,70)}"]
 
 distribute:
