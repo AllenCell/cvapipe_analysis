@@ -286,13 +286,13 @@ class ShapeSpaceMapper():
     def set_grouping(self, grouping):
         self.pmaker.set_grouping(grouping)
 
-    def map(self, stagings: List[Path]):
-        for p in stagings:
-            if p == self.control.get_staging():
+    def map(self, datasets: List[Path]):
+        for ds, paths in datasets.items():
+            if paths["perturbed"] == self.control.get_staging():
                 raise RuntimeError("Input and base dataset are the same.")
         if self.distance_threshold is None:
             raise ValueError("Please specify a distance threshold.")
-        self.datasets = dict([(p.name, {"path": p}) for p in stagings])
+        self.datasets = dict([(ds, paths["perturbed"]) for ds, paths in datasets.items()])
         self.workflow()
 
     def workflow(self):
@@ -317,14 +317,14 @@ class ShapeSpaceMapper():
 
     def merge_transformed_datasets(self):
         self.result["dataset"] = "base"
-        for dsname, ds in self.datasets.items():
+        for ds, dspath in self.datasets.items():
             """Read from computefeatures bc the map procedure can eventualy
             writes backinto preprocessing as datasets are filtered after
             mapping."""
-            df = pd.read_csv(ds["path"]/"computefeatures/manifest.csv", index_col="CellId")
-            print(f"\t{dsname} loaded. {df.shape}")            
+            df = pd.read_csv(f"{dspath}/computefeatures/manifest.csv", index_col="CellId")
+            print(f"\t{ds} loaded. {df.shape}")            
             axes = self.space.transform(df)
-            axes["dataset"] = dsname
+            axes["dataset"] = ds
             axes["structure_name"] = df["structure_name"]
             self.result = pd.concat([self.result, axes])
         self.result = self.result.reset_index().set_index([
