@@ -355,16 +355,31 @@ class ShapeSpaceMapper():
                 fname = output / f"{ds}_{alias}.vtk"
                 shtools.save_polydata(mesh, str(fname))
 
+    def find_distance_to_self(self, df_ct, df_pt):
+        dists = []
+        dist = spspatial.distance.cdist(df_ct.values, df_pt.values)
+        for mindex in df_pt.index:
+            CellId = mindex[-1]
+            if CellId in df_ct.index:
+                pos_ct = df_ct.index.get_loc(CellId)
+                pos_pt = df_pt.index.get_loc(mindex)
+                dists.append(dist[pos_ct, pos_pt])
+            else:
+                dists.append(np.nan)
+        return dists
+
     def create_nn_mapping(self):
         """ Calculates the distance to nearest neighbor and nearest
         neighbor with same structure."""
         df_map = self.result.copy()
-        for (ds, sname), df_Y in self.result.groupby(level=["dataset", "structure_name"]):
+        for (ds, sname), df_Y in self.result.groupby(level=["dataset", "structure_name"], sort=False):
             if ds != "base":
                 df_X = self.result.loc[("base", sname)]
+                self_distance = self.find_distance_to_self(df_X, df_Y)
                 df_X = self.drop_rows_with_similar_cellid(df_X, df_Y)
                 dist = spspatial.distance.cdist(df_X.values, df_Y.values)
                 df_map.loc[df_Y.index, "Dist"] = dist.min(axis=0)
+                df_map.loc[df_Y.index, "SelfDist"] = self_distance
                 df_map.loc[df_Y.index, "NNCellId"] = df_X.index[dist.argmin(axis=0)]
         df_map.NNCellId = df_map.fillna(-1).NNCellId.astype(np.int64)
         self.result = df_map
