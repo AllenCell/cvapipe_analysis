@@ -1,5 +1,6 @@
 import json
 import yaml
+import shutil
 from pathlib import Path
 from datetime import datetime
 from contextlib import contextmanager
@@ -12,10 +13,9 @@ def load_config_file(path: Path="./"):
     return config
 
 
-def save_config_file(config, path_to_folder):
+def save_config_file(path_to_folder):
     path_to_folder = Path(path_to_folder)
-    with open(path_to_folder / 'parameters.yaml', 'w') as f:
-        yaml.dump(config, f)
+    shutil.copyfile("./config.yaml", path_to_folder/"parameters.yaml")
     return
 
 
@@ -40,4 +40,4 @@ def configuration(path_to_folder=None):
     finally:
         if path_to_folder is not None:
             control.log({"end": get_date_time()})
-            save_config_file(control.config, path_to_folder)
+            save_config_file(path_to_folder)
