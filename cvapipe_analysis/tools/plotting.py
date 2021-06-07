@@ -15,6 +15,10 @@ from aicsimageio import AICSImage, writers
 from vtk.util import numpy_support as vtknp
 from cvapipe_analysis.tools import io
 
+plt.rcParams['ps.fonttype'] = 42
+plt.rcParams['pdf.fonttype'] = 42
+plt.rcParams['font.sans-serif'] = "Arial"
+plt.rcParams['font.family'] = "sans-serif"
 
 class PlotMaker(io.LocalStagingIO):
     """
@@ -66,6 +70,7 @@ class PlotMaker(io.LocalStagingIO):
                 if prefix is not None:
                     fname = f"{prefix}_{signature}"
                 fig.savefig(save_dir/f"{fname}.png", facecolor="white")
+                fig.savefig(save_dir/f"{fname}.pdf", facecolor="white")
                 plt.close(fig)
 
     def check_dataframe_exists(self):
@@ -469,7 +474,7 @@ class ShapeModePlotMaker(PlotMaker):
             fig, animate, frames=n, interval=100, blit=True
         )
         fname = self.control.get_staging() / f"{self.subfolder}/{prefix}.gif"
-        anim.save(fname, writer="imagemagick", fps=n)
+        anim.save(fname, fps=n)
         plt.close("all")
         return
 
@@ -673,6 +678,7 @@ class ShapeSpaceMapperPlotMaker(PlotMaker):
         self.plot_distance_vs_ncells()
         self.plot_mapping_1d()
         self.plot_nn_distance_distributions()
+        self.plot_self_distance_distributions()
         return
 
     def set_grouping(self, grouping):
@@ -682,12 +688,12 @@ class ShapeSpaceMapperPlotMaker(PlotMaker):
     def comparative_hists(df1, df2, title):
         nc = len(df1.columns)
         args = {"bins": 32, "density": True}
-        fig, axs = plt.subplots(nc, 1, figsize=(4,2*nc), sharex=True, gridspec_kw={"hspace": 0.5})
+        fig, axs = plt.subplots(nc, 1, figsize=(2,1*nc), sharex=True, gridspec_kw={"hspace": 0.5})
         axs = [axs] if len(axs)==1 else axs
         for sm, ax in zip(df1.columns, axs):
             ax.hist(df1[sm], **args, alpha=0.5, fc="black")
-            ax.hist(df2[sm], **args, histtype="step", linewidth=3, edgecolor="black")
-            ax.set_xlabel(sm, fontsize=14)
+            ax.hist(df2[sm], **args, histtype="step", linewidth=2, edgecolor="black")
+            ax.set_xlabel(sm, fontsize=12)
             ax.set_ylim(0, 1)
             ax.set_xlim(-5, 5)
         plt.suptitle(title, fontsize=18)
@@ -717,8 +723,7 @@ class ShapeSpaceMapperPlotMaker(PlotMaker):
         grid = {"hspace": 0.0, "wspace": 0.0, 'height_ratios': [
             1, 0.5, 3], 'width_ratios': [3, 1]}
         for sm1, sm2 in tqdm(zip(shape_modes[:-1], shape_modes[1:]), total=len(shape_modes)):
-            fig, axs = plt.subplots(3, 2, figsize=(9, 6), gridspec_kw=grid, sharex="col", sharey="row"
-                                    )
+            fig, axs = plt.subplots(3, 2, figsize=(9, 6), gridspec_kw=grid, sharex="col", sharey="row")
             for idx in [(0, 0), (0, 1), (1, 0), (1, 1), (2, 1)]:
                 axs[idx].axis("off")
             for idx, (ds, df) in enumerate(self.df.groupby(level="dataset", sort=False)):
@@ -764,6 +769,23 @@ class ShapeSpaceMapperPlotMaker(PlotMaker):
                 plt.legend()
                 plt.tight_layout()
                 self.figs.append((fig, f"nndist_{ds}"))
+
+    def plot_self_distance_distributions(self):
+        cmap = plt.cm.get_cmap("tab10")
+        hargs = {"bins": 32, "linewidth": 3, "density": True, "histtype": "step"}
+        for idx, (ds, df) in enumerate(self.df.groupby(level="dataset", sort=False)):
+            if ds != "base":
+                fig, ax = plt.subplots(1,1, figsize=(5,4))
+                ax.hist(df.Dist, bins=32, density=True, alpha=0.5, fc="black", label="nn")
+                df = df.dropna(subset=["SelfDist"])
+                if len(df):
+                    ax.hist(df.SelfDist, **hargs, edgecolor="k", label="self")
+                ax.set_xlabel("Distance", fontsize=14)
+                ax.set_xlim(0, 8)
+                plt.suptitle(ds, fontsize=14)
+                plt.legend()
+                plt.tight_layout()
+                self.figs.append((fig, f"nndist_self_{ds}"))
 
     def plot_distance_vs_ncells(self):
         for idx, (ds, df) in enumerate(self.df.groupby(level="dataset", sort=False)):
