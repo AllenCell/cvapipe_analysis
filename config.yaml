@@ -3,7 +3,7 @@ appName: cvapipe_analysis
 project:
     # Sufix to append to local_staging
     local_staging: "/allen/aics/assay-dev/MicroscopyOtherData/Viana/projects/cvapipe_analysis/local_staging_goldilocks"
-    overwrite: off
+    overwrite: on
 
 data:
     nucleus:

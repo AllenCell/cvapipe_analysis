@@ -26,8 +26,8 @@ class DataLoader(io.LocalStagingIO):
     required_df_columns = [
         'CellId',
         'structure_name',
-        'crop_seg_fms_id',
-        'crop_raw_fms_id',
+        'crop_seg_path',
+        'crop_raw_path',
     ]
     extra_columns = [
         'roi',
@@ -83,13 +83,10 @@ class DataLoader(io.LocalStagingIO):
         for col in ['crop_raw', 'crop_seg']:
             abs_path_data_folder = self.control.get_staging()/f"{self.subfolder}"
             (abs_path_data_folder/col).mkdir(parents=True, exist_ok=True)
-        get_path = self.get_direct_path_from_column
-        if use_fms:
-            get_path = self.get_path_from_fms_id
         for index, row in tqdm(df.iterrows(), total=len(df)):
             idx = str(uuid.uuid4())[:8]
             for col in ['crop_raw', 'crop_seg']:
-                src = get_path(row, col)
+                src = Path(row[col])
                 dst = abs_path_data_folder/f"{col}/{src.stem}_{idx}{src.suffix}"
                 os.symlink(src, dst)
                 df.loc[index, col] = dst

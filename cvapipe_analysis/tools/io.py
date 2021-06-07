@@ -108,20 +108,10 @@ class LocalStagingIO:
             path = Path(parameters['csv'])
             if not path.is_file():
                 raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), path)
-        return pd.read_csv(path)
-
-    @staticmethod
-    def get_direct_path_from_column(row, col):
-        return Path(row[col])
-
-    @staticmethod
-    def get_path_from_fms_id(row, col):
-        fms = FileManagementSystem()
-        fmsid = row[f"{col}_fms_id"]
-        record = fms.find_one_by_id(fmsid)
-        if record is None:
-            raise ValueError(f"Record {fmsid} not found on FMS.")
-        return Path(record.path)
+        df = pd.read_csv(path)
+        # Backwards compatibility for new DVC data
+        df = df.rename({"crop_seg_path": "crop_seg", "crop_raw_path": "crop_raw"})
+        return df
 
     @staticmethod
     def write_ome_tif(path, img, channel_names=None, image_name=None):
