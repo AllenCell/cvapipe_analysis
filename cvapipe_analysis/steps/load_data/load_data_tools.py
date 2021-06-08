@@ -26,17 +26,30 @@ class DataLoader(io.LocalStagingIO):
         'CellId',
         'structure_name',
         'crop_seg',
-        'crop_raw',
-        'name_dict'
+        'crop_raw'
     ]
+    extra_columns = [
+            'roi',
+            'volume',
+            'centroid_x',
+            'centroid_y',
+            'centroid_z',
+            'track_id',
+            'track_type',
+            'label_img',
+            'is_outlier',
+            'index_sequence',
+            'seg_full_zstack_path',
+            'raw_full_zstack_path'
+        ]
 
     def __init__(self, control):
         super().__init__(control)
         self.subfolder = 'loaddata'
 
     def load(self, parameters):
-        if 'csv' in parameters:
-            return self.load_data_from_csv(parameters)
+        if any(p in parameters for p in ["csv", "fmsid"]):
+            return self.download_local_data(parameters)
         return self.download_quilt_data('test' in parameters)
 
     def download_quilt_data(self, test=False):
@@ -50,6 +63,16 @@ class DataLoader(io.LocalStagingIO):
             pkg[row["crop_raw"]].fetch(path/row["crop_raw"])
             pkg[row["crop_seg"]].fetch(path/row["crop_seg"])
         return df_meta
+
+    def download_local_data(self, parameters):
+        use_fms = use_fms="fmsid" in parameters
+        df = self.load_data_from_csv(parameters, use_fms)
+        self.is_dataframe_valid(df)
+        cols = self.required_df_columns + self.extra_columns
+        df = df[[c for c in cols if c in df.columns]].set_index('CellId', drop=True)
+        if not use_fms:
+            self.create_symlinks(df)
+        return df
 
     def is_dataframe_valid(self, df):
         for col in self.required_df_columns:
@@ -70,18 +93,10 @@ class DataLoader(io.LocalStagingIO):
                 df.loc[index, col] = dst
         return df
 
-    # TODO: Merge this upstream LocalStagingIO.load_csv_file_as_dataframe?
-    def load_data_from_csv(self, parameters):
-        df = pd.read_csv(parameters['csv'])
-        self.is_dataframe_valid(df)
-        df = df[self.required_df_columns].set_index('CellId', drop=True)
-        self.create_symlinks(df)
-        return df
-
     @staticmethod
     def get_interphase_test_set(df):
         df_test = pd.DataFrame([])
         df = df.loc[df.cell_stage=='M0']# M0 = interphase
-        for struct, df_struct in df.groupby('structure_name'):
+        for _, df_struct in df.groupby('structure_name'):
             df_test = df_test.append(df_struct.sample(n=12, random_state=666, replace=False))
         return df_test.copy()

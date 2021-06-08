@@ -8,7 +8,9 @@ from tqdm import tqdm
 from pathlib import Path
 from aicsshparam import shtools
 from aicsimageio import AICSImage, writers
-
+try:
+    from aicsfiles import FileManagementSystem
+except: pass
 
 class LocalStagingIO:
     """
@@ -29,16 +31,20 @@ class LocalStagingIO:
 
     def get_single_cell_images(self, row, return_stack=False):
         imgs = []
-        imtypes = [k for k in eval(row.name_dict).keys()]
-        channel_names = [v for k, v in eval(row.name_dict).items()]
-        channel_names = [ch for names in channel_names for ch in names]
+        imtypes = ["crop_seg", "crop_raw"]
+        channel_names = []
         for imtype in imtypes:
             if imtype in row:
-                path = row[imtype]
-                if str(self.control.get_staging()) not in path:
+                path = Path(row[imtype])
+                if not path.is_file():
                     path = self.control.get_staging() / f"loaddata/{row[imtype]}"
-                img = AICSImage(path).data.squeeze()
+                reader = AICSImage(path)
+                channel_names += reader.get_channel_names()
+                img = reader.get_image_data('CZYX', S=0, T=0)
                 imgs.append(img)
+        if "name_dict" in row:
+            channel_names = [v for k, v in eval(row.name_dict).items()]
+            channel_names = [ch for names in channel_names for ch in names]
         imgs = np.vstack(imgs)
         if return_stack:
             return imgs, channel_names
@@ -95,12 +101,30 @@ class LocalStagingIO:
         ''' Not sure this function is producing a column named index when
         the concordance results are loaded. Further investigation is needed
         here'''
-        path_to_output_folder = self.control.get_staging() / self.subfolder
-        files = [path_to_output_folder / f for f in os.listdir(path_to_output_folder)]
+        path = self.control.get_staging() / self.subfolder
+        files = [{"csv": path/f} for f in os.listdir(path)]
         with concurrent.futures.ProcessPoolExecutor(self.control.get_ncores()) as executor:
             df = pd.concat(
-                tqdm(executor.map(self.load_csv_file_as_dataframe, files), total=len(files)),
+                tqdm(executor.map(self.load_data_from_csv, files), total=len(files)),
                 axis=0, ignore_index=True)
+        return df
+
+    @staticmethod
+    def load_data_from_csv(parameters, use_fms=False):
+        if use_fms:
+            fms = FileManagementSystem()
+            fmsid = parameters['fmsid']
+            record = fms.find_one_by_id(fmsid)
+            if record is None:
+                raise ValueError(f"Record {fmsid} not found on FMS.")
+            path = record.path
+        else:
+            path = Path(parameters['csv'])
+            if not path.is_file():
+                raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), path)
+        df = pd.read_csv(path)
+        # Backwards compatibility for new DVC data
+        df = df.rename(columns={"crop_seg_path": "crop_seg", "crop_raw_path": "crop_raw"})
         return df
 
     @staticmethod
