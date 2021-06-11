@@ -8,7 +8,7 @@ data:
     cell:
         alias: MEM
         channel: membrane_segmentation
-        color: '#3AADA7'
+        color: '#F200FF'
     nucleus:
         alias: NUC
         channel: dna_segmentation
@@ -35,8 +35,8 @@ features:
         lmax: 16
 
 preprocessing:
-    remove_mitotics: off
-    remove_outliers: off
+    remove_mitotics: on
+    remove_outliers: on
     filtering:
         filter: off
         csv: "/allen/aics/assay-dev/MicroscopyOtherData/Viana/projects/cvapipe_analysis/local_staging_goldilock/loaddata/manifest.csv"
