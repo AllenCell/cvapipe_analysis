@@ -61,6 +61,22 @@ class ShapeSpaceBasic():
         df_tmp = df_tmp.drop(columns=["extreme"])
         return df_tmp
 
+    @staticmethod
+    def get_feature_importance(pca, columns):
+        df_feats = {}
+        loadings = pca.components_.T * np.sqrt(pca.explained_variance_)
+        for comp, pc_name in enumerate(columns):
+            load = loadings[:, comp]
+            pc = [v for v in load]
+            apc = [v for v in np.abs(load)]
+            total = np.sum(apc)
+            cpc = [100 * v / total for v in apc]
+            df_feats[pc_name] = pc
+            df_feats[pc_name.replace("_PC", "_aPC")] = apc
+            df_feats[pc_name.replace("_PC", "_cPC")] = cpc
+        df_feats = pd.DataFrame(df_feats)
+        return df_feats
+
 class ShapeSpace(ShapeSpaceBasic):
     """
     Implements functionalities to navigate the shape
@@ -129,19 +145,8 @@ class ShapeSpace(ShapeSpaceBasic):
                 self.pca.components_[pcid] *= -1
 
     def calculate_feature_importance(self):
-        df_feats = {}
-        loadings = self.pca.components_.T * np.sqrt(self.pca.explained_variance_)
-        for comp, pc_name in enumerate(self.axes.columns):
-            load = loadings[:, comp]
-            pc = [v for v in load]
-            apc = [v for v in np.abs(load)]
-            total = np.sum(apc)
-            cpc = [100 * v / total for v in apc]
-            df_feats[pc_name] = pc
-            df_feats[pc_name.replace("_PC", "_aPC")] = apc
-            df_feats[pc_name.replace("_PC", "_cPC")] = cpc
+        df_feats = self.get_feature_importance(self.pca, self.axes.columns)
         df_feats["features"] = self.features
-        df_feats = pd.DataFrame(df_feats)
         df_feats = df_feats.set_index("features", drop=True)
         self.df_feats = df_feats
         return
