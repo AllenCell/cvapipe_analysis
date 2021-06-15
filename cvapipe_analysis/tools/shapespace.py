@@ -323,10 +323,7 @@ class ShapeSpaceMapper():
     def merge_transformed_datasets(self):
         self.result["dataset"] = "base"
         for ds, dspath in self.datasets.items():
-            """Read from computefeatures bc the map procedure can eventualy
-            writes backinto preprocessing as datasets are filtered after
-            mapping."""
-            df = pd.read_csv(f"{dspath}/computefeatures/manifest.csv", index_col="CellId")
+            df = pd.read_csv(f"{dspath}/preprocessing/manifest.csv", index_col="CellId")
             print(f"\t{ds} loaded. {df.shape}")            
             axes = self.space.transform(df)
             axes["dataset"] = ds
@@ -355,10 +352,16 @@ class ShapeSpaceMapper():
             matrix = self.result.loc[ds].values.mean(axis=0, keepdims=True)
             df = self.space.invert(matrix)
             row = df.loc[df.index[0]]
+            meshes = {}
             for alias in self.control.get_aliases_for_pca():
                 mesh = viz.MeshToolKit.get_mesh_from_series(row, alias, lrec)
                 fname = output / f"{ds}_{alias}.vtk"
                 shtools.save_polydata(mesh, str(fname))
+                meshes[alias] = [mesh]
+            projs = viz.MeshToolKit.get_2d_contours(meshes)
+            for proj, contours in projs.items():
+                fname = output / f"{ds}_{alias}_{proj}.gif"
+                viz.MeshToolKit.animate_contours(self.control, contours, save=fname)
 
     def find_distance_to_self(self, df_ct, df_pt):
         dists = []
