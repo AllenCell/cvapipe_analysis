@@ -137,10 +137,15 @@ class ShapeSpace(ShapeSpaceBasic):
 
     def sort_pca_axes(self):
         ranker = self.control.get_alias_for_sorting_pca_axes()
-        ranker = f"{ranker}_shape_volume"
+        ranker_volume = f"{ranker}_shape_volume"
+        ranker_height = f"{ranker}_position_depth"
         for pcid, pc in enumerate(self.axes.columns):
-            pearson = np.corrcoef(self.df[ranker].values, self.axes[pc].values)
-            if pearson[0, 1] < 0:
+            corrs = []
+            for rank in [ranker_volume, ranker_height]:
+                pearson = np.corrcoef(self.df[rank].values, self.axes[pc].values)
+                corrs.append(pearson[0, 1])
+            sign = np.sign(corrs[np.abs(corrs).argmax()])
+            if sign < 0:
                 self.axes[pc] *= -1
                 self.pca.components_[pcid] *= -1
 
