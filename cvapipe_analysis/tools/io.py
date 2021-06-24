@@ -31,8 +31,8 @@ class LocalStagingIO:
 
     def get_single_cell_images(self, row, return_stack=False):
         imgs = []
-        imtypes = ["crop_seg", "crop_raw"]
         channel_names = []
+        imtypes = ["crop_seg", "crop_raw"]
         for imtype in imtypes:
             if imtype in row:
                 path = Path(row[imtype])
@@ -240,8 +240,7 @@ class DataProducer(LocalStagingIO):
         return None
 
     def load_single_cell_data(self):
-        self.data, self.channels = self.get_single_cell_images(
-            self.row, return_stack="True")
+        self.data, self.channels = self.get_single_cell_images(self.row, return_stack="True")
         return
 
     def align_data(self):

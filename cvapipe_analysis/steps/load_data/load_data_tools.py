@@ -28,20 +28,6 @@ class DataLoader(io.LocalStagingIO):
         'crop_seg',
         'crop_raw'
     ]
-    extra_columns = [
-            'roi',
-            'volume',
-            'centroid_x',
-            'centroid_y',
-            'centroid_z',
-            'track_id',
-            'track_type',
-            'label_img',
-            'is_outlier',
-            'index_sequence',
-            'seg_full_zstack_path',
-            'raw_full_zstack_path'
-        ]
 
     def __init__(self, control):
         super().__init__(control)
@@ -68,8 +54,7 @@ class DataLoader(io.LocalStagingIO):
         use_fms = use_fms="fmsid" in parameters
         df = self.load_data_from_csv(parameters, use_fms)
         self.is_dataframe_valid(df)
-        cols = self.required_df_columns + self.extra_columns
-        df = df[[c for c in cols if c in df.columns]].set_index('CellId', drop=True)
+        df = df.set_index('CellId', drop=True)
         if not use_fms:
             self.create_symlinks(df)
         return df

@@ -44,6 +44,7 @@ class ShapeModeCalculator(io.DataProducer):
         return path_to_output_file
         
     def workflow(self):
+        import pdb; pdb.set_trace()
         self.space.execute(self.df)
         self.space.save_summary("shapemode/summary.html")
         self.plot_maker_sp.save_feature_importance(self.space)
@@ -153,10 +154,10 @@ class ShapeModeCalculator(io.DataProducer):
     def generate_and_save_animated_2d_contours(self):
         swap = self.control.swapxy_on_zproj()
         for sm, meshes in tqdm(self.meshes.items(), total=len(self.meshes)):
-            projs = self.plot_maker_sm.get_2d_contours(meshes, swap)
+            projs = viz.MeshToolKit.get_2d_contours(meshes, swap)
             for proj, contours in projs.items():
-                self.plot_maker_sm.animate_contours(contours, f"{sm}_{proj}")
-    
+                viz.MeshToolKit.animate_contours(self.control, contours, save=f"{sm}_{proj}")
+
     @staticmethod
     def translate_mesh_points(mesh, r):
         coords = vtk2np(mesh.GetPoints().GetData())

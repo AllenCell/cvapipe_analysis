@@ -50,8 +50,15 @@ class ComputeFeatures(Step):
             df_results = calculator.load_results_in_single_dataframe()
             df_results = df_results.set_index('CellId')
 
+            if len(df) != len(df_results):
+                df_miss = df.loc[~df.index.isin(df_results.index)]
+                log.info("Missing feature for indices:")
+                for index in df_miss.index:
+                    log.info(f"\t{index}")
+                log.info(f"Total of {len(df_miss)} indices.")
+
             log.info(f"Saving manifest...")
-            self.manifest = df.merge(df_results, left_index=True, right_index=True)
+            self.manifest = df.merge(df_results, left_index=True, right_index=True, how="outer")
             manifest_path = self.step_local_staging_dir / 'manifest.csv'
             self.manifest.to_csv(manifest_path)
 
