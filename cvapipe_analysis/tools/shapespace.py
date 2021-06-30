@@ -276,10 +276,13 @@ class ShapeSpaceMapper():
         self.pmaker = plotting.ShapeSpaceMapperPlotMaker(space.control, self.output)
 
     def normalization(self):
+        self.norm_stds = {}
         if self.normalize:
             for sm in self.control.get_shape_modes():
                 df_base = self.result.loc["base"]
-                self.result[sm] /= df_base[sm].values.std()
+                std = df_base[sm].values.std()
+                self.result[sm] /= std
+                self.norm_stds[sm] = std
 
     def set_normalization_off(self):
         self.normalize = False
@@ -313,6 +316,7 @@ class ShapeSpaceMapper():
         self.normalization()
         self.create_nn_mapping()
         self.flag_close_pairs()
+        self.reconstruct_matched_datasets_mean_cell()
         self.pmaker.set_dataframe(self.result)
         self.pmaker.execute(display=False, grouping=self.grouping)
 
@@ -366,6 +370,32 @@ class ShapeSpaceMapper():
             projs = viz.MeshToolKit.get_2d_contours(meshes)
             for proj, contours in projs.items():
                 fname = output / f"{ds}_{alias}_{proj}.gif"
+                viz.MeshToolKit.animate_contours(self.control, contours, save=fname)
+
+    def reconstruct_matched_datasets_mean_cell(self):
+        lrec = 2*self.control.get_lmax()
+        output = self.output / "avgshape"
+        output.mkdir(parents=True, exist_ok=True)
+        for ds in [k for k in self.datasets]:
+            ct_indices = self.result.loc['base',ds].loc[lambda x: x==True].index.tolist()
+            pt_indices = self.result.loc[ds,"Match"].loc[lambda x: x==True].index.tolist()
+            aliases = ["base"] * len(ct_indices) + [ds] * len(pt_indices)
+            indices = [(alias, *index) for alias, index in zip(aliases, ct_indices+pt_indices)]
+            matrix = self.result.loc[indices, self.control.get_shape_modes()].copy()
+            for sm in self.control.get_shape_modes():
+                matrix[sm] *= self.norm_stds[sm]
+            matrix = matrix.values.mean(axis=0, keepdims=True)
+            df = self.space.invert(matrix)
+            row = df.loc[df.index[0]]
+            meshes = {}
+            for alias in self.control.get_aliases_for_pca():
+                mesh = viz.MeshToolKit.get_mesh_from_series(row, alias, lrec)
+                fname = output / f"{ds}_{alias}_base_matched.vtk"
+                shtools.save_polydata(mesh, str(fname))
+                meshes[alias] = [mesh]
+            projs = viz.MeshToolKit.get_2d_contours(meshes)
+            for proj, contours in projs.items():
+                fname = output / f"{ds}_{alias}_base_matched_{proj}.gif"
                 viz.MeshToolKit.animate_contours(self.control, contours, save=fname)
 
     def find_distance_to_self(self, df_ct, df_pt):
