@@ -32,7 +32,7 @@ class LocalStagingIO:
     def get_single_cell_images(self, row, return_stack=False):
         imgs = []
         channel_names = []
-        imtypes = ["crop_seg", "crop_raw"]
+        imtypes = ["crop_raw", "crop_seg"]
         for imtype in imtypes:
             if imtype in row:
                 path = Path(row[imtype])
@@ -43,8 +43,10 @@ class LocalStagingIO:
                 img = reader.get_image_data('CZYX', S=0, T=0)
                 imgs.append(img)
         if "name_dict" in row:
-            channel_names = [v for k, v in eval(row.name_dict).items()]
-            channel_names = [ch for names in channel_names for ch in names]
+            channel_names = []
+            name_dict = eval(row.name_dict)
+            for imtype in imtypes:
+                channel_names += name_dict[imtype]
         imgs = np.vstack(imgs)
         if return_stack:
             return imgs, channel_names
