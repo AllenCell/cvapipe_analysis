@@ -152,11 +152,12 @@ class ShapeModeCalculator(io.DataProducer):
 
     def generate_and_save_animated_2d_contours(self):
         swap = self.control.swapxy_on_zproj()
+        abs_path_avgshape = self.control.get_staging()/f"shapemode/avgshape"
         for sm, meshes in tqdm(self.meshes.items(), total=len(self.meshes)):
             projs = viz.MeshToolKit.get_2d_contours(meshes, swap)
             for proj, contours in projs.items():
-                import pdb; pdb.set_trace()
-                viz.MeshToolKit.animate_contours(self.control, contours, save=f"{sm}_{proj}.gif")
+                fname = f"{abs_path_avgshape}/{sm}_{proj}.gif"
+                viz.MeshToolKit.animate_contours(self.control, contours, save=fname)
 
     @staticmethod
     def translate_mesh_points(mesh, r):
