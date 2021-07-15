@@ -54,19 +54,53 @@ class FeatureCalculator(io.DataProducer):
     def compute_features_for_alias(self, alias):
         channel = self.control.get_channel_from_alias(alias)
         chId = self.channels.index(channel)
-        features = self.get_basic_features(self.data[chId])
+        # RAW
+        if self.control.should_calculate_intensity_features(alias):
+            mask_alias = self.control.get_mask_alias(alias)
+            mask_channel = self.control.get_channel_from_alias(mask_alias)
+            mask_chId = self.channels.index(mask_channel)
+            features = self.get_intensity_features(
+                img = self.data_aligned[chId],
+                seg = self.data_aligned[mask_chId]
+            )
+        # SEG
+        else:
+            features = self.get_basic_features(self.data_aligned[chId])
         if self.control.should_calculate_shcoeffs(alias):
             coeffs = self.get_coeff_features(self.data_aligned[chId])
             features.update(coeffs)
         return features
     
+    def get_intensity_features(self, img, seg):
+        features = {}
+        input_seg = seg.copy()
+        input_seg = (input_seg>0).astype(np.uint8)
+        input_seg_lcc = skmeasure.label(input_seg)
+        for mask, suffix in zip([input_seg, input_seg_lcc], ['', '_lcc']):
+            values = img[mask>0].flatten()
+            if values.size:
+                features[f'intensity_mean{suffix}'] = values.mean()
+                features[f'intensity_std{suffix}'] = values.std()
+                features[f'intensity_1pct{suffix}'] = np.percentile(values, 1)
+                features[f'intensity_99pct{suffix}'] = np.percentile(values, 99)
+                features[f'intensity_max{suffix}'] = values.max()
+                features[f'intensity_min{suffix}'] = values.min()
+            else:
+                features[f'intensity_mean{suffix}'] = np.nan
+                features[f'intensity_std{suffix}'] = np.nan
+                features[f'intensity_1pct{suffix}'] = np.nan
+                features[f'intensity_99pct{suffix}'] = np.nan
+                features[f'intensity_max{suffix}'] = np.nan
+                features[f'intensity_min{suffix}'] = np.nan
+        return features
+
     def get_basic_features(self, img):
         features = {}
         input_image = img.copy()
         input_image = (input_image>0).astype(np.uint8)
         input_image_lcc = skmeasure.label(input_image)
-        features[f'connectivity_cc'] = input_image_lcc.max()
-        if features[f'connectivity_cc'] > 0:
+        features['connectivity_cc'] = input_image_lcc.max()
+        if features['connectivity_cc'] > 0:
             counts = np.bincount(input_image_lcc.reshape(-1))
             lcc = 1+np.argmax(counts[1:])
             input_image_lcc[input_image_lcc!=lcc] = 0
@@ -76,6 +110,8 @@ class FeatureCalculator(io.DataProducer):
                 z, y, x = np.where(img)
                 features[f'shape_volume{suffix}'] = img.sum()
                 features[f'position_depth{suffix}'] = 1+np.ptp(z)
+                features[f'position_height{suffix}'] = 1+np.ptp(y)
+                features[f'position_width{suffix}'] = 1+np.ptp(x)
                 for uname, u in zip(['x', 'y', 'z'], [x, y, z]):
                     features[f'position_{uname}_centroid{suffix}'] = u.mean()
                 features[f'roundness_surface_area{suffix}'] = self.get_surface_area(img)
@@ -83,6 +119,8 @@ class FeatureCalculator(io.DataProducer):
             for img, suffix in zip([input_image,input_image_lcc], ['', '_lcc']):
                 features[f'shape_volume{suffix}'] = np.nan
                 features[f'position_depth{suffix}'] = np.nan
+                features[f'position_height{suffix}'] = np.nan
+                features[f'position_width{suffix}'] = np.nan
                 for uname in ['x', 'y', 'z']:
                     features[f'position_{uname}_centroid{suffix}'] = np.nan
                 features[f'roundness_surface_area{suffix}'] = np.nan
