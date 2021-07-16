@@ -1,6 +1,7 @@
 import os
 import uuid
 import quilt3
+import concurrent
 import pandas as pd
 from tqdm import tqdm
 from pathlib import Path
@@ -39,15 +40,27 @@ class DataLoader(io.LocalStagingIO):
         return self.download_quilt_data('test' in parameters)
 
     def download_quilt_data(self, test=False):
-        pkg = quilt3.Package.browse(self.package_name, self.registry)
-        df_meta = pkg["metadata.csv"]()
+        self.pkg = quilt3.Package.browse(self.package_name, self.registry)
+        # df_meta = pkg["metadata.csv"]()
+        # Workaround the overflow error with the line above
+        self.pkg["metadata.csv"].fetch(self.control.get_staging()/"manifest.csv")
+        df_meta = pd.read_csv(self.control.get_staging()/"manifest.csv", index_col="CellId")
         if test:
             print('Downloading test dataset with 12 interphase cell images per structure.')
             df_meta = self.get_interphase_test_set(df_meta)
-        path = self.control.get_staging()/self.subfolder
-        for i, row in df_meta.iterrows():
-            pkg[row["crop_raw"]].fetch(path/row["crop_raw"])
-            pkg[row["crop_seg"]].fetch(path/row["crop_seg"])
+
+        seg_folder = self.control.get_staging()/f"{self.subfolder}/crop_seg"
+        seg_folder.mkdir(parents=True, exist_ok=True)
+        self.pkg["crop_seg"].fetch(seg_folder)
+
+        raw_folder = self.control.get_staging()/f"{self.subfolder}/crop_raw"
+        raw_folder.mkdir(parents=True, exist_ok=True)
+        self.pkg["crop_raw"].fetch(raw_folder)
+
+        for index, row in tqdm(df_meta.iterrows(), total=len(df_meta)):
+            df_meta.at[index, "crop_seg"] = str(self.control.get_staging()/f"loaddata/{row.crop_seg}")
+            df_meta.at[index, "crop_raw"] = str(self.control.get_staging()/f"loaddata/{row.crop_raw}")
+
         return df_meta
 
     def download_local_data(self, parameters):
