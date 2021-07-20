@@ -451,14 +451,14 @@ def initial_parsing(df):
     keepcolumns = [
         "CellId",
         "structure_name",
-        "mem_roundness_surface_area_lcc",
-        "mem_shape_volume_lcc",
-        "dna_roundness_surface_area_lcc",
-        "dna_shape_volume_lcc",
-        "str_connectivity_cc",
-        "str_shape_volume",
-        "mem_position_depth_lcc",
-        "dna_position_depth_lcc"
+        "MEM_roundness_surface_area_lcc",
+        "MEM_shape_volume_lcc",
+        "NUC_roundness_surface_area_lcc",
+        "NUC_shape_volume_lcc",
+        "STR_connectivity_cc",
+        "STR_shape_volume",
+        "MEM_position_depth_lcc",
+        "NUC_position_depth_lcc"
     ]
     
     cells = cells[keepcolumns]
@@ -466,15 +466,15 @@ def initial_parsing(df):
     # %% Rename columns
     cells = cells.rename(
         columns={
-            "mem_roundness_surface_area_lcc": "Cell surface area",
-            "mem_shape_volume_lcc": "Cell volume",
-            "dna_roundness_surface_area_lcc": "Nuclear surface area",
-            "dna_shape_volume_lcc": "Nuclear volume",
-            "str_connectivity_cc": "Number of pieces",
-            "str_shape_volume": "Structure volume",
-            "str_shape_volume_lcc": "Structure volume alt",
-            "mem_position_depth_lcc": "Cell height",
-            "dna_position_depth_lcc": "Nucleus height"
+            "MEM_roundness_surface_area_lcc": "Cell surface area",
+            "MEM_shape_volume_lcc": "Cell volume",
+            "NUC_roundness_surface_area_lcc": "Nuclear surface area",
+            "NUC_shape_volume_lcc": "Nuclear volume",
+            "STR_connectivity_cc": "Number of pieces",
+            "STR_shape_volume": "Structure volume",
+            "STR_shape_volume_lcc": "Structure volume alt",
+            "MEM_position_depth_lcc": "Cell height",
+            "NUC_position_depth_lcc": "Nucleus height"
         }
     )
     

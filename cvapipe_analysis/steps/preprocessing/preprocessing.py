@@ -49,13 +49,13 @@ class Preprocessing(Step):
                 path_to_outliers_folder.mkdir(parents=True, exist_ok=True)
                 
                 path_to_df_outliers = self.step_local_staging_dir/"outliers.csv"
-                if not control.overwrite() or path_to_df_outliers.is_file():
-                    log.info("Using pre-detected outliers.")
-                    df_outliers = pd.read_csv(path_to_df_outliers, index_col='CellId')
-                else:
+                if not path_to_df_outliers.is_file() or control.overwrite():
                     log.info("Computing outliers...")
                     df_outliers = outliers_removal(df=df, output_dir=path_to_outliers_folder, log=log)
                     df_outliers.to_csv(path_to_df_outliers)
+                else:
+                    log.info("Using pre-detected outliers.")
+                    df_outliers = pd.read_csv(path_to_df_outliers, index_col='CellId')
 
                 df_outliers = df_outliers.loc[df.index]
                 df.loc[df_outliers.index, 'Outlier'] = df_outliers['Outlier']
