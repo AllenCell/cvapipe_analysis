@@ -45,6 +45,8 @@ class DataLoader(io.LocalStagingIO):
         # Workaround the overflow error with the line above
         self.pkg["metadata.csv"].fetch(self.control.get_staging()/"manifest.csv")
         df_meta = pd.read_csv(self.control.get_staging()/"manifest.csv", index_col="CellId")
+        # Drop columns that are not needed
+        df_meta = df_meta[[f for f in df_meta.columns if not any(w in f for w in ["NUC_", "MEM_", "STR_"])]]
         if test:
             print('Downloading test dataset with 12 interphase cell images per structure.')
             df_meta = self.get_interphase_test_set(df_meta)
