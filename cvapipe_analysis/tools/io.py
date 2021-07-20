@@ -42,11 +42,15 @@ class LocalStagingIO:
                 channel_names += reader.get_channel_names()
                 img = reader.get_image_data('CZYX', S=0, T=0)
                 imgs.append(img)
-        if "name_dict" in row:
-            channel_names = []
+        try:
             name_dict = eval(row.name_dict)
+            channel_names = []
             for imtype in imtypes:
                 channel_names += name_dict[imtype]
+        except Exception as ex:
+            if not channel_names:
+                raise ValueError(f"Channel names not found, {ex}")
+            else: pass
         imgs = np.vstack(imgs)
         if return_stack:
             return imgs, channel_names
