@@ -89,7 +89,7 @@ class DataLoader(io.LocalStagingIO):
             abs_path_data_folder = self.control.get_staging()/self.subfolder
             (abs_path_data_folder/col).mkdir(parents=True, exist_ok=True)
         for index, row in tqdm(df.iterrows(), total=len(df)):
-            idx = str(uuid.uuid4())[:8]
+            idx = str(uuid.uuid4())[:12]
             for col in ['crop_raw', 'crop_seg']:
                 src = Path(row[col])
                 dst = abs_path_data_folder/f"{col}/{src.stem}_{idx}{src.suffix}"
