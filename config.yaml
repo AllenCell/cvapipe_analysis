@@ -1,13 +1,17 @@
 appName: cvapipe_analysis
 
 project:
-    local_staging: "/allen/aics/assay-dev/MicroscopyOtherData/Viana/projects/cvapipe_analysis/local_staging_var_midheight"
+    local_staging: "/allen/aics/assay-dev/MicroscopyOtherData/Viana/projects/cvapipe_analysis/local_staging_variance"
     overwrite: off
 
 data:
     cell:
         alias: MEM
         channel: membrane_segmentation
+        color: '#F200FF'
+    cell-roof:
+        alias: MEMROOF
+        channel: membrane_segmentation_roof
         color: '#F200FF'
     nucleus:
         alias: NUC
@@ -17,17 +21,27 @@ data:
         alias: STR
         channel: struct_segmentation_roof
         color: '#000000'
-    raw-structure:
-        alias: GFP
+    raw-structure-str:
+        alias: RAWSTR_MASKEDBY_STR
+        channel: structure
+        color: '#000000'
+    raw-structure-nuc:
+        alias: RAWSTR_MASKEDBY_NUC
+        channel: structure
+        color: '#000000'
+    raw-structure-mem:
+        alias: RAWSTR_MASKEDBY_MEM
         channel: structure
         color: '#000000'
 
 features:
-    aliases: ["NUC", "MEM", "STR", "GFP"]
+    aliases: ["NUC", "MEM", "STR", "RAWSTR_MASKEDBY_STR", "RAWSTR_MASKEDBY_NUC", "RAWSTR_MASKEDBY_MEM"]
     # Intensity features: specify aliases for raw image and
     # corresponding segmentation mask.
     intensity:
-        GFP: STR
+        RAWSTR_MASKEDBY_STR: STR
+        RAWSTR_MASKEDBY_NUC: NUC
+        RAWSTR_MASKEDBY_MEM: MEMROOF
     # SHE - Spherical harmonics expansion
     SHE:
         alignment:
