@@ -124,7 +124,9 @@ class Controller:
         return alias in self.get_aliases_with_shcoeffs_available()
 
     def should_calculate_intensity_features(self, alias):
-        return alias in [k for k in self.features_section['intensity'].keys()]
+        if "intensity" in self.features_section:
+            return alias in [k for k in self.features_section['intensity'].keys()]
+        return False
 
     def get_mask_alias(self, alias):
         return [v for (k, v) in self.features_section['intensity'].items() if k==alias][0]

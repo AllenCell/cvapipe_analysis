@@ -51,18 +51,24 @@ class DataLoader(io.LocalStagingIO):
         # Workaround the overflow error with the line above
         self.pkg["metadata.csv"].fetch(self.control.get_staging()/"manifest.csv")
         df_meta = pd.read_csv(self.control.get_staging()/"manifest.csv", index_col="CellId")
-        if test:
-            print('Downloading test dataset with 12 interphase cell images per structure.')
-            df_meta = self.get_interphase_test_set(df_meta)
-
+                
         seg_folder = self.control.get_staging()/f"{self.subfolder}/crop_seg"
         seg_folder.mkdir(parents=True, exist_ok=True)
-        self.pkg["crop_seg"].fetch(seg_folder)
 
         raw_folder = self.control.get_staging()/f"{self.subfolder}/crop_raw"
         raw_folder.mkdir(parents=True, exist_ok=True)
-        self.pkg["crop_raw"].fetch(raw_folder)
 
+        if test:
+            print('Downloading test dataset with 12 interphase cell images per structure.')
+            df_meta = self.get_interphase_test_set(df_meta)
+            for i, row in tqdm(df_meta.iterrows(), total=len(df_meta)):
+                self.pkg[row["crop_raw"]].fetch(self.control.get_staging()/f"loaddata/{row.crop_raw}")
+                self.pkg[row["crop_seg"]].fetch(self.control.get_staging()/f"loaddata/{row.crop_seg}")
+        else:
+            self.pkg["crop_seg"].fetch(seg_folder)
+            self.pkg["crop_raw"].fetch(raw_folder)
+
+        # Append full path to file paths
         for index, row in tqdm(df_meta.iterrows(), total=len(df_meta)):
             df_meta.at[index, "crop_seg"] = str(self.control.get_staging()/f"loaddata/{row.crop_seg}")
             df_meta.at[index, "crop_raw"] = str(self.control.get_staging()/f"loaddata/{row.crop_raw}")
