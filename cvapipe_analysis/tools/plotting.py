@@ -113,6 +113,9 @@ class ConcordancePlotMaker(PlotMaker):
     the local_staging folder is.
     """
 
+    heatmap_vmin = -1.0
+    heatmap_vmax = 1.0
+
     def __init__(self, control, subfolder: Optional[str] = None):
         super().__init__(control)
         self.subfolder = "concordance/plots" if subfolder is None else subfolder
@@ -127,6 +130,15 @@ class ConcordancePlotMaker(PlotMaker):
         else:
             self.make_dendrogram()
         return
+
+    def get_heatmap_as_matrix(self):
+        df = pd.DataFrame(self.matrix)
+        df.index = self.control.get_gene_names()
+        return df
+
+    def set_heatmap_min_max_values(self, vmin, vmax):
+        self.heatmap_vmin = vmin
+        self.heatmap_vmax = vmax
 
     def check_and_store_parameters(self):
         mpIds = self.df.mpId.unique()
@@ -163,7 +175,7 @@ class ConcordancePlotMaker(PlotMaker):
     def make_heatmap(self, diagonal=False, cmap="RdBu", **kwargs):
         ns = self.matrix.shape[0]
         fig, ax = plt.subplots(1, 1, figsize=(8, 8), dpi=self.dpi)
-        ax.imshow(-self.matrix, cmap=cmap, vmin=-1.0, vmax=1.0)
+        ax.imshow(-self.matrix, cmap=cmap, vmin=self.heatmap_vmin, vmax=self.heatmap_vmax)
         ax.set_xticks(np.arange(self.matrix.shape[0]))
         ax.set_yticks(np.arange(self.matrix.shape[0]))
         ax.get_xaxis().set_ticklabels([])
