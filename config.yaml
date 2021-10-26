@@ -1,7 +1,7 @@
 appName: cvapipe_analysis
 
 project:
-    local_staging: "/allen/aics/assay-dev/MicroscopyOtherData/Viana/projects/cvapipe_analysis/local_staging_test"
+    local_staging: "/allen/aics/assay-dev/MicroscopyOtherData/Viana/projects/cvapipe_analysis/local_staging_variance"
     overwrite: off
 
 data:
@@ -84,7 +84,7 @@ shapespace:
 parameterization:
     inner: "NUC"
     outer: "MEM"
-    parameterize: ["RAWSTR", "STR"]
+    parameterize: ["RAWSTR_MASKEDBY_STR", "STR"]
     number_of_interpolating_points: 32
 
 aggregation:
