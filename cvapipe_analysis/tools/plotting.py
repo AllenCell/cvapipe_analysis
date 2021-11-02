@@ -9,6 +9,7 @@ from typing import Optional
 from functools import reduce
 import matplotlib.pyplot as plt
 from matplotlib import animation
+from matplotlib import lines as pltlines
 from scipy import stats as spstats
 from scipy import cluster as spcluster
 from aicsimageio import AICSImage, writers
@@ -574,15 +575,24 @@ class ShapeSpaceMapperPlotMaker(PlotMaker):
     @staticmethod
     def comparative_hists(df1, df2, title):
         nc = len(df1.columns)
-        args = {"bins": 32, "density": True}
-        fig, axs = plt.subplots(nc, 1, figsize=(2,1*nc), sharex=True, gridspec_kw={"hspace": 0.5})
+
+        args = {"bins": np.linspace(-4.0, 4.0, 17), "density": True}
+        fig, axs = plt.subplots(nc, 1, figsize=(1.5,1*nc), sharex=False, gridspec_kw={"hspace": 0.5})
         axs = [axs] if len(axs)==1 else axs
         for sm, ax in zip(df1.columns, axs):
+            ax.set_frame_on(False)
             ax.hist(df1[sm], **args, alpha=0.5, fc="black")
-            ax.hist(df2[sm], **args, histtype="step", linewidth=2, edgecolor="black")
-            ax.set_xlabel(sm, fontsize=12)
+            ax.hist(df2[sm], **args, histtype="step", linewidth=1, edgecolor="#FF3264")
+            # ax.set_xlabel(sm, fontsize=12)
             ax.set_ylim(0, 1)
-            ax.set_xlim(-5, 5)
+            ax.set_xlim(-4, 4)
+            ax.get_xaxis().tick_bottom()
+            ax.set_xticks([-4, -2, 0, 2, 4])
+            ax.axes.get_yaxis().set_visible(False)
+            xmin, xmax = ax.get_xaxis().get_view_interval()
+            ymin, ymax = ax.get_yaxis().get_view_interval()
+            ax.add_artist(pltlines.Line2D((xmin, xmax), (ymin, ymin), color='black', linewidth=1))
+
         plt.suptitle(title, fontsize=18)
         plt.tight_layout()
         return fig
