@@ -40,7 +40,6 @@ class Correlation(Step):
 
             device = io.LocalStagingIO(control)
             df = device.load_step_manifest("preprocessing")
-            df = df.sample(100)
             
             if distribute:
 

@@ -6,6 +6,7 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 from pathlib import Path
+from skimage import io as skio
 from aicsshparam import shtools
 from aicsimageio import AICSImage, writers
 try:
@@ -70,7 +71,7 @@ class LocalStagingIO:
             index_col="CellId", low_memory=False
         )
         if clean:
-            feats = ['mem_', 'dna_', 'str_']
+            feats = ['mem_', 'dna_', 'str_'] #TODO: fix the aliases here
             df = df[[c for c in df.columns if not any(s in c for s in feats)]]
         return df
 

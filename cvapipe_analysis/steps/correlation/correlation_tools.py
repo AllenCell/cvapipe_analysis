@@ -1,21 +1,12 @@
 import os
-import vtk
-import json
-import psutil
-import pickle
-import random
+import sys
 import argparse
-import warnings
 import concurrent
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
 from pathlib import Path
-from aicsshparam import shtools
-from aicscytoparam import cytoparam
-from aicsimageio import AICSImage, writers
-from typing import Dict, List, Optional, Union
-from aics_dask_utils import DistributedHandler
+from joblib import Parallel, delayed
 
 from cvapipe_analysis.tools import io, general, controller
 
@@ -39,16 +30,32 @@ class CorrelationCalculator(io.DataProducer):
         self.subfolder = 'correlation/values'
 
     def set_indexes(self, indexes_i, indexes_j):
-        self.indexes_i = indexes_i
-        self.indexes_j = indexes_j
-        _, self.rep_aliases = self.read_parameterized_intensity(indexes_i[0], True)
+        self.ni = len(indexes_i)
+        self.nj = len(indexes_j)
+        self.indexes = indexes_i.tolist() + indexes_j.tolist()
+        self.corrs = np.zeros((self.ni, self.nj), dtype=np.float32)
+        _, aliases = self.read_parameterized_intensity(indexes_i[0], True)
+        if len(aliases) > 1:
+            raise ValueError("Only single channel represenations are supported.")
+        self.rep_alias = aliases[0]
         return
 
     def workflow(self):
-        self.reps_i = self.load_representations(self.indexes_i)
-        self.reps_j = self.load_representations(self.indexes_j)
-        with concurrent.futures.ProcessPoolExecutor(self.ncores) as executor:
-                executor.map(self.get_ij_pair_correlation_and_save, self.iter_over_ij_pairs())
+        self.reps = self.load_representations(self.indexes)
+        vsize = int(sys.getsizeof(self.reps)) / float(1 << 20)
+        print(f"Data shape: {self.reps.shape} ({self.reps.dtype}, {vsize:.1f}Mb)")
+
+        import pdb; pdb.set_trace()
+
+        _ = Parallel(n_jobs=self.ncores, backend="threading")(
+            delayed(self.get_ij_pair_correlation_and_save)(p)
+            for p in tqdm(self.iter_over_ij_pairs(), total=self.ni*self.nj)
+        )
+
+        import pdb; pdb.set_trace()
+
+        # with concurrent.futures.ProcessPoolExecutor(self.ncores) as executor:
+        #         executor.map(self.get_ij_pair_correlation_and_save, self.iter_over_ij_pairs())
         return
 
     def get_output_file_name(self):
@@ -66,39 +73,30 @@ class CorrelationCalculator(io.DataProducer):
             total=len(indexes)))
         return np.array(reps)
 
-    def save_ij_pair_correlation(self, idxi, idxj, corrs):
-        index_i = self.indexes_i[idxi]
-        index_j = self.indexes_j[idxj]
+    def save_ij_pair_correlation(self, idxi, idxj, corr):
+        index_i = self.indexes[idxi]
+        index_j = self.indexes[self.ni + idxj]
         for index_folder, index_file in zip([index_i, index_j], [index_j, index_i]):
             path = self.control.get_staging() / f"{self.subfolder}/{index_folder}"
             path.mkdir(parents=True, exist_ok=True)
-            for alias, corr in corrs.items():
-                with open(path / f"{index_file}.{alias}", "w") as ftxt:
-                    ftxt.write(f"{corr:.5f}")
+            with open(path / f"{index_file}.{self.rep_alias}", "w") as ftxt:
+                ftxt.write(f"{corr:.5f}")
         return
 
     def iter_over_ij_pairs(self):
-        for idxi, index_i in enumerate(self.indexes_i):
-            for idxj, index_j in enumerate(self.indexes_j):
+        for idxi in range(self.ni):
+            for idxj in range(self.nj):
                     yield (idxi, idxj)
 
-    def get_npairs(self):
-        n1 = len(self.indexes_i)
-        n2 = len(self.indexes_j)
-        return n1*n2
-
     def get_ij_pair_correlation(self, idxi, idxj):
-        corrs = {}
-        rep1, rep2 = self.reps_i[idxi], self.reps_j[idxj]
-        index_i, index_j = self.indexes_i[idxi], self.indexes_j[idxj]
-        for alias, r1, r2 in zip(self.rep_aliases, rep1, rep2):
-            corrs[alias] = self.correlate_representations(r1, r2)
-        return corrs
+        r1 = self.reps[idxi]
+        r2 = self.reps[self.ni + idxj]
+        return self.correlate_representations(r1, r2)
 
     def get_ij_pair_correlation_and_save(self, pair):
         idxi, idxj = pair
-        corrs = self.get_ij_pair_correlation(idxi, idxj)
-        self.save_ij_pair_correlation(idxi, idxj, corrs)
+        self.corrs[idxi, idxj] = self.get_ij_pair_correlation(idxi, idxj)
+        # self.save_ij_pair_correlation(idxi, idxj, corr)
         return
 
 if __name__ == "__main__":
