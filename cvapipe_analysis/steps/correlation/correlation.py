@@ -13,26 +13,9 @@ import pandas as pd
 from tqdm import tqdm
 from joblib import Parallel, delayed
 
-from cvapipe_analysis.tools import io, general, cluster
+from cvapipe_analysis.tools import io, general, controller
 
 log = logging.getLogger(__name__)
-
-def read_rep(eindex):
-    i, index = eindex
-    rep = device.read_parameterized_intensity(index)
-    rep = rep.astype(bool).flatten()
-    reps[i] = rep
-    return
-
-def get_next_pair():
-    for i in range(ncells):
-        for j in range(i+1, ncells):
-            yield (i, j)
-
-def correlate_ij(ij):
-    i, j = ij
-    corrs[i, j] = corrs[j, i] = np.corrcoef(reps[i], reps[j])[0, 1]
-    return
 
 class Correlation(Step):
     def __init__(
@@ -49,13 +32,30 @@ class Correlation(Step):
         **kwargs
     ):
 
+        def read_rep(eindex):
+            i, index = eindex
+            rep = device.read_parameterized_intensity(index)
+            rep = rep.astype(bool).flatten()
+            reps[i] = rep
+            return
+
+        def get_next_pair():
+            for i in range(ncells):
+                for j in range(i+1, ncells):
+                    yield (i, j)
+
+        def correlate_ij(ij):
+            i, j = ij
+            corrs[i, j] = corrs[j, i] = np.corrcoef(reps[i], reps[j])[0, 1]
+            return
+
         with general.configuration(self.step_local_staging_dir) as control:
 
             config = general.load_config_file("/allen/aics/assay-dev/MicroscopyOtherData/Viana/projects/cvapipe_analysis")
             control = controller.Controller(config)
             device = io.LocalStagingIO(control)
 
-            df = device.load_step_manifest("preprocessing")
+            df = device.load_step_manifest("preprocessing", nrows=800)
 
             ncells = len(df)
             rep_length = 532610
@@ -81,3 +81,5 @@ class Correlation(Step):
                 delayed(correlate_ij)(ij)
                 for ij in tqdm(get_next_pair(), total=npairs)
             )
+
+            # save the correlations
