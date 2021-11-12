@@ -64,10 +64,10 @@ class LocalStagingIO:
     def get_abs_path_to_step_manifest(self, step):
         return self.control.get_staging() / f"{step}/manifest.csv"
 
-    def load_step_manifest(self, step, clean=False):
+    def load_step_manifest(self, step, clean=False, **kwargs):
         df = pd.read_csv(
             self.get_abs_path_to_step_manifest(step),
-            index_col="CellId", low_memory=False
+            index_col="CellId", low_memory=False, **kwargs
         )
         if clean:
             feats = ['mem_', 'dna_', 'str_']
