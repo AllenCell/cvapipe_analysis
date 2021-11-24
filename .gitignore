@@ -9,6 +9,9 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+#Specific auto-generated C code
+bincorrlib.c
+
 # C extensions
 *.so
 

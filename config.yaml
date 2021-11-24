@@ -120,7 +120,7 @@ structures:
 distribute:
     # In case a (slurm) cluster is available
     cores: 30
-    number_of_workers: 900
+    number_of_workers: 16
     memory: "8GB"
     queue: "aics_cpu_general"
     walltime: "9-24:00:00"
