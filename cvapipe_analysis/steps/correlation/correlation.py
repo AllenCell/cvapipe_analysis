@@ -29,6 +29,7 @@ class Correlation(Step):
     @log_run_params
     def run(
         self,
+        gene,
         distribute: Optional[bool] = False,
         **kwargs
     ):
@@ -65,8 +66,9 @@ class Correlation(Step):
 
             df = device.load_step_manifest("preprocessing")
 
-            df = sample_by_factors(df, ["structure_name"], 1000)
-
+            df = df.loc[df.structure_name==gene]
+            #df = sample_by_factors(df, ["structure_name"], 1000)
+            print(f"Running gene {gene}. Dataframe of size: {df.shape}")
             print(df.groupby("structure_name").size())
 
             ncells = len(df)
@@ -94,7 +96,5 @@ class Correlation(Step):
                 for ij in tqdm(get_next_pair(), total=npairs)
             )
 
-            skio.imsave(f"{control.get_staging()}/correlation/matrix_sample1000_rs39.tif", corrs)
-            df[["structure_name"]].to_csv(f"{control.get_staging()}/correlation/matrix_sample1000_rs39_index.csv")
-
-            # save the correlations
+            skio.imsave(f"{control.get_staging()}/correlation/matrix_{gene}.tif", corrs)
+            df[["structure_name"]].to_csv(f"{control.get_staging()}/correlation/matrix_{gene}_index.csv")
