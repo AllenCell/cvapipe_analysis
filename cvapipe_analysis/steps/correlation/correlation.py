@@ -37,6 +37,7 @@ class Correlation(Step):
             i, index = eindex
             rep = device.read_parameterized_intensity(index)
             rep = rep.astype(bool).flatten()
+            rep[0] = True
             reps[i] = rep
             return
 
@@ -47,9 +48,14 @@ class Correlation(Step):
 
         def correlate_ij(ij):
             i, j = ij
-            # corrs[i, j] = corrs[j, i] = np.corrcoef(reps[i], reps[j])[0, 1]
             corrs[i, j] = corrs[j, i] = bincorr.calculate(reps[i], reps[j], 532610)
             return
+
+        def sample_by_factors(df, factors, n):
+            df_sample = pd.DataFrame([])
+            for factors, df_factor in df.groupby(factors):
+                df_sample = df_sample.append(df_factor.sample(n, replace=False, random_state=39), ignore_index=False)
+            return df_sample
 
         with general.configuration(self.step_local_staging_dir) as control:
 
@@ -59,7 +65,7 @@ class Correlation(Step):
 
             df = device.load_step_manifest("preprocessing")
 
-            df = df.loc[df.structure_name.isin(["NPM1", "LMNB1"])]
+            df = sample_by_factors(df, ["structure_name"], 1000)
 
             print(df.groupby("structure_name").size())
 
@@ -88,7 +94,7 @@ class Correlation(Step):
                 for ij in tqdm(get_next_pair(), total=npairs)
             )
 
-            skio.imsave(f"{control.get_staging()}/correlation/matrix_npm1_lmnb1.tif", corrs)
-            df[["structure_name"]].to_csv(f"{control.get_staging()}/correlation/matrix_npm1_lmnb1_index.csv")
+            skio.imsave(f"{control.get_staging()}/correlation/matrix_sample1000_rs39.tif", corrs)
+            df[["structure_name"]].to_csv(f"{control.get_staging()}/correlation/matrix_sample1000_rs39_index.csv")
 
             # save the correlations
