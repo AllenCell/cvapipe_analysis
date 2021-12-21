@@ -213,14 +213,15 @@ class Controller:
     def get_number_of_interpolating_points(self):
         return self.param_section['number_of_interpolating_points']
 
-    def get_variables_values_for_aggregation(self):
+    def get_variables_values_for_aggregation(self, include_genes=True):
         variables = {}
         variables['shape_mode'] = self.get_shape_modes()
         variables['mpId'] = self.get_map_point_indexes()
         variables['aggtype'] = self.config['aggregation']['type']
         variables['alias'] = self.param_section['parameterize']
-        structs = self.config['structures']
-        variables['structure'] = [k for k in structs.keys()]
+        if include_genes:
+            structs = self.config['structures']
+            variables['structure'] = [k for k in structs.keys()]
         return variables
 
     def duplicate_variable(self, variables, v):
