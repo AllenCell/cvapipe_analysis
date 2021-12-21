@@ -123,6 +123,17 @@ class Distributor:
         self.execute()
         return
 
+    def distribute_by_row(self):
+        print("\nCleaning distribute directory.\n")
+        self.clean_distribute_folder()
+        print(f"\nDistributing dataframe of shape: {self.df.shape} by row.")
+        for chunk, (index, row) in enumerate(self.df.iterrows()):
+            abs_path_to_dataframe = self.abs_path_to_distribute/f"dataframes/{chunk}.csv"
+            pd.DataFrame(row).to_csv(abs_path_to_dataframe)
+            self.append_job(chunk)
+        self.execute()
+        return
+
     def distribute_by_blocks(self):
         print("\nCleaning distribute directory.\n")
         self.clean_distribute_folder()
