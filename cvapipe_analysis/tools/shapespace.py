@@ -238,6 +238,15 @@ class ShapeSpace(ShapeSpaceBasic):
         df.mpId = df.mpId.astype(np.int64)
         return df
 
+    @staticmethod
+    def sample_cell_ids(df, nmax, random_seed=42):
+        np.random.seed(random_seed)
+        for index, row in df.iterrows():
+            if len(row.CellIds) > nmax:
+                sample = np.random.choice(row.CellIds, nmax ,replace=False)
+                df.at[index, "CellIds"] = sample.tolist()
+        return df
+
     def save_summary(self, path):
         variables = self.control.get_variables_values_for_aggregation()
         df = self.get_aggregated_df(variables)
