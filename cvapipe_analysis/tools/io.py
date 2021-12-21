@@ -40,7 +40,7 @@ class LocalStagingIO:
                 if not path.is_file():
                     path = self.control.get_staging() / f"loaddata/{row[imtype]}"
                 reader = AICSImage(path)
-                channel_names += reader.get_channel_names()
+                channel_names += reader.channel_names
                 img = reader.get_image_data('CZYX', S=0, T=0)
                 imgs.append(img)
         try:
@@ -89,7 +89,7 @@ class LocalStagingIO:
         path = self.control.get_staging() / path
         if path.is_file():
             code = AICSImage(path)
-            intensity_names = code.get_channel_names()
+            intensity_names = code.channel_names
             code = code.data.squeeze()
         if return_intensity_names:
             return code, intensity_names
