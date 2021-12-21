@@ -6,98 +6,86 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 from pathlib import Path
+from skimage import io as skio
 from joblib import Parallel, delayed
 
-from cvapipe_analysis.tools import io, general, controller
-
+from cvapipe_analysis.tools import io, general, controller, bincorr
 
 class CorrelationCalculator(io.DataProducer):
     """
     Provides the functionalities necessary for
     calculating the correlation of cells using their
     parameterized intensity representation.
-
     WARNING: All classes are assumed to know the whole
     structure of directories inside the local_staging
     folder and this is hard coded. Therefore, classes
     may break if you move saved files from the places
     their are saved.
+
+    WARNING: This class is optimized to compute
+    correlations on binary representations only.
     """
+
+    rep_length = 532610 # Need some work to make general
 
     def __init__(self, control):
         super().__init__(control)
         self.ncores = control.get_ncores()
         self.subfolder = 'correlation/values'
 
-    def set_indexes(self, indexes_i, indexes_j):
-        self.ni = len(indexes_i)
-        self.nj = len(indexes_j)
-        self.indexes = indexes_i.tolist() + indexes_j.tolist()
-        self.corrs = np.zeros((self.ni, self.nj), dtype=np.float32)
-        _, aliases = self.read_parameterized_intensity(indexes_i[0], True)
-        if len(aliases) > 1:
-            raise ValueError("Only single channel represenations are supported.")
-        self.rep_alias = aliases[0]
+    def read_representation_as_boolean(self, eindex):
+        i, index = eindex
+        rep = self.read_parameterized_intensity(index)
+        rep = rep.astype(bool).flatten()
+        rep[0] = True # Avoid ill computation
+        self.reps[i] = rep
+        return
+
+    def load_representations(self):
+        self.ncells = len(self.row.CellIds)
+        self.reps = np.zeros((self.ncells, self.rep_length), dtype=bool)
+        repsize = int(sys.getsizeof(self.reps)) / float(1 << 20)
+        print(f"Representations shape: {self.reps.shape} ({self.reps.dtype}, {repsize:.1f}Mb)")
+
+        self.corrs = np.zeros((self.ncells, self.ncells), dtype=np.float32)
+        corrssize = int(sys.getsizeof(self.corrs)) / float(1 << 20)
+        print(f"Correlations shape: {self.corrs.shape} ({self.corrs.dtype}, {corrssize:.1f}Mb)")
+
+        print(f"Loading representations using {self.ncores} cores...")
+
+        _ = Parallel(n_jobs=self.ncores, backend="threading")(
+            delayed(self.read_representation_as_boolean)(eindex)
+            for eindex in tqdm(enumerate(self.row.CellIds), total=self.ncells)
+        )
+
+    def get_next_pair(self):
+        for i in range(self.ncells):
+            for j in range(i+1, self.ncells):
+                yield (i, j)
+
+    def correlate_ij(self, ij):
+        i, j = ij
+        self.corrs[i, j] = self.corrs[j, i] = bincorr.calculate(self.reps[i], self.reps[j], self.rep_length)
         return
 
     def workflow(self):
-        self.reps = self.load_representations(self.indexes)
-        vsize = int(sys.getsizeof(self.reps)) / float(1 << 20)
-        print(f"Data shape: {self.reps.shape} ({self.reps.dtype}, {vsize:.1f}Mb)")
-
-        import pdb; pdb.set_trace()
-
+        self.load_representations()
+        npairs = int(self.ncells*(self.ncells-1)/2)
         _ = Parallel(n_jobs=self.ncores, backend="threading")(
-            delayed(self.get_ij_pair_correlation_and_save)(p)
-            for p in tqdm(self.iter_over_ij_pairs(), total=self.ni*self.nj)
+            delayed(self.correlate_ij)(ij)
+            for ij in tqdm(self.get_next_pair(), total=npairs)
         )
-
-        import pdb; pdb.set_trace()
-
-        # with concurrent.futures.ProcessPoolExecutor(self.ncores) as executor:
-        #         executor.map(self.get_ij_pair_correlation_and_save, self.iter_over_ij_pairs())
         return
 
     def get_output_file_name(self):
-        pass
+        fname = self.get_prefix_from_row(self.row)
+        return fname
 
-    def load_representations(self, indexes):
-        # Representations of all cells in the manifest should be present.
-        # Given the size of the single cell dataset, this function
-        # currently only supports the segmented images so the data
-        # can be load as type bool. Otherwise we run into lack of
-        # memory issues to load the representations.
-        with concurrent.futures.ProcessPoolExecutor(self.ncores) as executor:
-            reps = list(tqdm(
-                executor.map(self.read_parameterized_intensity_as_boolean, indexes),
-            total=len(indexes)))
-        return np.array(reps)
-
-    def save_ij_pair_correlation(self, idxi, idxj, corr):
-        index_i = self.indexes[idxi]
-        index_j = self.indexes[self.ni + idxj]
-        for index_folder, index_file in zip([index_i, index_j], [index_j, index_i]):
-            path = self.control.get_staging() / f"{self.subfolder}/{index_folder}"
-            path.mkdir(parents=True, exist_ok=True)
-            with open(path / f"{index_file}.{self.rep_alias}", "w") as ftxt:
-                ftxt.write(f"{corr:.5f}")
-        return
-
-    def iter_over_ij_pairs(self):
-        for idxi in range(self.ni):
-            for idxj in range(self.nj):
-                    yield (idxi, idxj)
-
-    def get_ij_pair_correlation(self, idxi, idxj):
-        r1 = self.reps[idxi]
-        r2 = self.reps[self.ni + idxj]
-        return self.correlate_representations(r1, r2)
-
-    def get_ij_pair_correlation_and_save(self, pair):
-        idxi, idxj = pair
-        self.corrs[idxi, idxj] = self.get_ij_pair_correlation(idxi, idxj)
-        # self.save_ij_pair_correlation(idxi, idxj, corr)
-        return
+    def save(self):
+        save_as = self.get_output_file_path()
+        skio.imsave(f"{save_as}.tif", self.corrs)
+        pd.DataFrame({"CellIds": self.row.CellIds}).to_csv(f"{save_as}.csv")
+        return f"{save_as}.tif"
 
 if __name__ == "__main__":
 
@@ -109,9 +97,11 @@ if __name__ == "__main__":
     args = vars(parser.parse_args())
 
     df = pd.read_csv(args['csv'], index_col=0)
-
+    df = df.T
+    df.CellIds = df.CellIds.astype(object)
+    for index, row in df.iterrows():
+        df.at[index,"CellIds"] = eval(row.CellIds)
     calculator = CorrelationCalculator(control)
-    indexes_i = df.loc[df.Group==0].index
-    indexes_j = df.loc[df.Group==1].index
-    calculator.set_indexes(indexes_i, indexes_j)
-    calculator.workflow()
+    for _, row in df.iterrows():
+        '''Concurrent processes inside. Do not use concurrent here.'''
+        calculator.execute(row)
