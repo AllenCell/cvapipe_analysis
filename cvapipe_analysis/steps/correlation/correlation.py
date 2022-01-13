@@ -45,8 +45,7 @@ class Correlation(Step):
             space = shapespace.ShapeSpace(control)
             space.execute(df)
             variables = control.get_variables_values_for_aggregation()
-            df_agg = space.get_aggregated_df(variables, True)
-            df_agg = space.sample_cell_ids(df_agg, 1000)
+            df_agg = space.get_aggregated_df(variables, include_cellIds=True)
             agg_cols = [f for f in df_agg.columns if f not in ["CellIds", "structure"]]
             df_agg = df_agg.groupby(agg_cols).agg({"CellIds": sum})
             df_agg = df_agg.reset_index()
