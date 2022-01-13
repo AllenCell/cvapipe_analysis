@@ -73,7 +73,7 @@ class CorrelationCalculator(io.DataProducer):
         npairs = int(self.ncells*(self.ncells-1)/2)
         _ = Parallel(n_jobs=self.ncores, backend="threading")(
             delayed(self.correlate_ij)(ij)
-            for ij in tqdm(self.get_next_pair(), total=npairs)
+            for ij in tqdm(self.get_next_pair(), total=npairs, miniters=self.ncells)
         )
         return
 
