@@ -7,6 +7,7 @@ from tqdm import tqdm
 from pathlib import Path
 from typing import Optional
 from functools import reduce
+from skimage import io as skio
 import matplotlib.pyplot as plt
 from matplotlib import animation
 from matplotlib import lines as pltlines
@@ -14,14 +15,14 @@ from scipy import stats as spstats
 from scipy import cluster as spcluster
 from aicsimageio import AICSImage, writers
 from vtk.util import numpy_support as vtknp
-from cvapipe_analysis.tools import io
+from cvapipe_analysis.tools import io, shapespace
 
 plt.rcParams['ps.fonttype'] = 42
 plt.rcParams['pdf.fonttype'] = 42
 plt.rcParams['font.sans-serif'] = "Arial"
 plt.rcParams['font.family'] = "sans-serif"
 
-class PlotMaker(io.LocalStagingIO):
+class PlotMaker(io.DataProducer):
     """
     Support class. Should not be instantiated directly.
 
@@ -236,27 +237,47 @@ class StereotypyPlotMaker(PlotMaker):
 
     def __init__(self, control, subfolder: Optional[str] = None):
         super().__init__(control)
-        self.max_number_of_pairs = 0
         self.subfolder = "stereotypy/plots" if subfolder is None else subfolder
-
-    def set_max_number_of_pairs(self, n):
-        self.max_number_of_pairs = n if n > 0 else 0
 
     def workflow(self):
         self.make_boxplot()
 
+    def get_output_file_name(self, row):
+        return f"{row.aggtype}-{row.alias}-{row.shape_mode}-{row.mpId}"
+
+    def read_corelation_matrix(self, row):
+        fname = self.get_output_file_name(row)
+        try:
+            corr = skio.imread(f"{self.control.get_staging()}/correlation/values/{fname}.tif")
+        except Exception as ex:
+            print(f"Correlation matrix {fname} not found.")
+            return None, None
+        corr_idx = pd.read_csv(f"{self.control.get_staging()}/correlation/values/{fname}.csv", index_col=0)
+        corr_idx["structure"] = self.df.structure_name[corr_idx.CellIds].values
+        return corr_idx, corr
+
     def make_boxplot(self):
+
+        corr_idx, corr = self.read_corelation_matrix(self.row)
+        if corr is None:
+            return
+
         labels = []
         self.check_dataframe_exists()
         fig, ax = plt.subplots(1, 1, figsize=(7, 8), dpi=self.dpi)
         for sid, gene in enumerate(reversed(self.control.get_gene_names())):
-            df_s = self.df.loc[self.df.structure == gene]
-            if self.max_number_of_pairs > 0:
-                df_s = df_s.sample(n=np.min([len(df_s), self.max_number_of_pairs]))
-            y = np.random.normal(size=len(df_s), loc=sid, scale=0.1)
-            ax.scatter(df_s.Pearson, y, s=1, c="k", alpha=0.1)
+
+            rank = corr_idx.loc[corr_idx.structure==gene].index.values
+            values = corr[rank, :]
+            values = values[:, rank]
+            values = values[np.triu_indices(len(rank), k=1)]
+
+            np.random.seed(42)
+            x = np.random.choice(values, np.min([len(rank), 1024]), replace=False)
+            y = np.random.normal(size=len(x), loc=sid, scale=0.1)
+            ax.scatter(x, y, s=1, c="k", alpha=0.1)
             box = ax.boxplot(
-                df_s.Pearson,
+                values,
                 positions=[sid],
                 showmeans=True,
                 widths=0.75,
@@ -270,18 +291,17 @@ class StereotypyPlotMaker(PlotMaker):
                     "markersize": 5,
                 },
             )
-            label = f"{self.control.get_structure_name(gene)} (N={len(df_s):04d})"
+            label = f"{self.control.get_structure_name(gene)} (N={len(rank):04d})"
             labels.append(label)
             box["boxes"][0].set(facecolor=self.control.get_gene_color(gene))
             box["medians"][0].set(color="black")
         ax.set_yticklabels(labels)
         ax.set_xlim(-0.2, 1.0)
         ax.set_xlabel("Pearson correlation coefficient", fontsize=14)
-        ax.set_title(self.get_dataframe_desc(self.df))
+        ax.set_title(self.get_output_file_name(self.row))
         ax.grid(True)
         plt.tight_layout()
-        self.figs.append((fig, self.get_dataframe_desc(self.df)))
-
+        self.figs.append((fig, self.get_output_file_name(self.row)))
 
 class ShapeSpacePlotMaker(PlotMaker):
     """
