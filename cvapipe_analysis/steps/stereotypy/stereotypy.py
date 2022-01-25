@@ -49,9 +49,10 @@ class Stereotypy(Step):
             log.info(f"Generating plots...")
 
             for index, row in tqdm(df_agg.iterrows(), total=len(df_agg)):
-                if index < 48:
-                    continue
                 pmaker = plotting.StereotypyPlotMaker(control)
                 pmaker.set_dataframe(df)
                 pmaker.set_row(row)
+                if row.mpId == 1:
+                    pmaker.set_extra_values({"mpId": [1,2,3,4,5,6,7,8,9]})
                 pmaker.execute(display=False)
+
