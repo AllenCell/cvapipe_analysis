@@ -8,7 +8,9 @@ from tqdm import tqdm
 from pathlib import Path
 from skimage import io as skio
 from aicsshparam import shtools
-from aicsimageio import AICSImage, writers
+from aicsimageio import AICSImage
+from aicsimageio.writers import OmeTiffWriter
+
 try:
     from aicsfiles import FileManagementSystem
 except: pass
@@ -188,9 +190,7 @@ class LocalStagingIO:
         dims = [['X', 'Y', 'Z', 'C', 'T'][d] for d in range(img.ndim)]
         dims = ''.join(dims[::-1])
         name = path.stem if image_name is None else image_name
-        with writers.ome_tiff_writer.OmeTiffWriter(path, overwrite_file=True) as writer:
-            writer.save(
-                img, dimension_order=dims, image_name=name, channel_names=channel_names)
+        OmeTiffWriter.save(img, path, dim_order=dims, image_name=name, channel_names=channel_names)
         return
 
     @staticmethod
