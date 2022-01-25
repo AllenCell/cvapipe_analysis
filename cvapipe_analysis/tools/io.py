@@ -120,6 +120,50 @@ class LocalStagingIO:
                 axis=0, ignore_index=True)
         return df
 
+    def read_corelation_matrix(self, row):
+        df = self.load_step_manifest("loaddata")
+        fname = self.get_correlation_matrix_file_prefix(row)
+
+        try:
+            corr = skio.imread(f"{self.control.get_staging()}/correlation/values/{fname}.tif")
+        except Exception as ex:
+            print(f"Correlation matrix {fname} not found.")
+            return None
+        np.fill_diagonal(corr, np.nan)
+        corr_idx = pd.read_csv(f"{self.control.get_staging()}/correlation/values/{fname}.csv", index_col=0)
+        df_corr = pd.DataFrame(corr)
+        df_corr.columns = pd.MultiIndex.from_tuples([
+            (
+                df.at[corr_idx.at[c, "CellIds"], "structure_name"],
+                corr_idx.at[c, "CellIds"],
+                c
+            ) for c in df_corr.columns], name=["structure", "CellId", "rank"])
+        df_corr.index = pd.MultiIndex.from_tuples([
+            (
+                df.at[corr_idx.at[c, "CellIds"], "structure_name"],
+                corr_idx.at[c,"CellIds"],
+                c
+            ) for c in df_corr.index], name=["structure", "CellId", "rank"])
+        return df_corr
+
+    def get_correlation_matrix_from_avg_reps(self, row):
+        genes = self.control.get_gene_names()
+        matrix = np.ones((len(genes), len(genes)))
+        for gid1, gene1 in enumerate(genes):
+            for gid2, gene2 in enumerate(genes):
+                if gid2 > gid1:
+                    fname = self.get_correlation_matrix_file_prefix(row, genes=(gene1,gene2))
+                    df = pd.read_csv(f"{self.control.get_staging()}/concordance/values/{fname}.csv")
+                    matrix[gid1, gid2] = matrix[gid2, gid1] = df.Pearson.values[0]
+        return matrix
+
+    @staticmethod
+    def get_correlation_matrix_file_prefix(row, genes=None):
+        fname = f"{row.aggtype}-{row.alias}-{row.shape_mode}-{row.mpId}"
+        if genes is not None:
+            fname = f"{row.aggtype}-{row.alias}-{genes[0]}-{genes[1]}-{row.shape_mode}-{row.mpId}"
+        return fname
+
     @staticmethod
     def load_data_from_csv(parameters, use_fms=False):
         if use_fms:
