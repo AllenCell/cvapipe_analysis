@@ -98,6 +98,7 @@ class Distributor:
             print(f"#SBATCH --output {abs_path_output_folder}/%A_%a.out", file=fs)
             print(f"#SBATCH --error {abs_path_output_folder}/%A_%a.err", file=fs)
             print(f"#SBATCH --array=1-{len(self.jobs)}", file=fs)
+            print("#SBATCH --job-name=cvapipe", file=fs)
             print(
                 f"srun $(head -n $SLURM_ARRAY_TASK_ID {self.abs_path_jobs_file_as_str} | tail -n 1)", file=fs)
         return
