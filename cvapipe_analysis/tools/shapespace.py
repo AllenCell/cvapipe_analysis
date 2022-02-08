@@ -94,6 +94,7 @@ class ShapeSpace(ShapeSpaceBasic):
 
     def __init__(self, control):
         super().__init__(control)
+        self.remove_extreme_points_on = True
 
     def execute(self, df):
         self.df = df
@@ -103,9 +104,12 @@ class ShapeSpace(ShapeSpaceBasic):
     def workflow(self):
         self.calculate_pca()
         self.calculate_feature_importance()
-        pct = self.control.get_removal_pct()
+        pct = self.control.get_removal_pct() if self.remove_extreme_points_on else 0.0
         self.shape_modes = self.remove_extreme_points(self.axes, pct)
-        
+
+    def set_remove_extreme_points(self, value):
+        self.remove_extreme_points_on = value
+
     def calculate_pca(self):
         self.df_pca = self.df[self.features]
         matrix_of_features = self.df_pca.values.copy()
