@@ -61,8 +61,10 @@ class Concordance(Step):
             df_agg =  df_agg.drop(columns=["structure"]).drop_duplicates().reset_index()
 
             for index, row in tqdm(df_agg.iterrows(), total=len(df_agg)):
-                pmaker = plotting.ConcordancePlotMaker(control)
-                pmaker.use_average_representations(True)
-                pmaker.set_dataframe(df)
-                pmaker.set_row(row)
-                pmaker.execute(display=False)
+                for mode in [True, False]:
+                    pmaker = plotting.ConcordancePlotMaker(control)
+                    pmaker.use_average_representations(mode)
+                    pmaker.set_dataframe(df)
+                    pmaker.set_row(row)
+                    pmaker.execute(display=False)
+
