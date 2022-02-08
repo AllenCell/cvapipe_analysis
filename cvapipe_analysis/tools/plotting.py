@@ -111,8 +111,7 @@ class PlotMaker(io.DataProducer):
         for s1, name1 in enumerate(rank):
             for s2, name2 in enumerate(rank):
                 if (name1 in names1) and (name2 in names2):
-                    indexes = df.loc[(df.structure1 == name1) &
-                                     (df.structure2 == name2)].index
+                    indexes = df.loc[(df.structure1 == name1) & (df.structure2 == name2)].index
                     matrix[s1, s2] = df.at[indexes[0], "Pearson"]
         return matrix
 
@@ -130,8 +129,7 @@ class PlotMaker(io.DataProducer):
 
     @staticmethod
     def get_dataframe_desc(df):
-        desc = "-".join([str(sorted(df[f].unique()))
-                         for f in ["alias", "shape_mode", "mpId"]])
+        desc = "-".join([str(sorted(df[f].unique())) for f in ["alias", "shape_mode", "mpId"]])
         desc = desc.replace("[", "").replace("]", "").replace("'", "")
         return desc
 
@@ -147,20 +145,29 @@ class ConcordancePlotMaker(PlotMaker):
         super().__init__(control)
         self.work_with_avg_reps = False
         self.subfolder = "concordance/plots" if subfolder is None else subfolder
+        self.ncells = dict([(gene, None) for gene in control.get_structure_names()])
 
     def workflow(self):
+        suffix = "_AVG_CORR_OF_REPS"
+        if self.work_with_avg_reps:
+            suffix = "_CORR_OF_AVG_REP"
         self.check_dataframe_exists()
-        self.matrix = self.get_agg_correlation_matrix()
-        self.matrix = self.normalize_by_diagonal(self.matrix)
-        self.set_heatmap_min_max_values(-1, 1)
-        self.make_heatmap(self.matrix)
-        self.make_dendrogram(self.matrix)
+        self.matrix = self.get_agg_correlation_matrix(update_ncells=True)
+        # self.matrix = self.normalize_by_diagonal(self.matrix)
+        if not self.work_with_avg_reps:
+            self.set_heatmap_min_max_values(-0.3, 0.3)
+        prefix = self.make_heatmap(self.matrix, suffix=suffix)
+        genes = self.control.get_gene_names()
+        df_corrs = pd.DataFrame(self.matrix, columns=genes, index=genes)
+        self.dataframes.append((df_corrs, prefix))
+        self.make_dendrogram(self.matrix, suffix=suffix)
         if self.row.mpId < self.control.get_center_map_point_index():
             self.matrix_mirrored = self.get_agg_correlation_matrix(create_mirrored_matrix=True)
-            self.make_heatmap(self.matrix_mirrored, diagonal=True, suffix="_mirrored")
+            self.make_heatmap(self.matrix_mirrored, diagonal=True, suffix=f"_mirrored{suffix}")
             self.matrix_relative = self.get_agg_correlation_matrix(create_mirrored_matrix=True, relative_to_center=True)
-            self.set_heatmap_min_max_values(-0.05, 0.05)
-            self.make_heatmap(self.matrix_relative, diagonal=True, cmap="PRGn", suffix="_relative")
+            if not self.work_with_avg_reps:
+                self.set_heatmap_min_max_values(-0.1, 0.1)
+            self.make_heatmap(self.matrix_relative, diagonal=True, cmap="PRGn", suffix=f"_relative{suffix}")
         return
 
     def use_average_representations(self, value):
@@ -176,17 +183,21 @@ class ConcordancePlotMaker(PlotMaker):
         matrix = 0.5*(matrix+matrix.T)
         return matrix
 
-    def get_agg_correlation_matrix(self, create_mirrored_matrix=False, relative_to_center=False):
+    def get_agg_correlation_matrix(self, create_mirrored_matrix=False, relative_to_center=False, update_ncells=False):
         row = self.row.copy()
         mpIdc = self.control.get_center_map_point_index()
         if create_mirrored_matrix:
             row.mpId = mpIdc-(row.mpId-mpIdc)
         df_corr = self.device.read_corelation_matrix(row)
+        if update_ncells:
+            for struct, gene in zip(self.control.get_structure_names(), self.control.get_gene_names()):
+                self.ncells[struct] = len(df_corr.loc[gene])
         if df_corr is None:
             return
         genes = self.control.get_gene_names()
         if self.work_with_avg_reps:
             matrix = self.device.get_correlation_matrix_from_avg_reps(row)
+            np.fill_diagonal(matrix, 0)
         else:
             matrix = self.get_aggregated_matrix_from_df(genes, df_corr)
         if relative_to_center:
@@ -212,7 +223,11 @@ class ConcordancePlotMaker(PlotMaker):
         ax.set_xticks(np.arange(matrix.shape[0]))
         ax.set_yticks(np.arange(matrix.shape[0]))
         ax.get_xaxis().set_ticklabels([])
-        ax.get_yaxis().set_ticklabels(self.control.get_structure_names())
+        names = self.control.get_structure_names()
+        for i, name in enumerate(names):
+            n = self.ncells[name]
+            names[i] = f"{name} (N={n})" if n is not None else name
+        ax.get_yaxis().set_ticklabels(names)
         for _, spine in ax.spines.items():
             spine.set_visible(False)
         ax.set_xticks(np.arange(ns + 1) - 0.5, minor=True)
@@ -227,11 +242,12 @@ class ConcordancePlotMaker(PlotMaker):
         ax.set_title(prefix)
         plt.tight_layout()
         self.figs.append((fig, prefix))
-        return
+        return prefix
 
-    def make_dendrogram(self, matrix):
+    def make_dendrogram(self, matrix, **kwargs):
+        method = "average"
         try:
-            Z = spcluster.hierarchy.linkage(matrix, "average")
+            Z = spcluster.hierarchy.linkage(matrix, method)
         except Exception as ex:
             print(f"Can't generate the dendrogram. Possible NaN in matrix: {ex}")
             return
@@ -239,6 +255,8 @@ class ConcordancePlotMaker(PlotMaker):
         fig, ax = plt.subplots(1, 1, figsize=(8, 8))
         _ = spcluster.hierarchy.dendrogram(Z, labels=self.control.get_structure_names(), leaf_rotation=90)
         desc = self.device.get_correlation_matrix_file_prefix(self.row)
+        if "suffix" in kwargs:
+            desc += kwargs["suffix"]
         ax.set_title(desc)
         plt.tight_layout()
         self.figs.append((fig, "dendrogram_"+desc))
