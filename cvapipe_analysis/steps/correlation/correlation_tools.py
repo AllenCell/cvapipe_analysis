@@ -35,14 +35,15 @@ class CorrelationCalculator(io.DataProducer):
 
     def read_representation_as_boolean(self, eindex):
         i, index = eindex
-        rep = self.read_parameterized_intensity(index)
-        rep = rep.astype(bool).flatten()
-        rep[0] = True # Avoid ill computation
+        rep = self.read_parameterized_intensity(index).astype(bool).flatten()
+        if not rep.sum():
+            self.usable[i] = False
         self.reps[i] = rep
         return
 
     def load_representations(self):
         self.ncells = len(self.row.CellIds)
+        self.usable = np.ones(self.ncells, dtype=bool)
         self.reps = np.zeros((self.ncells, self.rep_length), dtype=bool)
         repsize = int(sys.getsizeof(self.reps)) / float(1 << 20)
         print(f"Representations shape: {self.reps.shape} ({self.reps.dtype}, {repsize:.1f}Mb)")
@@ -65,12 +66,16 @@ class CorrelationCalculator(io.DataProducer):
 
     def correlate_ij(self, ij):
         i, j = ij
-        self.corrs[i, j] = self.corrs[j, i] = bincorr.calculate(self.reps[i], self.reps[j], self.rep_length)
+        corr = np.nan
+        if self.usable[i] and self.usable[j]:
+            corr = bincorr.calculate(self.reps[i], self.reps[j], self.rep_length)
+        self.corrs[i, j] = self.corrs[j, i] = corr
         return
 
     def workflow(self):
         self.load_representations()
         npairs = int(self.ncells*(self.ncells-1)/2)
+
         _ = Parallel(n_jobs=self.ncores, backend="threading")(
             delayed(self.correlate_ij)(ij)
             for ij in tqdm(self.get_next_pair(), total=npairs, miniters=self.ncells)
