@@ -48,7 +48,8 @@ class CorrelationCalculator(io.DataProducer):
         repsize = int(sys.getsizeof(self.reps)) / float(1 << 20)
         print(f"Representations shape: {self.reps.shape} ({self.reps.dtype}, {repsize:.1f}Mb)")
 
-        self.corrs = np.zeros((self.ncells, self.ncells), dtype=np.float32)
+        self.corrs = np.full((self.ncells, self.ncells), np.nan, dtype=np.float32)
+        np.fill_diagonal(self.corrs, 1.0)
         corrssize = int(sys.getsizeof(self.corrs)) / float(1 << 20)
         print(f"Correlations shape: {self.corrs.shape} ({self.corrs.dtype}, {corrssize:.1f}Mb)")
 
@@ -75,7 +76,6 @@ class CorrelationCalculator(io.DataProducer):
     def workflow(self):
         self.load_representations()
         npairs = int(self.ncells*(self.ncells-1)/2)
-
         _ = Parallel(n_jobs=self.ncores, backend="threading")(
             delayed(self.correlate_ij)(ij)
             for ij in tqdm(self.get_next_pair(), total=npairs, miniters=self.ncells)
