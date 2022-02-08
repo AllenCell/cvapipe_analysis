@@ -43,9 +43,15 @@ class Correlation(Step):
             device = io.LocalStagingIO(control)
             df = device.load_step_manifest("preprocessing")
             space = shapespace.ShapeSpace(control)
+            if control.get_number_of_map_points() == 1:
+                # Do not remove extreme points when working on
+                # matched datasets for whcih the number of bins
+                # equals 1 (consistency with previous analysis).
+                space.set_remove_extreme_points(False)
             space.execute(df)
             variables = control.get_variables_values_for_aggregation()
             df_agg = space.get_aggregated_df(variables, include_cellIds=True)
+            df_agg = space.sample_cell_ids(df_agg, 1000)
             agg_cols = [f for f in df_agg.columns if f not in ["CellIds", "structure"]]
             df_agg = df_agg.groupby(agg_cols).agg({"CellIds": sum})
             df_agg = df_agg.reset_index()
