@@ -53,6 +53,7 @@ class Stereotypy(Step):
                 pmaker.set_dataframe(df)
                 pmaker.set_row(row)
                 if row.mpId == 1:
-                    pmaker.set_extra_values({"mpId": [1,2,3,4,5,6,7,8,9]})
+                    pmaker.set_extra_values({"mpId": df_agg.mpId.unique().tolist()})
                 pmaker.execute(display=False)
+
 
