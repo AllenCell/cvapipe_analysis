@@ -97,10 +97,6 @@ class LocalStagingIO:
             return code, intensity_names
         return code
 
-    def read_parameterized_intensity_as_boolean(self, index):
-        code = self.read_parameterized_intensity(index)
-        return code.astype(np.bool)
-
     def read_agg_parameterized_intensity(self, row):
         path = f"aggregation/repsagg/{self.get_aggrep_file_name(row)}"
         path = self.control.get_staging() / path
