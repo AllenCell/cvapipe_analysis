@@ -105,12 +105,9 @@ if __name__ == "__main__":
     df = df.T
     df.CellIds = df.CellIds.astype(object)
     for index, row in df.iterrows():
-        df.at[index,"CellIds"] = eval(row.CellIds)[:600]
+        df.at[index,"CellIds"] = eval(row.CellIds)
     calculator = CorrelationCalculator(control)
     for _, row in df.iterrows():
         '''Concurrent processes inside. Do not use concurrent here.'''
-        calculator.set_row(row)
-        calculator.workflow()
-        print(f"<REPS> = {calculator.reps.mean():.10f}")
-        print(f"<CORR> = {calculator.corrs.mean():.10f}") 
+        calculator.execute(row)
 
