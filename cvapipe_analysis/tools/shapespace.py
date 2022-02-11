@@ -287,7 +287,7 @@ class ShapeSpace(ShapeSpaceBasic):
     def get_cells_inside_ndsphere_of_radius(self, radius=4.0):
         # Radius sigma=4.0 has been optimized to recapitulate the
         # number of center per structure averaged over 8 center bins.
-        # Refer to notebook AverageDendrogramFrom8DimSphere for more
+        # Refer to notebook Optimization8DimSphere for more
         # details on the optimization process.
         df_agg = pd.DataFrame([])
         dist = np.sqrt(np.power(self.shape_modes.values, 2).mean(axis=1))
