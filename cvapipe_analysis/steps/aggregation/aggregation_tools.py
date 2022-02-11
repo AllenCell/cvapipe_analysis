@@ -88,8 +88,13 @@ class Aggregator(io.DataProducer):
         n = self.control.get_number_of_interpolating_points()
         alias_outer = self.control.get_outer_most_alias_to_parameterize()
         alias_inner = self.control.get_inner_most_alias_to_parameterize()
-        mesh_outer = self.read_map_point_mesh(alias_outer)
-        mesh_inner = self.read_map_point_mesh(alias_inner)
+        reader = self.read_map_point_mesh
+        if self.row.shape_mode == "NdSphere":
+            # Change the reader function in case we are aggregating
+            # cells inside the NdSphere
+            reader = self.read_mean_shape_mesh
+        mesh_outer = reader(alias_outer)
+        mesh_inner = reader(alias_inner)
         domain, origin = cytoparam.voxelize_meshes([mesh_outer, mesh_inner])
         coords_param, _ = cytoparam.parameterize_image_coordinates(
             seg_mem=(domain>0).astype(np.uint8),

@@ -36,7 +36,9 @@ class Aggregation(Step):
             space = shapespace.ShapeSpace(control)
             space.execute(df)
             variables = control.get_variables_values_for_aggregation()
-            df_agg = space.get_aggregated_df(variables)
+            df_agg = space.get_aggregated_df(variables, include_cellIds=True)
+            df_sphere = space.get_cells_inside_ndsphere_of_radius()
+            df_agg = df_agg.append(df_sphere, ignore_index=True)
 
             if distribute:
 
