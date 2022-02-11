@@ -52,6 +52,9 @@ class Correlation(Step):
             variables = control.get_variables_values_for_aggregation()
             df_agg = space.get_aggregated_df(variables, include_cellIds=True)
             df_agg = space.sample_cell_ids(df_agg, 1000)
+            df_sphere = space.get_cells_inside_ndsphere_of_radius()
+            df_agg = df_agg.append(df_sphere, ignore_index=True)
+
             agg_cols = [f for f in df_agg.columns if f not in ["CellIds", "structure"]]
             df_agg = df_agg.groupby(agg_cols).agg({"CellIds": sum})
             df_agg = df_agg.reset_index()

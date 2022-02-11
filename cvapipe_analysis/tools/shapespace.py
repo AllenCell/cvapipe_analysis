@@ -270,6 +270,43 @@ class ShapeSpace(ShapeSpaceBasic):
         df.to_html(self.control.get_staging()/path)
         return
 
+    def get_average_number_of_cells_in_center_bin(self):
+        data = []
+        for sm in self.control.get_shape_modes():
+            self.set_active_shape_mode(sm, digitize=True)
+            self.set_active_map_point_index(self.control.get_center_map_point_index())
+            CellIds = self.get_active_cellids()
+            serie = self.df.loc[CellIds, ["structure_name"]].groupby("structure_name").size()
+            serie.name = sm
+            data.append(serie)
+        df_agg = pd.DataFrame(data).T
+        df_agg = df_agg.reindex(self.control.get_gene_names())
+        df_agg = pd.DataFrame(df_agg.mean(axis=1), columns=["AvgNumberOfCells"])
+        return df_agg
+
+    def get_cells_inside_ndsphere_of_radius(self, radius=4.0):
+        # Radius sigma=4.0 has been optimized to recapitulate the
+        # number of center per structure averaged over 8 center bins.
+        # Refer to notebook AverageDendrogramFrom8DimSphere for more
+        # details on the optimization process.
+        df_agg = pd.DataFrame([])
+        dist = np.sqrt(np.power(self.shape_modes.values, 2).mean(axis=1))
+        df_dist = pd.DataFrame({"Distance": dist}, index=self.shape_modes.index)
+        for gene, df_gene in self.df.groupby("structure_name"):
+            CellIds = df_dist.loc[df_dist.Distance<=radius].index
+            CellIds = df_gene.loc[df_gene.index.isin(CellIds)].index.tolist()
+            row = {
+                "shape_mode": "NdSphere",
+                "mpId": 0,
+                "aggtype": "avg", #TODO: make this more flexible
+                "alias": "STR", #TODO: make this more flexible
+                "structure": gene,
+                "CellIds": CellIds
+            }
+            df_agg = df_agg.append(row, ignore_index=True)
+        df_agg.mpId = df_agg.mpId.astype(np.int64)
+        return df_agg
+
 class ShapeSpaceMapper():
     """This class does not follow the design of io.DataProducer
     because its use requires mixing local_staging folder. For this
