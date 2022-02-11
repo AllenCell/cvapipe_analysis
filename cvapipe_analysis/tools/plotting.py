@@ -155,7 +155,7 @@ class ConcordancePlotMaker(PlotMaker):
         self.matrix = self.get_agg_correlation_matrix(update_ncells=True)
         # self.matrix = self.normalize_by_diagonal(self.matrix)
         if not self.work_with_avg_reps:
-            self.set_heatmap_min_max_values(-0.3, 0.3)
+            self.set_heatmap_min_max_values(-0.2, 0.2)
         prefix = self.make_heatmap(self.matrix, suffix=suffix)
         genes = self.control.get_gene_names()
         df_corrs = pd.DataFrame(self.matrix, columns=genes, index=genes)
