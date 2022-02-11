@@ -85,6 +85,15 @@ class LocalStagingIO:
             raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), path)
         return self.read_vtk_polydata(path)
 
+    def read_mean_shape_mesh(self, alias):
+        sm = self.control.get_shape_modes()
+        mpIdc = self.control.get_center_map_point_index()
+        path = f"shapemode/avgshape/{alias}_{sm[0]}_{mpIdc}.vtk"
+        path = self.control.get_staging() / path
+        if not path.is_file():
+            raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), path)
+        return self.read_vtk_polydata(path)
+
     def read_parameterized_intensity(self, index, return_intensity_names=False):
         code, intensity_names = None, []
         path = f"parameterization/representations/{index}.tif"
