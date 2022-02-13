@@ -284,13 +284,15 @@ class ShapeSpace(ShapeSpaceBasic):
         df_agg = pd.DataFrame(df_agg.mean(axis=1), columns=["AvgNumberOfCells"])
         return df_agg
 
-    def get_cells_inside_ndsphere_of_radius(self, radius=4.0):
+    def get_cells_inside_ndsphere_of_radius(self, radius=0.72):
         # Radius sigma=4.0 has been optimized to recapitulate the
         # number of center per structure averaged over 8 center bins.
         # Refer to notebook Optimization8DimSphere for more
         # details on the optimization process.
         df_agg = pd.DataFrame([])
-        dist = np.sqrt(np.power(self.shape_modes.values, 2).mean(axis=1))
+        dist = self.shape_modes.values.copy()
+        dist /= dist.std(axis=0, keepdims=True)
+        dist = np.sqrt(np.power(dist, 2).mean(axis=1))
         df_dist = pd.DataFrame({"Distance": dist}, index=self.shape_modes.index)
         for gene, df_gene in self.df.groupby("structure_name"):
             CellIds = df_dist.loc[df_dist.Distance<=radius].index
