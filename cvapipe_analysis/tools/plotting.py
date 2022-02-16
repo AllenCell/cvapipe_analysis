@@ -197,7 +197,7 @@ class ConcordancePlotMaker(PlotMaker):
         genes = self.control.get_gene_names()
         if self.work_with_avg_reps:
             matrix = self.device.get_correlation_matrix_from_avg_reps(row)
-            np.fill_diagonal(matrix, 0)
+            # np.fill_diagonal(matrix, 0)
         else:
             matrix = self.get_aggregated_matrix_from_df(genes, df_corr)
         if relative_to_center:
