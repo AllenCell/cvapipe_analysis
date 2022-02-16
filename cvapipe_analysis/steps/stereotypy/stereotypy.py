@@ -44,16 +44,22 @@ class Stereotypy(Step):
             space.execute(df)
             variables = control.get_variables_values_for_aggregation()
             df_agg = space.get_aggregated_df(variables, include_cellIds=False)
+            variables.update({"shape_mode": ["NdSphere"], "mpId": [control.get_center_map_point_index()]})
+            df_sphere = space.get_aggregated_df(variables, include_cellIds=False)
+            df_agg = df_agg.append(df_sphere, ignore_index=True)
             df_agg =  df_agg.drop(columns=["structure"]).drop_duplicates().reset_index()
 
             log.info(f"Generating plots...")
 
             for index, row in tqdm(df_agg.iterrows(), total=len(df_agg)):
-                pmaker = plotting.StereotypyPlotMaker(control)
-                pmaker.set_dataframe(df)
-                pmaker.set_row(row)
-                if row.mpId == 1:
-                    pmaker.set_extra_values({"mpId": df_agg.mpId.unique().tolist()})
-                pmaker.execute(display=False)
+                try:
+                    pmaker = plotting.StereotypyPlotMaker(control)
+                    pmaker.set_heatmap_min_max_values(-0.2, 0.2)
+                    pmaker.set_dataframe(df)
+                    pmaker.set_row(row)
+                    if row.mpId == 1:
+                        pmaker.set_extra_values({"mpId": df_agg.mpId.unique().tolist()})
+                    pmaker.execute(display=False)
+                except: pass
 
 
