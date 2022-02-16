@@ -300,7 +300,7 @@ class ShapeSpace(ShapeSpaceBasic):
             CellIds = df_gene.loc[df_gene.index.isin(CellIds)].index.tolist()
             row = {
                 "shape_mode": "NdSphere",
-                "mpId": 0,
+                "mpId": self.control.get_center_map_point_index(),
                 "aggtype": "avg", #TODO: make this more flexible
                 "alias": "STR", #TODO: make this more flexible
                 "structure": gene,
