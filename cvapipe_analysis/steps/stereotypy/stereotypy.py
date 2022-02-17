@@ -47,7 +47,7 @@ class Stereotypy(Step):
             variables.update({"shape_mode": ["NdSphere"], "mpId": [control.get_center_map_point_index()]})
             df_sphere = space.get_aggregated_df(variables, include_cellIds=False)
             df_agg = df_agg.append(df_sphere, ignore_index=True)
-            df_agg =  df_agg.drop(columns=["structure"]).drop_duplicates().reset_index()
+            df_agg =  df_agg.drop(columns=["structure"]).drop_duplicates().reset_index(drop=True)
 
             log.info(f"Generating plots...")
 
