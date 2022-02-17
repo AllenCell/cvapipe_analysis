@@ -31,6 +31,12 @@ class ShapeSpaceBasic():
         self.active_shapeMode = sm
 
     @staticmethod
+    def get_aggregated_df(variables):
+        df = ShapeSpaceBasic.expand(variables)
+        df.mpId = df.mpId.astype(np.int64)
+        return df
+
+    @staticmethod
     def expand(dc):
         '''Works like the function expand from snakemake. Given
         a dict like this:
@@ -284,8 +290,8 @@ class ShapeSpace(ShapeSpaceBasic):
         df_agg = pd.DataFrame(df_agg.mean(axis=1), columns=["AvgNumberOfCells"])
         return df_agg
 
-    def get_cells_inside_ndsphere_of_radius(self, radius=2.10):
-        # Radius sigma=4.0 has been optimized to recapitulate the
+    def get_cells_inside_ndsphere_of_radius(self, radius=2.10, return_dist=False):
+        # Radius has been optimized to recapitulate the
         # number of center per structure averaged over 8 center bins.
         # Refer to notebook Optimization8DimSphere for more
         # details on the optimization process.
@@ -308,6 +314,8 @@ class ShapeSpace(ShapeSpaceBasic):
             }
             df_agg = df_agg.append(row, ignore_index=True)
         df_agg.mpId = df_agg.mpId.astype(np.int64)
+        if return_dist:
+            return df_agg, df_dist
         return df_agg
 
 class ShapeSpaceMapper():
