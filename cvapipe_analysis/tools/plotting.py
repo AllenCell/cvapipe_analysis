@@ -33,15 +33,15 @@ class PlotMaker(io.DataProducer):
     their are saved.
     """
 
-    figs = []
-    df = None
     dpi = 72
-    dataframes = []
     heatmap_vmin = -1.0
     heatmap_vmax = 1.0
 
     def __init__(self, control):
         super().__init__(control)
+        self.df = None
+        self.figs = []
+        self.dataframes = []
         self.device = io.LocalStagingIO(control)
 
     def workflow(self):
