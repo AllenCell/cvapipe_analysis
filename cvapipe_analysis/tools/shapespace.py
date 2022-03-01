@@ -326,6 +326,7 @@ class ShapeSpaceMapper():
 
     grouping = None
     normalize = True
+    make_plots = True
     distance_threshold = None
     full_base_dataset = False
     allow_similar_cellids_off = True
@@ -360,6 +361,9 @@ class ShapeSpaceMapper():
     def set_grouping(self, grouping):
         self.pmaker.set_grouping(grouping)
 
+    def set_make_plots_off(self):
+        self.make_plots = False
+
     def map(self, datasets: List[Path]):
         for ds, paths in datasets.items():
             if paths["perturbed"] == self.control.get_staging():
@@ -378,8 +382,9 @@ class ShapeSpaceMapper():
         self.create_nn_mapping()
         self.flag_close_pairs()
         self.reconstruct_matched_datasets_mean_cell()
-        self.pmaker.set_dataframe(self.result)
-        self.pmaker.execute(display=False, grouping=self.grouping)
+        if self.make_plots:
+            self.pmaker.set_dataframe(self.result)
+            self.pmaker.execute(display=False, grouping=self.grouping)
 
     def flag_close_pairs(self):
         self.result["Match"] = self.result.Dist < self.distance_threshold
