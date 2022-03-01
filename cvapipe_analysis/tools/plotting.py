@@ -668,43 +668,46 @@ class ShapeSpaceMapperPlotMaker(PlotMaker):
         self.grouping = grouping
 
     @staticmethod
-    def comparative_hists(df1, df2, title):
+    def comparative_hists(df1, df2, title, bin_edges, display_both=True):
         nc = len(df1.columns)
-
-        args = {"bins": np.linspace(-4.0, 4.0, 17), "density": True}
-        fig, axs = plt.subplots(nc, 1, figsize=(1.5,1*nc), sharex=False, gridspec_kw={"hspace": 0.5})
+        args = {"bins": bin_edges, "density": True}
+        fig, axs = plt.subplots(1, nc, figsize=(1.5*nc, 1.5), sharex=False, gridspec_kw={"wspace": 0.2})
         axs = [axs] if len(axs)==1 else axs
         for sm, ax in zip(df1.columns, axs):
             ax.set_frame_on(False)
-            ax.hist(df1[sm], **args, alpha=0.5, fc="black")
-            ax.hist(df2[sm], **args, histtype="step", linewidth=1, edgecolor="#FF3264")
+            if display_both:
+                ax.hist(df1[sm], **args, alpha=0.4, fc="gray")
+                ax.hist(df2[sm], **args, histtype="step", linewidth=1, edgecolor="#FF3264")
+            else:
+                ax.hist(df1[sm], **args, histtype="step", linewidth=1, edgecolor="black")
             # ax.set_xlabel(sm, fontsize=12)
             ax.set_ylim(0, 1)
-            ax.set_xlim(-4, 4)
+            ax.set_xlim(int(bin_edges[0]-1), int(bin_edges[-1]+1))
             ax.get_xaxis().tick_bottom()
-            ax.set_xticks([-4, -2, 0, 2, 4])
+            ax.set_xticks([-2, 0, 2])
             ax.axes.get_yaxis().set_visible(False)
             xmin, xmax = ax.get_xaxis().get_view_interval()
             ymin, ymax = ax.get_yaxis().get_view_interval()
             ax.add_artist(pltlines.Line2D((xmin, xmax), (ymin, ymin), color='black', linewidth=1))
-
-        plt.suptitle(title, fontsize=18)
-        plt.tight_layout()
+        # plt.tight_layout()
         return fig
 
-    def plot_mapping_1d(self):
+    def plot_mapping_1d(self, display_both=True):
         df_base = self.df.loc["base"]
         sms = self.control.get_shape_modes()
+        bin_centers = self.control.get_map_points()
+        binw = 0.5*np.diff(bin_centers).mean() if len(bin_centers) > 1 else 1
+        bin_edges = np.unique([(b-binw, b+binw) for b in bin_centers])
         for dsname, df in self.df.groupby(level="dataset", sort=False):
             if dsname != "base":
-                fig = self.comparative_hists(df_base[sms], df[sms], dsname)
+                fig = self.comparative_hists(df_base[sms], df[sms], dsname, bin_edges)
                 self.figs.append((fig, f"mapping_{dsname}"))
                 # Same plots for matching pairs
                 ds_ids = df.loc[df.Match==True].index
                 NNCellIds = df.loc[ds_ids].NNCellId.values
                 bs_ids = [(sname, nnid) for ((_, sname, _), nnid) in zip(ds_ids, NNCellIds)]
                 bs_ids = pd.MultiIndex.from_tuples(bs_ids).drop_duplicates()
-                fig = self.comparative_hists(df_base.loc[bs_ids, sms], df.loc[ds_ids, sms], dsname)
+                fig = self.comparative_hists(df_base.loc[bs_ids, sms], df.loc[ds_ids, sms], dsname, bin_edges, display_both)
                 self.figs.append((fig, f"mapping_{dsname}_match"))
 
     def plot_mapping_2d(self):
