@@ -106,6 +106,28 @@ class LocalStagingIO:
             return code, intensity_names
         return code
 
+    def read_normalized_parameterized_intensity_of_alias(self, index, alias):
+        reps, names = self.read_parameterized_intensity(index, return_intensity_names=True)
+        if reps is None:
+            return None
+        if reps.ndim == 2:
+            reps = reps.reshape(1, *reps.shape)
+        rep = reps[names.index(alias)]
+        amount = int((rep>0).sum())
+        if amount > 0:
+            rep[rep>0] = 1.0
+            rep /= amount
+        return rep
+
+    def read_parameterized_intensity_of_alias(self, index, alias):
+        reps, names = self.read_parameterized_intensity(index, return_intensity_names=True)
+        if reps is None:
+            return None
+        if reps.ndim == 2:
+            reps = reps.reshape(1, *reps.shape)
+        rep = reps[names.index(alias)]
+        return rep
+
     def read_agg_parameterized_intensity(self, row):
         path = f"aggregation/repsagg/{self.get_aggrep_file_name(row)}"
         path = self.control.get_staging() / path
