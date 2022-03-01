@@ -37,11 +37,12 @@ class Concordance(Step):
             variables = control.get_variables_values_for_aggregation()
             variables = control.duplicate_variable(variables, "structure")
             df_agg = space.get_aggregated_df(variables, include_cellIds=False)
-            variables = control.get_variables_values_for_aggregation()
-            variables.update({"shape_mode": ["NdSphere"], "mpId": [control.get_center_map_point_index()]})
-            variables = control.duplicate_variable(variables, "structure")
-            df_sphere = space.get_aggregated_df(variables, include_cellIds=False)
-            df_agg = df_agg.append(df_sphere, ignore_index=True)
+            if len(control.get_map_points()) > 1:
+                variables = control.get_variables_values_for_aggregation()
+                variables.update({"shape_mode": ["NdSphere"], "mpId": [control.get_center_map_point_index()]})
+                variables = control.duplicate_variable(variables, "structure")
+                df_sphere = space.get_aggregated_df(variables, include_cellIds=False)
+                df_agg = df_agg.append(df_sphere, ignore_index=True)
 
             if distribute:
 
@@ -61,18 +62,17 @@ class Concordance(Step):
 
             variables = control.get_variables_values_for_aggregation()
             df_agg = space.get_aggregated_df(variables, include_cellIds=False)
-            variables.update({"shape_mode": ["NdSphere"], "mpId": [control.get_center_map_point_index()]})
-            df_sphere = space.get_aggregated_df(variables, include_cellIds=False)
-            df_agg = df_agg.append(df_sphere, ignore_index=True)
+            if len(control.get_map_points()) > 1:
+                variables.update({"shape_mode": ["NdSphere"], "mpId": [control.get_center_map_point_index()]})
+                df_sphere = space.get_aggregated_df(variables, include_cellIds=False)
+                df_agg = df_agg.append(df_sphere, ignore_index=True)
             df_agg =  df_agg.drop(columns=["structure"]).drop_duplicates().reset_index(drop=True)
 
             for index, row in tqdm(df_agg.iterrows(), total=len(df_agg)):
-                try:
-                    for mode in [True, False]:
-                        pmaker = plotting.ConcordancePlotMaker(control)
-                        pmaker.use_average_representations(mode)
-                        pmaker.set_dataframe(df)
-                        pmaker.set_row(row)
-                        pmaker.execute(display=False)
-                except: pass
+                for mode in [True, False]:
+                    pmaker = plotting.ConcordancePlotMaker(control)
+                    pmaker.use_average_representations(mode)
+                    pmaker.set_dataframe(df)
+                    pmaker.set_row(row)
+                    pmaker.execute(display=False)
 
