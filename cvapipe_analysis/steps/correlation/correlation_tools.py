@@ -36,50 +36,26 @@ class CorrelationCalculator(io.DataProducer):
     def read_representation_as_boolean(self, eindex):
         i, index = eindex
         rep = self.read_parameterized_intensity(index).astype(bool).flatten()
-        if not rep.sum():
-            self.usable[i] = False
         self.reps[i] = rep
         return
 
     def load_representations(self):
         self.ncells = len(self.row.CellIds)
-        self.usable = np.ones(self.ncells, dtype=bool)
         self.reps = np.zeros((self.ncells, self.rep_length), dtype=bool)
         repsize = int(sys.getsizeof(self.reps)) / float(1 << 20)
         print(f"Representations shape: {self.reps.shape} ({self.reps.dtype}, {repsize:.1f}Mb)")
-
-        self.corrs = np.full((self.ncells, self.ncells), np.nan, dtype=np.float32)
-        np.fill_diagonal(self.corrs, 1.0)
-        corrssize = int(sys.getsizeof(self.corrs)) / float(1 << 20)
-        print(f"Correlations shape: {self.corrs.shape} ({self.corrs.dtype}, {corrssize:.1f}Mb)")
-
-        print(f"Loading representations using {self.ncores} cores...")
 
         _ = Parallel(n_jobs=self.ncores, backend="threading")(
             delayed(self.read_representation_as_boolean)(eindex)
             for eindex in tqdm(enumerate(self.row.CellIds), total=self.ncells)
         )
 
-    def get_next_pair(self):
-        for i in range(self.ncells):
-            for j in range(i+1, self.ncells):
-                yield (i, j)
-
-    def correlate_ij(self, ij):
-        i, j = ij
-        corr = np.nan
-        if self.usable[i] and self.usable[j]:
-            corr = bincorr.calculate(self.reps[i], self.reps[j], self.rep_length)
-        self.corrs[i, j] = self.corrs[j, i] = corr
-        return
+    def correlate_all(self):
+        self.corrs = np.corrcoef(self.reps, dtype=np.float32)
 
     def workflow(self):
         self.load_representations()
-        npairs = int(self.ncells*(self.ncells-1)/2)
-        _ = Parallel(n_jobs=self.ncores, backend="threading")(
-            delayed(self.correlate_ij)(ij)
-            for ij in tqdm(self.get_next_pair(), total=npairs, miniters=self.ncells)
-        )
+        self.correlate_all()
         return
 
     def get_output_file_name(self):
