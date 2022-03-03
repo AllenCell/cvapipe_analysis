@@ -175,7 +175,7 @@ class LocalStagingIO:
             ) for c in df_corr.index], name=["structure", "CellId", "rank"])
         return df_corr
 
-    def get_correlation_matrix_from_avg_reps(self, row):
+    def get_correlation_matrix_of_avg_reps(self, row):
         genes = self.control.get_gene_names()
         matrix = np.ones((len(genes), len(genes)))
         for gid1, gene1 in enumerate(genes):
@@ -192,6 +192,16 @@ class LocalStagingIO:
         if genes is not None:
             fname = f"{row.aggtype}-{row.alias}-{genes[0]}-{genes[1]}-{row.shape_mode}-{row.mpId}"
         return fname
+
+    def get_mean_correlation_matrix_of_reps(self, row, return_ncells=False):
+        prefix = self.get_prefix_from_row(row)
+        df_corr = pd.read_csv(f"{self.control.get_staging()}/concordance/plots/{prefix}_AVG_CORR_OF_REPS.csv", index_col=0)
+        if return_ncells:
+            CellIds = pd.read_csv(f"{self.control.get_staging()}/correlation/values/{prefix}.csv", index_col=0).CellIds
+            df = self.load_step_manifest("preprocessing")
+            df = pd.DataFrame(df.loc[CellIds].groupby("structure_name").size(), columns=["ncells"])
+            return df_corr, prefix, df
+        return df_corr, prefix
 
     @staticmethod
     def load_data_from_csv(parameters, use_fms=False):
