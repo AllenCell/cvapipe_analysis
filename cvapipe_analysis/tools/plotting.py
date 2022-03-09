@@ -244,6 +244,54 @@ class ConcordancePlotMaker(PlotMaker):
         self.figs.append((fig, prefix))
         return prefix
 
+    def make_confidence_heatmap(self, matrix, conf_matrix, size_scale=49, diagonal=False, cmap="RdBu", **kwargs):
+        yxfac = 1 if matrix.shape[0]==matrix.shape[1] else 3*matrix.shape[1]/matrix.shape[0]
+        fig, ax = plt.subplots(1, 1, figsize=(8*yxfac, 8), dpi=self.dpi)
+        idxname = matrix.index.name
+        colname = matrix.columns.name
+        m = matrix.stack().reset_index()
+        m['conf'] = conf_matrix.flatten()
+        # Mapping from column names to integer coordinates
+        x = m[colname]
+        y = m[idxname]
+        x_labels = [v for v in m[colname].unique()]
+        y_labels = [v for v in m[idxname].unique()]
+        x_to_num = {p[1]:p[0] for p in enumerate(x_labels)} 
+        y_to_num = {p[1]:p[0] for p in enumerate(y_labels)} 
+
+        ax.scatter(
+            x=x.map(x_to_num), # Use mapping for x
+            y=y.map(y_to_num), # Use mapping for y
+            c=-m[0],
+            s=m['conf'] * size_scale, # Vector of square sizes, proportional to size parameter
+            marker='s', # Use square as scatterplot marker,
+            ec="black",
+            cmap=cmap
+        )
+        ns = conf_matrix.shape[0]
+        ax.invert_yaxis()
+        ax.set_yticks([y_to_num[v] for v in y_labels])
+        names = self.control.get_structure_names()
+        for i, name in enumerate(names):
+            n = self.ncells[name]
+            names[i] = f"{name} (N={n})" if n is not None else name
+        ax.set_yticklabels(names)
+        for _, spine in ax.spines.items():
+            spine.set_visible(False)
+        ax.get_xaxis().set_ticklabels([])
+        ax.tick_params(which="both", bottom=False, left=False)
+        prefix = self.device.get_correlation_matrix_file_prefix(self.row)
+        if diagonal:
+            ax.plot([-0.5, ns - 0.5], [-0.5, ns - 0.5], "k-", linewidth=2)
+        if "suffix" in kwargs:
+            prefix += kwargs["suffix"]
+        if "xlim" in kwargs:
+            ax.set_xlim(*kwargs["xlim"])
+        ax.set_title(prefix)
+        plt.tight_layout()
+        self.figs.append((fig, prefix))
+        return prefix
+
     def make_dendrogram(self, matrix, **kwargs):
         method = "average"
         try:
