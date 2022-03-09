@@ -1,8 +1,6 @@
-import yaml
 import numpy as np
 import multiprocessing
 from pathlib import Path
-from aicsimageio import AICSImage
 
 
 class Controller:

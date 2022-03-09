@@ -1,21 +1,15 @@
 import vtk
-import math
-import operator
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
 from pathlib import Path
 from typing import Optional
-from functools import reduce
-from skimage import io as skio
 import matplotlib.pyplot as plt
 from matplotlib import animation
 from matplotlib import lines as pltlines
 from scipy import stats as spstats
 from scipy import cluster as spcluster
 from aicsimageio import AICSImage, writers
-from vtk.util import numpy_support as vtknp
-from cvapipe_analysis.tools import io, shapespace
 
 plt.rcParams['ps.fonttype'] = 42
 plt.rcParams['pdf.fonttype'] = 42

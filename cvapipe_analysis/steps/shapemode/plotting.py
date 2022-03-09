@@ -1,12 +1,14 @@
 import re
 import warnings
+from pathlib import Path
+from typing import List, Optional
+
 import matplotlib
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from pathlib import Path
-import matplotlib.pyplot as plt
 from scipy import stats as scistats
-from typing import Dict, List, Optional, Union
+
 
 def dataset_summary_table(
     df: pd.DataFrame,

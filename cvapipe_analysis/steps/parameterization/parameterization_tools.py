@@ -1,14 +1,9 @@
-import os
-import json
 import argparse
 import concurrent
 import pandas as pd
-from pathlib import Path
-from aicsimageio import writers
 from aicscytoparam import cytoparam
 
 from cvapipe_analysis.tools import io, general, controller
-from cvapipe_analysis.steps.compute_features import compute_features_tools
 
 class Parameterizer(io.DataProducer):
     """

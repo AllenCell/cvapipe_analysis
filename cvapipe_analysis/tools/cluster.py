@@ -3,7 +3,6 @@ import shutil
 import subprocess
 import numpy as np
 import pandas as pd
-from tqdm import tqdm
 from pathlib import Path
 import cvapipe_analysis
 
