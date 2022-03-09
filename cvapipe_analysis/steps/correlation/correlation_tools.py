@@ -9,7 +9,7 @@ from pathlib import Path
 from skimage import io as skio
 from joblib import Parallel, delayed
 
-from cvapipe_analysis.tools import io, general, controller, bincorr
+from cvapipe_analysis.tools import io, general, controller
 
 class CorrelationCalculator(io.DataProducer):
     """
