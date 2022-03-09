@@ -124,3 +124,6 @@ ENV/
 .mypy_cache/
 workflow_config.json
 .distribute/*
+
+# MacOS
+*.DS_Store

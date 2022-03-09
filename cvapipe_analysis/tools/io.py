@@ -207,7 +207,7 @@ class LocalStagingIO:
         if use_fms:
             fms = FileManagementSystem()
             fmsid = parameters['fmsid']
-            record = fms.find_one_by_id(fmsid)
+            record = fms.get_file_by_id(fmsid)
             if record is None:
                 raise ValueError(f"Record {fmsid} not found on FMS.")
             path = record.path
