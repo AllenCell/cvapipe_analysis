@@ -10,6 +10,7 @@ from matplotlib import lines as pltlines
 from scipy import stats as spstats
 from scipy import cluster as spcluster
 from aicsimageio import AICSImage, writers
+from cvapipe_analysis.tools import io
 
 plt.rcParams['ps.fonttype'] = 42
 plt.rcParams['pdf.fonttype'] = 42
