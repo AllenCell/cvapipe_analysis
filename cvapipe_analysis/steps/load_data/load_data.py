@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 import logging
+import os
 from pathlib import Path
 from typing import Dict, List, Optional, Union
 from datastep import Step, log_run_params
@@ -22,12 +23,14 @@ class LoadData(Step):
     def run(self, **kwargs):
 
         with general.configuration(self.step_local_staging_dir) as control:
-
-            loader = DataLoader(control)
-            df = loader.load(kwargs)
-
-            self.manifest = df
             manifest_path = self.step_local_staging_dir / 'manifest.csv'
-            self.manifest.to_csv(manifest_path)
+        
+            if control.overwrite() or not os.path.isfile(manifest_path):
+                loader = DataLoader(control)
+                df = loader.load(kwargs)
+                self.manifest = df
+                self.manifest.to_csv(manifest_path)
+            else:
+                print(f"Skipping LoadData, manifest already exists at {manifest_path}")
 
         return manifest_path
