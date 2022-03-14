@@ -2,7 +2,7 @@ import numpy as np
 from skimage import measure as skmeasure
 from aicsimageio import writers
 
-from cvapipe_analysis.tools import io
+from cvapipe_analysis.tools import io, general
 
 class ObjectCollector(io.DataProducer):
     """
@@ -45,10 +45,9 @@ class ObjectCollector(io.DataProducer):
         return objs
 
     def save_img(self, img, prefix):
-        save_as = self.abs_path_local_staging/f"{self.subfolder}/{prefix}.tif"
-        save_as.parent.mkdir(parents=True, exist_ok=True)
-        with writers.ome_tiff_writer.OmeTiffWriter(save_as, overwrite_file=True) as writer:
-            writer.save(img, dimension_order = 'CZYX', image_name = save_as.stem)
+        fpath = self.abs_path_local_staging/f"{self.subfolder}/{prefix}.tif"
+        fpath.parent.mkdir(parents=True, exist_ok=True)
+        writers.ome_tiff_writer.OmeTiffWriter.save(img, fpath, dimension_order='CZYX')
     
     @staticmethod
     def pack_objs(objs):

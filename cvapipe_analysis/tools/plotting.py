@@ -607,8 +607,7 @@ class ShapeModePlotMaker(PlotMaker):
             gaps[1:-1] = gaps[2:] + gaps[:-2]
         stack = stack[:, :, gaps > 0, :]
         fname = self.control.get_staging() / f"{self.subfolder}/combined.tif"
-        with writers.ome_tiff_writer.OmeTiffWriter(fname, overwrite_file=True) as writer:
-            writer.save(stack, dimension_order='CZYX')
+        writers.ome_tiff_writer.OmeTiffWriter.save(stack, fname, dimension_order='CZYX')
         return
 
     @staticmethod

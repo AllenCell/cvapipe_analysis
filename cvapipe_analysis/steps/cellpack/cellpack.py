@@ -56,9 +56,8 @@ class Cellpack(Step):
                 dna = space.get_dna_mesh_of_bin(b)
                 mem = space.get_mem_mesh_of_bin(b)
                 seg = cytoparam.voxelize_meshes([mem, dna])
-                save_as = save_dir / f"{prefix}.tif"
-                with writers.ome_tiff_writer.OmeTiffWriter(save_as, overwrite_file=True) as writer:
-                    writer.save(seg[0], dimension_order='ZYX', image_name=save_as.stem)
+                fname = save_dir / f"{prefix}.tif"
+                writers.ome_tiff_writer.OmeTiffWriter.save(seg[0], fname, dimension_order='ZYX' )
 
                 CellIds = space.get_active_cellids()
                 with concurrent.futures.ProcessPoolExecutor(cluster.get_ncores()) as executor:
