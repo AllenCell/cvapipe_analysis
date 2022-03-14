@@ -196,8 +196,7 @@ class ConcordancePlotMaker(PlotMaker):
             return
         genes = self.control.get_gene_names()
         if self.work_with_avg_reps:
-            matrix = self.device.get_correlation_matrix_from_avg_reps(row)
-            # np.fill_diagonal(matrix, 0)
+            matrix = self.device.build_correlation_matrix_of_avg_reps_from_corr_values(row)
         else:
             matrix = self.get_aggregated_matrix_from_df(genes, df_corr)
         if relative_to_center:
@@ -205,7 +204,7 @@ class ConcordancePlotMaker(PlotMaker):
             row_center.mpId = mpIdc
             df_corr_center = self.device.read_corelation_matrix(row_center)
             if self.work_with_avg_reps:
-                matrix_center = self.device.get_correlation_matrix_from_avg_reps(row_center)
+                matrix_center = self.device.build_correlation_matrix_of_avg_reps_from_corr_values(row_center)
             else:
                 matrix_center = self.get_aggregated_matrix_from_df(genes, df_corr_center)
             matrix =  matrix_center - matrix
@@ -244,31 +243,38 @@ class ConcordancePlotMaker(PlotMaker):
         self.figs.append((fig, prefix))
         return prefix
 
-    def make_confidence_heatmap(self, matrix, conf_matrix, size_scale=49, diagonal=False, cmap="RdBu", **kwargs):
-        yxfac = 1 if matrix.shape[0]==matrix.shape[1] else 3*matrix.shape[1]/matrix.shape[0]
-        fig, ax = plt.subplots(1, 1, figsize=(8*yxfac, 8), dpi=self.dpi)
-        idxname = matrix.index.name
-        colname = matrix.columns.name
-        m = matrix.stack().reset_index()
-        m['conf'] = conf_matrix.flatten()
-        # Mapping from column names to integer coordinates
-        x = m[colname]
-        y = m[idxname]
-        x_labels = [v for v in m[colname].unique()]
-        y_labels = [v for v in m[idxname].unique()]
-        x_to_num = {p[1]:p[0] for p in enumerate(x_labels)} 
-        y_to_num = {p[1]:p[0] for p in enumerate(y_labels)} 
+    def make_confidence_heatmap(self, matrix, conf_matrix, colors, size_scale=49, hide_colors=[], **kwargs):
 
-        ax.scatter(
-            x=x.map(x_to_num), # Use mapping for x
-            y=y.map(y_to_num), # Use mapping for y
-            c=-m[0],
-            s=m['conf'] * size_scale, # Vector of square sizes, proportional to size parameter
-            marker='s', # Use square as scatterplot marker,
-            ec="black",
-            cmap=cmap
-        )
-        ns = conf_matrix.shape[0]
+        yxfac = 1 if matrix.shape[0]==matrix.shape[1] else 0.36#3*matrix.shape[1]/matrix.shape[0]
+        fig, ax = plt.subplots(1, 1, figsize=(8*yxfac, 8), dpi=self.dpi)
+
+        y_labels = matrix.index
+        x_labels = matrix.columns
+        x_to_num = {xlab:i for i, xlab in enumerate(x_labels)} 
+        y_to_num = {ylab:i for i, ylab in enumerate(y_labels)} 
+
+        for ylab, row in matrix.iterrows():
+            for xlab, value in row.items():
+                if value not in hide_colors:
+                    ax.scatter(
+                        x=x_to_num[xlab],
+                        y=y_to_num[ylab],
+                        color=colors[value],
+                        s=conf_matrix.at[ylab,xlab] * size_scale,
+                        marker='s',
+                        ec="black"
+                    )
+                else:
+                    ax.scatter(
+                        x=x_to_num[xlab],
+                        y=y_to_num[ylab],
+                        color="k",
+                        s=size_scale,
+                        marker='.',
+                        ec="black"
+                    )
+        ns = len(conf_matrix)
+        ax.set_ylim(-1, ns+1)
         ax.invert_yaxis()
         ax.set_yticks([y_to_num[v] for v in y_labels])
         names = self.control.get_structure_names()
@@ -281,8 +287,6 @@ class ConcordancePlotMaker(PlotMaker):
         ax.get_xaxis().set_ticklabels([])
         ax.tick_params(which="both", bottom=False, left=False)
         prefix = self.device.get_correlation_matrix_file_prefix(self.row)
-        if diagonal:
-            ax.plot([-0.5, ns - 0.5], [-0.5, ns - 0.5], "k-", linewidth=2)
         if "suffix" in kwargs:
             prefix += kwargs["suffix"]
         if "xlim" in kwargs:
