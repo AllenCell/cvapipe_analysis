@@ -150,7 +150,6 @@ class LocalStagingIO:
         return df
 
     def read_corelation_matrix(self, row):
-        df = self.load_step_manifest("loaddata")
         fname = self.get_correlation_matrix_file_prefix(row)
 
         try:
@@ -161,6 +160,8 @@ class LocalStagingIO:
         np.fill_diagonal(corr, np.nan)
         corr_idx = pd.read_csv(f"{self.control.get_staging()}/correlation/values/{fname}.csv", index_col=0)
         df_corr = pd.DataFrame(corr)
+        # Include structure name information into the correlation matrix
+        df = self.load_step_manifest("loaddata")
         df_corr.columns = pd.MultiIndex.from_tuples([
             (
                 df.at[corr_idx.at[c, "CellIds"], "structure_name"],
@@ -174,6 +175,18 @@ class LocalStagingIO:
                 c
             ) for c in df_corr.index], name=["structure", "CellId", "rank"])
         return df_corr
+
+    #TODO: revist this function (maybe redundant)
+    def build_correlation_matrix_of_avg_reps_from_corr_values(self, row):
+        genes = self.control.get_gene_names()
+        matrix = np.ones((len(genes), len(genes)))
+        for gid1, gene1 in enumerate(genes):
+            for gid2, gene2 in enumerate(genes):
+                if gid2 > gid1:
+                    fname = self.get_correlation_matrix_file_prefix(row, genes=(gene1,gene2))
+                    df = pd.read_csv(f"{self.control.get_staging()}/concordance/values/{fname}.csv")
+                    matrix[gid1, gid2] = matrix[gid2, gid1] = df.Pearson.values[0]
+        return matrix
 
     def get_correlation_of_mean_reps(self, row, return_ncells=False):
         prefix = self.get_prefix_from_row(row)
