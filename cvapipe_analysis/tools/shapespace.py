@@ -7,7 +7,7 @@ from aicsshparam import shtools
 from sklearn.decomposition import PCA
 from scipy import spatial as spspatial
 
-from . import plotting, viz
+from . import general, controller, io, plotting, viz
 
 class ShapeSpaceBasic():
     """
@@ -290,13 +290,16 @@ class ShapeSpace(ShapeSpaceBasic):
         df_agg = pd.DataFrame(df_agg.mean(axis=1), columns=["AvgNumberOfCells"])
         return df_agg
 
-    def get_cells_inside_ndsphere_of_radius(self, radius=2.10, return_dist=False):
+    def get_cells_inside_ndsphere_of_radius(self, radius=2.10, return_dist=False, dims_to_use=None):
         # Radius has been optimized to recapitulate the
         # number of center per structure averaged over 8 center bins.
         # Refer to notebook Optimization8DimSphere for more
         # details on the optimization process.
         df_agg = pd.DataFrame([])
-        dist = self.shape_modes.values.copy()
+        dist = self.shape_modes.copy()
+        if dims_to_use is not None:
+            dist = dist[dims_to_use]
+        dist = dist.values
         dist -= dist.mean(axis=0, keepdims=True)
         dist /= dist.std(axis=0, keepdims=True)
         dist = np.sqrt(np.power(dist, 2).sum(axis=1))
@@ -443,26 +446,43 @@ class ShapeSpaceMapper():
         output = self.output / "avgshape"
         output.mkdir(parents=True, exist_ok=True)
         for ds in [k for k in self.datasets]:
-            ct_indices = self.result.loc['base',ds].loc[lambda x: x==True].index.tolist()
-            pt_indices = self.result.loc[ds,"Match"].loc[lambda x: x==True].index.tolist()
-            aliases = ["base"] * len(ct_indices) + [ds] * len(pt_indices)
-            indices = [(alias, *index) for alias, index in zip(aliases, ct_indices+pt_indices)]
-            matrix = self.result.loc[indices, self.control.get_shape_modes()].copy()
-            for sm in self.control.get_shape_modes():
-                matrix[sm] *= self.norm_stds[sm]
-            matrix = matrix.values.mean(axis=0, keepdims=True)
-            df = self.space.invert(matrix)
-            row = df.loc[df.index[0]]
-            meshes = {}
-            for alias in self.control.get_aliases_for_pca():
-                mesh = viz.MeshToolKit.get_mesh_from_series(row, alias, lrec)
-                fname = output / f"{ds}_{alias}_base_matched.vtk"
-                shtools.save_polydata(mesh, str(fname))
-                meshes[alias] = [mesh]
-            projs = viz.MeshToolKit.get_2d_contours(meshes)
-            for proj, contours in projs.items():
-                fname = output / f"{ds}_{alias}_base_matched_{proj}.gif"
-                viz.MeshToolKit.animate_contours(self.control, contours, save=fname)
+            indices_ct = self.result.loc['base',ds].loc[lambda x: x==True].index.tolist()
+            indices_ct = [idx for (_, idx) in indices_ct]
+            indices_pt = self.result.loc[ds,"Match"].loc[lambda x: x==True].index.tolist()
+            indices_pt = [idx for (_, idx) in indices_pt]
+
+            ''' The mean shape of the matched dataset is defined as the
+            shape reconstructed at the origin of the shape space created
+            by using the perturbed cells and their matched counterpart
+            from the baseline dataset.
+            '''
+            # Start by reading the config file from perturbed dataset
+            path_step = Path(self.datasets[ds]) / "shapemode"
+            config_pt = general.load_config_file(path_step, fname="parameters.yaml")
+            control_pt = controller.Controller(config_pt)
+            # Now we merge the two datasets together
+            device_pt = io.LocalStagingIO(control_pt)
+            df_pt = device_pt.load_step_manifest("preprocessing")
+            df_ct = self.space.df
+            df_combined = pd.concat([df_ct.loc[indices_ct], df_pt.loc[indices_pt]])
+            df_combined = df_combined.reset_index(drop=True)
+            # Create a combined shape space
+            space_combined = ShapeSpace(control_pt)
+            space_combined.execute(df_combined)
+
+
+            # df = self.space.invert(matrix)
+            # row = df.loc[df.index[0]]
+            # meshes = {}
+            # for alias in self.control.get_aliases_for_pca():
+            #     mesh = viz.MeshToolKit.get_mesh_from_series(row, alias, lrec)
+            #     fname = output / f"{ds}_{alias}_base_matched.vtk"
+            #     shtools.save_polydata(mesh, str(fname))
+            #     meshes[alias] = [mesh]
+            # projs = viz.MeshToolKit.get_2d_contours(meshes)
+            # for proj, contours in projs.items():
+            #     fname = output / f"{ds}_{alias}_base_matched_{proj}.gif"
+            #     viz.MeshToolKit.animate_contours(self.control, contours, save=fname)
 
     def find_distance_to_self(self, df_ct, df_pt):
         dists = []
