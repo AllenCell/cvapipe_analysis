@@ -17,14 +17,16 @@ class LoadData(Step):
         direct_upstream_tasks: List["Step"] = [],
         config: Optional[Union[str, Path, Dict[str, str]]] = None,
     ):
+        self.config, self.config_path = general.resolve_config()
         super().__init__(direct_upstream_tasks=direct_upstream_tasks, config=config)
 
     @log_run_params
     def run(self, **kwargs):
 
-        with general.configuration(self.step_local_staging_dir) as control:
+        with general.configuration(self.config, config_path=self.config_path, staging_dir=self.step_local_staging_dir) as control:
+            log.info(self.step_local_staging_dir)
             manifest_path = self.step_local_staging_dir / 'manifest.csv'
-        
+            
             if control.overwrite() or not os.path.isfile(manifest_path):
                 loader = DataLoader(control)
                 df = loader.load(kwargs)

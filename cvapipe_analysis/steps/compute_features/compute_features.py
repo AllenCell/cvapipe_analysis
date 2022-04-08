@@ -16,19 +16,18 @@ class ComputeFeatures(Step):
     def __init__(
         self,
         direct_upstream_tasks: List["Step"] = [],
-        config: Optional[Union[str, Path, Dict[str, str]]] = None,
     ):
-        super().__init__(direct_upstream_tasks=direct_upstream_tasks, config=config)
+        self.config, self.config_path = general.resolve_config()
+        super().__init__(direct_upstream_tasks=direct_upstream_tasks, config=self.config)
 
     @log_run_params
     def run(self, distribute: Optional[bool]=False, **kwargs):
-
-        with general.configuration(self.step_local_staging_dir) as control:
-
+        print(self.step_local_staging_dir)
+        with general.configuration(self.config, config_path=self.config_path, staging_dir=self.step_local_staging_dir) as control:
+            
             device = io.LocalStagingIO(control)
             df = device.load_step_manifest("loaddata")
             log.info(f"Manifest: {df.shape}")
-
             save_dir = self.step_local_staging_dir/"cell_features"
             save_dir.mkdir(parents=True, exist_ok=True)
 

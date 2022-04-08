@@ -22,9 +22,6 @@ logging.basicConfig(
     level=logging.INFO, format="[%(levelname)4s:%(lineno)4s %(asctime)s] %(message)s"
 )
 
-tools.general.create_workflow_file_from_config()
-log.info("Workflow file created.")
-
 def cli():
     step_map = {
         name.lower(): step

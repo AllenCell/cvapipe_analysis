@@ -18,12 +18,13 @@ class Controller:
     def __init__(self, config):
         self.config = config
         self.config['log'] = {}
-        self.set_abs_path_to_local_staging_folder(config['project']['local_staging'])
+        self.set_abs_path_to_local_staging_folder(config['local_staging'])
         self.data_section = self.config['data']
         self.features_section = self.config['features']
         self.space_section = self.config['shapespace']
         self.distribute_section = self.config['distribute']
         self.param_section = self.config['parameterization']
+        self.shape_recon_err_section = self.config['shape_recon_err']
 
     def set_abs_path_to_local_staging_folder(self, path):
         self.abs_path_local_staging = Path(path)
@@ -282,3 +283,12 @@ class Controller:
 
     def get_distributed_memory(self):
         return self.distribute_section['memory']
+
+    def get_max_lmax(self):
+        return self.shape_recon_err_section['max_lmax']
+
+    def get_pixel_size(self):
+        return self.shape_recon_err_section['pixel_size']
+
+    def get_shape_recon_err_sample_size(self):
+        return self.shape_recon_err_section['number_of_sample_cells']

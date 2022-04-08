@@ -62,6 +62,7 @@ requirements = [
     "scipy",
     "scikit-image",
     "aicsimageio",
+    "aicsfiles",
     "imgkit==1.0.2",
     "xvfbwrapper==0.2.9",
     "aicsshparam>=0.1.1",

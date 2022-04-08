@@ -18,9 +18,10 @@ class Preprocessing(Step):
     def __init__(
         self,
         direct_upstream_tasks: List['Step'] = [],
-        config: Optional[Union[str, Path, Dict[str, str]]] = None,
+        config: Optional[Union[str, Path, Dict[str, str]]] = None
     ):
-        super().__init__(direct_upstream_tasks=direct_upstream_tasks, config=config)
+        self.config, self.config_path = general.resolve_config()
+        super().__init__(direct_upstream_tasks=direct_upstream_tasks, config=self.config)
 
     @log_run_params
     def run(
@@ -29,9 +30,7 @@ class Preprocessing(Step):
         debug: bool=False,
         **kwargs
         ):
-        
-        with general.configuration(self.step_local_staging_dir) as control:
-            
+        with general.configuration(self.config, config_path=self.config_path, staging_dir=self.step_local_staging_dir) as control:
             device = io.LocalStagingIO(control)
             df = device.load_step_manifest("computefeatures")
             log.info(f"Shape of manifest: {df.shape}")
