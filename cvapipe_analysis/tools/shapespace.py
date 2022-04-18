@@ -380,7 +380,10 @@ class ShapeSpaceMapper():
         self.result = self.space.axes if self.full_base_dataset else self.space.shape_modes
         self.result["structure_name"] = self.space.df.loc[self.result.index, "structure_name"]
         self.merge_transformed_datasets()
-        self.reconstruct_datasets_mean_cell()
+        # Commenting the line bellow bc the mean shape
+        # of individual datasets should be calculated
+        # by the shapemode step
+        # self.reconstruct_datasets_mean_cell()
         self.normalization()
         self.create_nn_mapping()
         self.flag_close_pairs()
@@ -450,7 +453,6 @@ class ShapeSpaceMapper():
             indices_ct = [idx for (_, idx) in indices_ct]
             indices_pt = self.result.loc[ds,"Match"].loc[lambda x: x==True].index.tolist()
             indices_pt = [idx for (_, idx) in indices_pt]
-
             ''' The mean shape of the matched dataset is defined as the
             shape reconstructed at the origin of the shape space created
             by using the perturbed cells and their matched counterpart
@@ -469,20 +471,21 @@ class ShapeSpaceMapper():
             # Create a combined shape space
             space_combined = ShapeSpace(control_pt)
             space_combined.execute(df_combined)
-
-
-            # df = self.space.invert(matrix)
-            # row = df.loc[df.index[0]]
-            # meshes = {}
-            # for alias in self.control.get_aliases_for_pca():
-            #     mesh = viz.MeshToolKit.get_mesh_from_series(row, alias, lrec)
-            #     fname = output / f"{ds}_{alias}_base_matched.vtk"
-            #     shtools.save_polydata(mesh, str(fname))
-            #     meshes[alias] = [mesh]
-            # projs = viz.MeshToolKit.get_2d_contours(meshes)
-            # for proj, contours in projs.items():
-            #     fname = output / f"{ds}_{alias}_base_matched_{proj}.gif"
-            #     viz.MeshToolKit.animate_contours(self.control, contours, save=fname)
+            # Get the origin (should all be very close to zero)
+            origin = space_combined.shape_modes.values.mean(axis=0, keepdims=True)
+            df_origin = space_combined.invert(origin)
+            row = df_origin.loc[df_origin.index[0]]
+            # Reconstruct
+            meshes = {}
+            for alias in self.control.get_aliases_for_pca():
+                mesh = viz.MeshToolKit.get_mesh_from_series(row, alias, lrec)
+                fname = output / f"{ds}_{alias}_matched.vtk"
+                shtools.save_polydata(mesh, str(fname))
+                meshes[alias] = [mesh]
+            projs = viz.MeshToolKit.get_2d_contours(meshes)
+            for proj, contours in projs.items():
+                fname = output / f"{ds}_{alias}_matched_{proj}.gif"
+                viz.MeshToolKit.animate_contours(self.control, contours, save=fname)
 
     def find_distance_to_self(self, df_ct, df_pt):
         dists = []
