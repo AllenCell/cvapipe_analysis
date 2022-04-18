@@ -641,6 +641,8 @@ class ShapeModePlotMaker(PlotMaker):
     def load_animated_gif(self, shape_mode, proj):
         fname = self.control.get_staging() / f"{self.subfolder}/{shape_mode}_{proj}.gif"
         image = AICSImage(fname).data.squeeze()
+        if image.ndim == 3:
+            image = np.expand_dims(image, 0)
         return image
 
     def combine_and_save_animated_gifs(self):
@@ -649,23 +651,13 @@ class ShapeModePlotMaker(PlotMaker):
             imx = self.load_animated_gif(sm, "x")
             imy = self.load_animated_gif(sm, "y")
             imz = self.load_animated_gif(sm, "z")
-            img = np.c_[imz, imy, imx]
-            print(img.shape)
-            if imx.ndim == 3:
-                img = np.expand_dims(img, 0)
-            img = np.swapaxes(img, 0, 1)# mpID -> Z
+            img = np.concatenate([imz, imy, imx], axis=-2)
             stack.append(img)
         stack = np.array(stack)
-        stack = np.concatenate(stack[:], axis=-2)[:3]
-        stack = np.concatenate([stack[:, :-1], stack[:, ::-1]], axis=1)
-        # Reduce the empty space between images
-        gaps = stack.min(axis=(0, 1, 3)) < 125
-        for _ in range(5):
-            gaps[1:-1] = gaps[2:] + gaps[:-2]
-        stack = stack[:, :, gaps > 0, :]
+        stack = np.concatenate(stack[:], axis=-3)
+        stack = np.rollaxis(stack, -1, 1)
         fname = self.control.get_staging() / f"{self.subfolder}/combined.tif"
-        with writers.ome_tiff_writer.OmeTiffWriter(fname, overwrite_file=True) as writer:
-            writer.save(stack, dimension_order='CZYX')
+        writers.ome_tiff_writer.OmeTiffWriter.save(stack, fname, overwrite_file=True, dim_order="CZYX")
         return
 
     @staticmethod
