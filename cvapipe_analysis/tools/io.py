@@ -347,10 +347,10 @@ class DataProducer(LocalStagingIO):
         self.data, self.channels = self.get_single_cell_images(self.row, return_stack="True")
         return
 
-    def align_data(self):
+    def align_data(self, force_alignment=False):
         self.angle = np.nan
         self.data_aligned = self.data
-        if self.control.should_align():
+        if self.control.should_align() or force_alignment:
             alias_ref = self.control.get_alignment_reference_alias()
             if alias_ref is None:
                 raise ValueError("Specify a reference alias for alignment.")
