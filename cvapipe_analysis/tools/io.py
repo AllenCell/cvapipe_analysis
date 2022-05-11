@@ -149,7 +149,7 @@ class LocalStagingIO:
                 axis=0, ignore_index=True)
         return df
 
-    def read_corelation_matrix(self, row):
+    def read_corelation_matrix(self, row, return_cellids=False):
         fname = self.get_correlation_matrix_file_prefix(row)
 
         try:
@@ -174,6 +174,8 @@ class LocalStagingIO:
                 corr_idx.at[c,"CellIds"],
                 c
             ) for c in df_corr.index], name=["structure", "CellId", "rank"])
+        if return_cellids:
+            return df_corr, corr_idx
         return df_corr
 
     #TODO: revist this function (maybe redundant)
