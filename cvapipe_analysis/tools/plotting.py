@@ -333,12 +333,18 @@ class StereotypyPlotMaker(PlotMaker):
     def workflow(self):
         self.make_boxplot()
         self.load_data_for_extra_values()
-        self.make_heatmap()
+        for matrix, relative in zip([self.matrix, self.matrix_relative], [False, True]):
+            vmin, vmax = -0.2, 0.2
+            if relative:
+                vmin, vmax = -0.1, 0.1
+            self.set_heatmap_min_max_values(vmin, vmax)
+            self.make_heatmap(matrix=matrix, relative=relative)
 
     def set_extra_values(self, values):
         self.extra_values = values
 
     def load_data_for_extra_values(self):
+        self.matrix, self.matrix_relative = None, None
         if self.extra_values is None:
             return
         cols = []
@@ -358,6 +364,13 @@ class StereotypyPlotMaker(PlotMaker):
         prefix = self.device.get_correlation_matrix_file_prefix(self.row)
         prefix += "".join([f"{k}_"+"_".join([str(v) for v in self.extra_values[k]]) for k in self.extra_values.keys()])
         self.dataframes.append((df_stereo, prefix))
+        # Relative heatmap
+        df_stereo_relative = df_stereo.copy()
+        center_col = [f"{k}={self.control.get_center_map_point_index()}" for k in self.extra_values.keys()][0]
+        for col in cols:
+            df_stereo_relative[col] = df_stereo[center_col]-df_stereo_relative[col]
+        self.matrix_relative = df_stereo_relative.values
+        self.dataframes.append((df_stereo_relative, prefix+"_relative"))
         return
 
     def make_boxplot(self):
@@ -406,14 +419,15 @@ class StereotypyPlotMaker(PlotMaker):
         plt.tight_layout()
         self.figs.append((fig, self.device.get_correlation_matrix_file_prefix(self.row)))
 
-    def make_heatmap(self, cmap="RdBu"):
-        if self.matrix is None:
+    def make_heatmap(self, matrix, relative=False):
+        if matrix is None:
             return
-        nsy, nsx = self.matrix.shape
+        nsy, nsx = matrix.shape
+        cmap = "PRGn" if relative else "RdBu"
         fig, ax = plt.subplots(1, 1, figsize=(8, 16), dpi=self.dpi)
-        ax.imshow(-self.matrix, cmap=cmap, vmin=self.heatmap_vmin, vmax=self.heatmap_vmax)
-        ax.set_xticks(np.arange(self.matrix.shape[0]))
-        ax.set_yticks(np.arange(self.matrix.shape[0]))
+        ax.imshow(-matrix, cmap=cmap, vmin=self.heatmap_vmin, vmax=self.heatmap_vmax)
+        ax.set_xticks(np.arange(matrix.shape[0]))
+        ax.set_yticks(np.arange(matrix.shape[0]))
         ax.get_xaxis().set_ticklabels([])
         ax.get_yaxis().set_ticklabels(self.control.get_structure_names())
         for _, spine in ax.spines.items():
@@ -424,6 +438,8 @@ class StereotypyPlotMaker(PlotMaker):
         ax.tick_params(which="both", bottom=False, left=False)
         prefix = self.device.get_correlation_matrix_file_prefix(self.row)
         prefix += "".join([f"{k}_"+"_".join([str(v) for v in self.extra_values[k]]) for k in self.extra_values.keys()])
+        if relative:
+            prefix += "_relative"
         ax.set_title(prefix)
         plt.tight_layout()
         self.figs.append((fig, prefix))
@@ -712,7 +728,7 @@ class ShapeSpaceMapperPlotMaker(PlotMaker):
         self.grouping = grouping
 
     @staticmethod
-    def comparative_hists(df1, df2, title, bin_edges, display_both=True):
+    def comparative_hists(df1, df2, title, bin_edges, display_both=True, ymax=1):
         nc = len(df1.columns)
         args = {"bins": bin_edges, "density": True}
         fig, axs = plt.subplots(1, nc, figsize=(1.5*nc, 1.5), sharex=False, gridspec_kw={"wspace": 0.2})
@@ -725,7 +741,7 @@ class ShapeSpaceMapperPlotMaker(PlotMaker):
             else:
                 ax.hist(df1[sm], **args, histtype="step", linewidth=1, edgecolor="black")
             # ax.set_xlabel(sm, fontsize=12)
-            ax.set_ylim(0, 1)
+            ax.set_ylim(0, ymax)
             ax.set_xlim(int(bin_edges[0]-1), int(bin_edges[-1]+1))
             ax.get_xaxis().tick_bottom()
             ax.set_xticks([-2, 0, 2])
@@ -736,7 +752,7 @@ class ShapeSpaceMapperPlotMaker(PlotMaker):
         # plt.tight_layout()
         return fig
 
-    def plot_mapping_1d(self, display_both=True):
+    def plot_mapping_1d(self, display_both=True, ymax=1):
         df_base = self.df.loc["base"]
         sms = self.control.get_shape_modes()
         bin_centers = self.control.get_map_points()
@@ -744,14 +760,14 @@ class ShapeSpaceMapperPlotMaker(PlotMaker):
         bin_edges = np.unique([(b-binw, b+binw) for b in bin_centers])
         for dsname, df in self.df.groupby(level="dataset", sort=False):
             if dsname != "base":
-                fig = self.comparative_hists(df_base[sms], df[sms], dsname, bin_edges)
+                fig = self.comparative_hists(df_base[sms], df[sms], dsname, bin_edges, ymax=ymax)
                 self.figs.append((fig, f"mapping_{dsname}"))
                 # Same plots for matching pairs
                 ds_ids = df.loc[df.Match==True].index
                 NNCellIds = df.loc[ds_ids].NNCellId.values
                 bs_ids = [(sname, nnid) for ((_, sname, _), nnid) in zip(ds_ids, NNCellIds)]
                 bs_ids = pd.MultiIndex.from_tuples(bs_ids).drop_duplicates()
-                fig = self.comparative_hists(df_base.loc[bs_ids, sms], df.loc[ds_ids, sms], dsname, bin_edges, display_both)
+                fig = self.comparative_hists(df_base.loc[bs_ids, sms], df.loc[ds_ids, sms], dsname, bin_edges, display_both, ymax=ymax)
                 self.figs.append((fig, f"mapping_{dsname}_match"))
 
     def plot_mapping_2d(self):
