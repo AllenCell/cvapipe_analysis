@@ -259,6 +259,9 @@ class Controller:
     def get_optimal_seg_contrast(self, gene):
         return eval(self.config["structures"][gene][2])["seg"]
 
+    def get_optimal_avgseg_contrast(self, gene):
+        return eval(self.config["structures"][gene][2])["avgseg"]
+
     def get_optimal_raw_contrast(self, gene):
         return eval(self.config["structures"][gene][2])["raw"]
 
