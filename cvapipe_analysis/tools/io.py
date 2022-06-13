@@ -179,8 +179,9 @@ class LocalStagingIO:
         return df_corr
 
     #TODO: revist this function (maybe redundant)
-    def build_correlation_matrix_of_avg_reps_from_corr_values(self, row):
-        genes = self.control.get_gene_names()
+    def build_correlation_matrix_of_avg_reps_from_corr_values(self, row, genes=None):
+        if genes is None:
+            genes = self.control.get_gene_names()
         matrix = np.ones((len(genes), len(genes)))
         for gid1, gene1 in enumerate(genes):
             for gid2, gene2 in enumerate(genes):
