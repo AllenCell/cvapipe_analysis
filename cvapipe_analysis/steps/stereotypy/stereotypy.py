@@ -43,34 +43,22 @@ class Stereotypy(Step):
             space = shapespace.ShapeSpace(control)
             space.execute(df)
             variables = control.get_variables_values_for_aggregation()
-            df_agg = space.get_aggregated_df(variables, True)
-
-            if distribute:
-
-                distributor = cluster.StereotypyDistributor(control)
-                distributor.set_data(df_agg)
-                distributor.distribute()
-                log.info(
-                    f"Multiple jobs have been launched. Please come back when the calculation is complete.")
-
-                return None
-
-            calculator = StereotypyCalculator(control)
-            for _, row in tqdm(df_agg.iterrows(), total=len(df_agg)):
-                '''Concurrent processes inside. Do not use concurrent here.'''
-                calculator.execute(row)
-
-            log.info(f"Loading results...")
-
-            df_results = calculator.load_results_in_single_dataframe()
+            df_agg = space.get_aggregated_df(variables, include_cellIds=False)
+            '''Do not aggregate cells inside nD sphere when working with
+            datasets with a single map point, which is the case of matched datasets'''
+            if len(control.get_map_points()) > 1:
+                variables.update({"shape_mode": ["NdSphere"], "mpId": [control.get_center_map_point_index()]})
+                df_sphere = space.get_aggregated_df(variables, include_cellIds=False)
+                df_agg = df_agg.append(df_sphere, ignore_index=True)
+            df_agg =  df_agg.drop(columns=["structure"]).drop_duplicates().reset_index(drop=True)
 
             log.info(f"Generating plots...")
 
-            pmaker = plotting.StereotypyPlotMaker(control)
-            pmaker.set_dataframe(df_results)
-            for alias in tqdm(control.get_aliases_to_parameterize()):
-                for shape_mode in control.get_shape_modes():
-                    mpId = control.get_center_map_point_index()
-                    pmaker.filter_dataframe(
-                        {'alias': alias, 'shape_mode': shape_mode, 'mpId': [mpId]})
-                    pmaker.execute(display=False)
+            for index, row in tqdm(df_agg.iterrows(), total=len(df_agg)):
+                pmaker = plotting.StereotypyPlotMaker(control)
+                pmaker.set_heatmap_min_max_values(-0.2, 0.2)
+                pmaker.set_dataframe(df)
+                pmaker.set_row(row)
+                if row.mpId == 1:
+                    pmaker.set_extra_values({"mpId": df_agg.mpId.unique().tolist()})
+                pmaker.execute(display=False)

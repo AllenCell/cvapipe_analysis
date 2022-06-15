@@ -6,6 +6,7 @@ from .compute_features import ComputeFeatures
 from .shapemode import Shapemode
 from .parameterization import Parameterization
 from .aggregation import Aggregation
+from .correlation import Correlation
 from .stereotypy import Stereotypy
 from .concordance import Concordance
 from .cellpack import Cellpack
@@ -18,6 +19,7 @@ __all__ = [
     "ComputeFeatures",
     "Parameterization",
     "Aggregation",
+    "Correlation",
     "Stereotypy",
     "Concordance",
     "Cellpack"

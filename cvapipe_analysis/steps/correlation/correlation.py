@@ -1,20 +1,25 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 import os
+import sys
+import errno
 import logging
 from pathlib import Path
-from datastep import Step, log_run_params
 from typing import Dict, List, Optional, Union
+from datastep import Step, log_run_params
 
-import concurrent
+import numpy as np
 import pandas as pd
 from tqdm import tqdm
+from skimage import io as skio
+from joblib import Parallel, delayed
+
 from cvapipe_analysis.tools import io, general, cluster, shapespace
-from .aggregation_tools import Aggregator
+from .correlation_tools import CorrelationCalculator
 
 log = logging.getLogger(__name__)
 
-class Aggregation(Step):
+class Correlation(Step):
     def __init__(
         self,
         direct_upstream_tasks: List["Step"] = [],
@@ -23,40 +28,48 @@ class Aggregation(Step):
         super().__init__(direct_upstream_tasks=direct_upstream_tasks, config=config)
 
     @log_run_params
-    def run(self, distribute: Optional[bool]=False, **kwargs):
+    def run(
+        self,
+        distribute: Optional[bool] = False,
+        **kwargs
+    ):
 
         with general.configuration(self.step_local_staging_dir) as control:
 
-            for folder in ["repsagg", "aggmorph"]:
+            for folder in ['values']:
                 save_dir = self.step_local_staging_dir / folder
                 save_dir.mkdir(parents=True, exist_ok=True)
 
             device = io.LocalStagingIO(control)
             df = device.load_step_manifest("preprocessing")
             space = shapespace.ShapeSpace(control)
+            if control.get_number_of_map_points() == 1:
+                # Do not remove extreme points when working on
+                # matched datasets for whcih the number of bins
+                # equals 1 (consistency with previous analysis).
+                space.set_remove_extreme_points(False)
             space.execute(df)
             variables = control.get_variables_values_for_aggregation()
             df_agg = space.get_aggregated_df(variables, include_cellIds=True)
+            df_agg = space.sample_cell_ids(df_agg, 1000)
             df_sphere = space.get_cells_inside_ndsphere_of_radius()
             df_agg = df_agg.append(df_sphere, ignore_index=True)
 
+            agg_cols = [f for f in df_agg.columns if f not in ["CellIds", "structure"]]
+            df_agg = df_agg.groupby(agg_cols).agg({"CellIds": sum})
+            df_agg = df_agg.reset_index()
+
             if distribute:
 
-                distributor = cluster.AggregationDistributor(control)
+                distributor = cluster.CorrelationDistributor(control)
                 distributor.set_data(df_agg)
-                '''Setting chunk size to 1 here so that each job has to generate
-                a single file. Otherwise Slurm crashes for reasons that I don't
-                yet know. It seems to me that aggregation_tools.py is leaking
-                memory. To be investigated.'''
-                distributor.set_chunk_size(1)
-                distributor.distribute()
-                log.info(f"Multiple jobs have been launched. Please come back when the calculation is complete.")
-
+                distributor.distribute_by_row()
+                log.info(
+                    f"Multiple jobs have been launched. Please come back when the calculation is complete.")
                 return None
 
-            aggregator = Aggregator(control)
-            for index, row in tqdm(df_agg.iterrows(), total=len(df_agg)):
+            calculator = CorrelationCalculator(control)
+            for _, row in tqdm(df_agg.iterrows(), total=len(df_agg)):
                 '''Concurrent processes inside. Do not use concurrent here.'''
-                aggregator.execute(row)
-                
-        return
+                calculator.execute(row)
+

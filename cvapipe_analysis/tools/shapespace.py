@@ -7,7 +7,7 @@ from aicsshparam import shtools
 from sklearn.decomposition import PCA
 from scipy import spatial as spspatial
 
-from . import plotting, viz
+from . import general, controller, io, plotting, viz
 
 class ShapeSpaceBasic():
     """
@@ -29,6 +29,12 @@ class ShapeSpaceBasic():
         
     def set_active_shape_mode(self, sm):
         self.active_shapeMode = sm
+
+    @staticmethod
+    def get_aggregated_df(variables):
+        df = ShapeSpaceBasic.expand(variables)
+        df.mpId = df.mpId.astype(np.int64)
+        return df
 
     @staticmethod
     def expand(dc):
@@ -94,6 +100,7 @@ class ShapeSpace(ShapeSpaceBasic):
 
     def __init__(self, control):
         super().__init__(control)
+        self.remove_extreme_points_on = True
 
     def execute(self, df):
         self.df = df
@@ -103,9 +110,12 @@ class ShapeSpace(ShapeSpaceBasic):
     def workflow(self):
         self.calculate_pca()
         self.calculate_feature_importance()
-        pct = self.control.get_removal_pct()
+        pct = self.control.get_removal_pct() if self.remove_extreme_points_on else 0.0
         self.shape_modes = self.remove_extreme_points(self.axes, pct)
-        
+
+    def set_remove_extreme_points(self, value):
+        self.remove_extreme_points_on = value
+
     def calculate_pca(self):
         self.df_pca = self.df[self.features]
         matrix_of_features = self.df_pca.values.copy()
@@ -238,6 +248,15 @@ class ShapeSpace(ShapeSpaceBasic):
         df.mpId = df.mpId.astype(np.int64)
         return df
 
+    @staticmethod
+    def sample_cell_ids(df, nmax, random_seed=42):
+        np.random.seed(random_seed)
+        for index, row in df.iterrows():
+            if len(row.CellIds) > nmax:
+                sample = np.random.choice(row.CellIds, nmax ,replace=False)
+                df.at[index, "CellIds"] = sample.tolist()
+        return df
+
     def save_summary(self, path):
         variables = self.control.get_variables_values_for_aggregation()
         df = self.get_aggregated_df(variables)
@@ -257,6 +276,51 @@ class ShapeSpace(ShapeSpaceBasic):
         df.to_html(self.control.get_staging()/path)
         return
 
+    def get_average_number_of_cells_in_center_bin(self):
+        data = []
+        for sm in self.control.get_shape_modes():
+            self.set_active_shape_mode(sm, digitize=True)
+            self.set_active_map_point_index(self.control.get_center_map_point_index())
+            CellIds = self.get_active_cellids()
+            serie = self.df.loc[CellIds, ["structure_name"]].groupby("structure_name").size()
+            serie.name = sm
+            data.append(serie)
+        df_agg = pd.DataFrame(data).T
+        df_agg = df_agg.reindex(self.control.get_gene_names())
+        df_agg = pd.DataFrame(df_agg.mean(axis=1), columns=["AvgNumberOfCells"])
+        return df_agg
+
+    def get_cells_inside_ndsphere_of_radius(self, radius=2.10, return_dist=False, dims_to_use=None):
+        # Radius has been optimized to recapitulate the
+        # number of center per structure averaged over 8 center bins.
+        # Refer to notebook Optimization8DimSphere for more
+        # details on the optimization process.
+        df_agg = pd.DataFrame([])
+        dist = self.shape_modes.copy()
+        if dims_to_use is not None:
+            dist = dist[dims_to_use]
+        dist = dist.values
+        dist -= dist.mean(axis=0, keepdims=True)
+        dist /= dist.std(axis=0, keepdims=True)
+        dist = np.sqrt(np.power(dist, 2).sum(axis=1))
+        df_dist = pd.DataFrame({"Distance": dist}, index=self.shape_modes.index)
+        for gene, df_gene in self.df.groupby("structure_name"):
+            CellIds = df_dist.loc[df_dist.Distance<radius].index
+            CellIds = df_gene.loc[df_gene.index.isin(CellIds)].index.tolist()
+            row = {
+                "shape_mode": "NdSphere",
+                "mpId": self.control.get_center_map_point_index(),
+                "aggtype": "avg", #TODO: make this more flexible
+                "alias": "STR", #TODO: make this more flexible
+                "structure": gene,
+                "CellIds": CellIds
+            }
+            df_agg = df_agg.append(row, ignore_index=True)
+        df_agg.mpId = df_agg.mpId.astype(np.int64)
+        if return_dist:
+            return df_agg, df_dist
+        return df_agg
+
 class ShapeSpaceMapper():
     """This class does not follow the design of io.DataProducer
     because its use requires mixing local_staging folder. For this
@@ -265,6 +329,7 @@ class ShapeSpaceMapper():
 
     grouping = None
     normalize = True
+    make_plots = True
     distance_threshold = None
     full_base_dataset = False
     allow_similar_cellids_off = True
@@ -299,6 +364,9 @@ class ShapeSpaceMapper():
     def set_grouping(self, grouping):
         self.pmaker.set_grouping(grouping)
 
+    def set_make_plots_off(self):
+        self.make_plots = False
+
     def map(self, datasets: List[Path]):
         for ds, paths in datasets.items():
             if paths["perturbed"] == self.control.get_staging():
@@ -312,13 +380,17 @@ class ShapeSpaceMapper():
         self.result = self.space.axes if self.full_base_dataset else self.space.shape_modes
         self.result["structure_name"] = self.space.df.loc[self.result.index, "structure_name"]
         self.merge_transformed_datasets()
-        self.reconstruct_datasets_mean_cell()
+        # Commenting the line bellow bc the mean shape
+        # of individual datasets should be calculated
+        # by the shapemode step
+        # self.reconstruct_datasets_mean_cell()
         self.normalization()
         self.create_nn_mapping()
         self.flag_close_pairs()
         self.reconstruct_matched_datasets_mean_cell()
-        self.pmaker.set_dataframe(self.result)
-        self.pmaker.execute(display=False, grouping=self.grouping)
+        if self.make_plots:
+            self.pmaker.set_dataframe(self.result)
+            self.pmaker.execute(display=False, grouping=self.grouping)
 
     def flag_close_pairs(self):
         self.result["Match"] = self.result.Dist < self.distance_threshold
@@ -377,25 +449,42 @@ class ShapeSpaceMapper():
         output = self.output / "avgshape"
         output.mkdir(parents=True, exist_ok=True)
         for ds in [k for k in self.datasets]:
-            ct_indices = self.result.loc['base',ds].loc[lambda x: x==True].index.tolist()
-            pt_indices = self.result.loc[ds,"Match"].loc[lambda x: x==True].index.tolist()
-            aliases = ["base"] * len(ct_indices) + [ds] * len(pt_indices)
-            indices = [(alias, *index) for alias, index in zip(aliases, ct_indices+pt_indices)]
-            matrix = self.result.loc[indices, self.control.get_shape_modes()].copy()
-            for sm in self.control.get_shape_modes():
-                matrix[sm] *= self.norm_stds[sm]
-            matrix = matrix.values.mean(axis=0, keepdims=True)
-            df = self.space.invert(matrix)
-            row = df.loc[df.index[0]]
+            indices_ct = self.result.loc['base',ds].loc[lambda x: x==True].index.tolist()
+            indices_ct = [idx for (_, idx) in indices_ct]
+            indices_pt = self.result.loc[ds,"Match"].loc[lambda x: x==True].index.tolist()
+            indices_pt = [idx for (_, idx) in indices_pt]
+            ''' The mean shape of the matched dataset is defined as the
+            shape reconstructed at the origin of the shape space created
+            by using the perturbed cells and their matched counterpart
+            from the baseline dataset.
+            '''
+            # Start by reading the config file from perturbed dataset
+            path_step = Path(self.datasets[ds]) / "shapemode"
+            config_pt = general.load_config_file(path_step, fname="parameters.yaml")
+            control_pt = controller.Controller(config_pt)
+            # Now we merge the two datasets together
+            device_pt = io.LocalStagingIO(control_pt)
+            df_pt = device_pt.load_step_manifest("preprocessing")
+            df_ct = self.space.df
+            df_combined = pd.concat([df_ct.loc[indices_ct], df_pt.loc[indices_pt]])
+            df_combined = df_combined.reset_index(drop=True)
+            # Create a combined shape space
+            space_combined = ShapeSpace(control_pt)
+            space_combined.execute(df_combined)
+            # Get the origin (should all be very close to zero)
+            origin = space_combined.shape_modes.values.mean(axis=0, keepdims=True)
+            df_origin = space_combined.invert(origin)
+            row = df_origin.loc[df_origin.index[0]]
+            # Reconstruct
             meshes = {}
             for alias in self.control.get_aliases_for_pca():
                 mesh = viz.MeshToolKit.get_mesh_from_series(row, alias, lrec)
-                fname = output / f"{ds}_{alias}_base_matched.vtk"
+                fname = output / f"{ds}_{alias}_matched.vtk"
                 shtools.save_polydata(mesh, str(fname))
                 meshes[alias] = [mesh]
             projs = viz.MeshToolKit.get_2d_contours(meshes)
             for proj, contours in projs.items():
-                fname = output / f"{ds}_{alias}_base_matched_{proj}.gif"
+                fname = output / f"{ds}_{alias}_matched_{proj}.gif"
                 viz.MeshToolKit.animate_contours(self.control, contours, save=fname)
 
     def find_distance_to_self(self, df_ct, df_pt):

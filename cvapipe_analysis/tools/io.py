@@ -6,8 +6,11 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 from pathlib import Path
+from skimage import io as skio
 from aicsshparam import shtools
-from aicsimageio import AICSImage, writers
+from aicsimageio import AICSImage
+from aicsimageio.writers import OmeTiffWriter
+
 try:
     from aicsfiles import FileManagementSystem
 except: pass
@@ -39,7 +42,7 @@ class LocalStagingIO:
                 if not path.is_file():
                     path = self.control.get_staging() / f"loaddata/{row[imtype]}"
                 reader = AICSImage(path)
-                channel_names += reader.get_channel_names()
+                channel_names += reader.channel_names
                 img = reader.get_image_data('CZYX', S=0, T=0)
                 imgs.append(img)
         try:
@@ -70,7 +73,7 @@ class LocalStagingIO:
             index_col="CellId", low_memory=False, **kwargs
         )
         if clean:
-            feats = ['mem_', 'dna_', 'str_']
+            feats = ['mem_', 'dna_', 'str_'] #TODO: fix the aliases here
             df = df[[c for c in df.columns if not any(s in c for s in feats)]]
         return df
 
@@ -82,17 +85,48 @@ class LocalStagingIO:
             raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), path)
         return self.read_vtk_polydata(path)
 
-    def read_parameterized_intensity(self, index, return_intensity_names=False):
-        path = f"parameterization/representations/{index}.tif"
+    def read_mean_shape_mesh(self, alias):
+        sm = self.control.get_shape_modes()
+        mpIdc = self.control.get_center_map_point_index()
+        path = f"shapemode/avgshape/{alias}_{sm[0]}_{mpIdc}.vtk"
         path = self.control.get_staging() / path
         if not path.is_file():
             raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), path)
-        code = AICSImage(path)
-        intensity_names = code.get_channel_names()
-        code = code.data.squeeze()
+        return self.read_vtk_polydata(path)
+
+    def read_parameterized_intensity(self, index, return_intensity_names=False):
+        code, intensity_names = None, []
+        path = f"parameterization/representations/{index}.tif"
+        path = self.control.get_staging() / path
+        if path.is_file():
+            code = AICSImage(path)
+            intensity_names = code.channel_names
+            code = code.data.squeeze()
         if return_intensity_names:
             return code, intensity_names
         return code
+
+    def read_normalized_parameterized_intensity_of_alias(self, index, alias):
+        reps, names = self.read_parameterized_intensity(index, return_intensity_names=True)
+        if reps is None:
+            return None
+        if reps.ndim == 2:
+            reps = reps.reshape(1, *reps.shape)
+        rep = reps[names.index(alias)]
+        amount = int((rep>0).sum())
+        if amount > 0:
+            rep[rep>0] = 1.0
+            rep /= amount
+        return rep
+
+    def read_parameterized_intensity_of_alias(self, index, alias):
+        reps, names = self.read_parameterized_intensity(index, return_intensity_names=True)
+        if reps is None:
+            return None
+        if reps.ndim == 2:
+            reps = reps.reshape(1, *reps.shape)
+        rep = reps[names.index(alias)]
+        return rep
 
     def read_agg_parameterized_intensity(self, row):
         path = f"aggregation/repsagg/{self.get_aggrep_file_name(row)}"
@@ -114,6 +148,75 @@ class LocalStagingIO:
                 tqdm(executor.map(self.load_data_from_csv, files), total=len(files)),
                 axis=0, ignore_index=True)
         return df
+
+    def read_corelation_matrix(self, row, return_cellids=False):
+        fname = self.get_correlation_matrix_file_prefix(row)
+
+        try:
+            corr = skio.imread(f"{self.control.get_staging()}/correlation/values/{fname}.tif")
+        except Exception as ex:
+            print(f"Correlation matrix {fname} not found.")
+            return None
+        np.fill_diagonal(corr, np.nan)
+        corr_idx = pd.read_csv(f"{self.control.get_staging()}/correlation/values/{fname}.csv", index_col=0)
+        df_corr = pd.DataFrame(corr)
+        # Include structure name information into the correlation matrix
+        df = self.load_step_manifest("loaddata")
+        df_corr.columns = pd.MultiIndex.from_tuples([
+            (
+                df.at[corr_idx.at[c, "CellIds"], "structure_name"],
+                corr_idx.at[c, "CellIds"],
+                c
+            ) for c in df_corr.columns], name=["structure", "CellId", "rank"])
+        df_corr.index = pd.MultiIndex.from_tuples([
+            (
+                df.at[corr_idx.at[c, "CellIds"], "structure_name"],
+                corr_idx.at[c,"CellIds"],
+                c
+            ) for c in df_corr.index], name=["structure", "CellId", "rank"])
+        if return_cellids:
+            return df_corr, corr_idx
+        return df_corr
+
+    #TODO: revist this function (maybe redundant)
+    def build_correlation_matrix_of_avg_reps_from_corr_values(self, row, genes=None):
+        if genes is None:
+            genes = self.control.get_gene_names()
+        matrix = np.ones((len(genes), len(genes)))
+        for gid1, gene1 in enumerate(genes):
+            for gid2, gene2 in enumerate(genes):
+                if gid2 > gid1:
+                    fname = self.get_correlation_matrix_file_prefix(row, genes=(gene1,gene2))
+                    df = pd.read_csv(f"{self.control.get_staging()}/concordance/values/{fname}.csv")
+                    matrix[gid1, gid2] = matrix[gid2, gid1] = df.Pearson.values[0]
+        return matrix
+
+    def get_correlation_of_mean_reps(self, row, return_ncells=False):
+        prefix = self.get_prefix_from_row(row)
+        df_corr = pd.read_csv(f"{self.control.get_staging()}/concordance/plots/{prefix}_CORR_OF_AVG_REP.csv", index_col=0)
+        if return_ncells:
+            CellIds = pd.read_csv(f"{self.control.get_staging()}/correlation/values/{prefix}.csv", index_col=0).CellIds
+            df = self.load_step_manifest("preprocessing")
+            df = pd.DataFrame(df.loc[CellIds].groupby("structure_name").size(), columns=["ncells"])
+            return df_corr, prefix, df
+        return df_corr, prefix
+
+    def get_mean_correlation_matrix_of_reps(self, row, return_ncells=False):
+        prefix = self.get_prefix_from_row(row)
+        df_corr = pd.read_csv(f"{self.control.get_staging()}/concordance/plots/{prefix}_AVG_CORR_OF_REPS.csv", index_col=0)
+        if return_ncells:
+            CellIds = pd.read_csv(f"{self.control.get_staging()}/correlation/values/{prefix}.csv", index_col=0).CellIds
+            df = self.load_step_manifest("preprocessing")
+            df = pd.DataFrame(df.loc[CellIds].groupby("structure_name").size(), columns=["ncells"])
+            return df_corr, prefix, df
+        return df_corr, prefix
+
+    @staticmethod
+    def get_correlation_matrix_file_prefix(row, genes=None):#TODO Can be deleted?
+        fname = f"{row.aggtype}-{row.alias}-{row.shape_mode}-{row.mpId}"
+        if genes is not None:
+            fname = f"{row.aggtype}-{row.alias}-{genes[0]}-{genes[1]}-{row.shape_mode}-{row.mpId}"
+        return fname
 
     @staticmethod
     def load_data_from_csv(parameters, use_fms=False):
@@ -139,9 +242,7 @@ class LocalStagingIO:
         dims = [['X', 'Y', 'Z', 'C', 'T'][d] for d in range(img.ndim)]
         dims = ''.join(dims[::-1])
         name = path.stem if image_name is None else image_name
-        with writers.ome_tiff_writer.OmeTiffWriter(path, overwrite_file=True) as writer:
-            writer.save(
-                img, dimension_order=dims, image_name=name, channel_names=channel_names)
+        OmeTiffWriter.save(img, path, dim_order=dims, image_name=name, channel_names=channel_names)
         return
 
     @staticmethod
@@ -249,10 +350,10 @@ class DataProducer(LocalStagingIO):
         self.data, self.channels = self.get_single_cell_images(self.row, return_stack="True")
         return
 
-    def align_data(self):
+    def align_data(self, force_alignment=False):
         self.angle = np.nan
         self.data_aligned = self.data
-        if self.control.should_align():
+        if self.control.should_align() or force_alignment:
             alias_ref = self.control.get_alignment_reference_alias()
             if alias_ref is None:
                 raise ValueError("Specify a reference alias for alignment.")

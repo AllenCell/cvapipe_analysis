@@ -36,7 +36,13 @@ class Concordance(Step):
             space.execute(df)
             variables = control.get_variables_values_for_aggregation()
             variables = control.duplicate_variable(variables, "structure")
-            df_agg = space.get_aggregated_df(variables, False)
+            df_agg = space.get_aggregated_df(variables, include_cellIds=False)
+            if len(control.get_map_points()) > 1:
+                variables = control.get_variables_values_for_aggregation()
+                variables.update({"shape_mode": ["NdSphere"], "mpId": [control.get_center_map_point_index()]})
+                variables = control.duplicate_variable(variables, "structure")
+                df_sphere = space.get_aggregated_df(variables, include_cellIds=False)
+                df_agg = df_agg.append(df_sphere, ignore_index=True)
 
             if distribute:
 
@@ -52,21 +58,21 @@ class Concordance(Step):
             with concurrent.futures.ProcessPoolExecutor(control.get_ncores()) as executor:
                 executor.map(calculator.execute, [row for _, row in df_agg.iterrows()])
 
-            log.info(f"Loading results...")
-
-            df_results = calculator.load_results_in_single_dataframe()
-
             log.info(f"Generating plots...")
 
-            pmaker = plotting.ConcordancePlotMaker(control)
-            pmaker.set_dataframe(df_results)
-            for alias in tqdm(control.get_aliases_to_parameterize()):
-                for shape_mode in control.get_shape_modes():
-                    mpId = control.get_center_map_point_index()
-                    pmaker.filter_dataframe(
-                        {'alias': alias, 'shape_mode': shape_mode, 'mpId': [mpId]})
+            variables = control.get_variables_values_for_aggregation()
+            df_agg = space.get_aggregated_df(variables, include_cellIds=False)
+            if len(control.get_map_points()) > 1:
+                variables.update({"shape_mode": ["NdSphere"], "mpId": [control.get_center_map_point_index()]})
+                df_sphere = space.get_aggregated_df(variables, include_cellIds=False)
+                df_agg = df_agg.append(df_sphere, ignore_index=True)
+            df_agg =  df_agg.drop(columns=["structure"]).drop_duplicates().reset_index(drop=True)
+
+            for index, row in tqdm(df_agg.iterrows(), total=len(df_agg)):
+                for mode in [True, False]:
+                    pmaker = plotting.ConcordancePlotMaker(control)
+                    pmaker.use_average_representations(mode)
+                    pmaker.set_dataframe(df)
+                    pmaker.set_row(row)
                     pmaker.execute(display=False)
-                    mpIds = control.get_extreme_opposite_map_point_indexes()
-                    pmaker.filter_dataframe(
-                        {'alias': alias, 'shape_mode': shape_mode, 'mpId': mpIds})
-                    pmaker.execute(display=False)
+

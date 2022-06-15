@@ -46,6 +46,19 @@ class Distributor:
     def get_next_chunk(self):
         for chunk, df_chunk in self.df.groupby(np.arange(self.nrows) // self.chunk_size):
             yield chunk, df_chunk
+    
+    def get_next_block(self):
+        block = 0
+        ni = int(np.sqrt(self.nworkers))
+        nj = int(self.nworkers / ni)
+        for indexes_i in np.array_split(self.df.index.values, ni):
+            for indexes_j in np.array_split(self.df.index.values, nj):
+                col1 = np.hstack([indexes_i, indexes_j])
+                col2 = np.hstack([0*indexes_i, 1+0*indexes_j])
+                df = pd.DataFrame(np.vstack([col1, col2]).T, columns=["CellId", "Group"])
+                df = df.set_index("CellId")
+                block += 1
+                yield block, df
 
     def get_abs_path_to_python_file_as_str(self):
         path = self.abs_path_to_cvapipe / self.rel_path_to_python_file
@@ -85,6 +98,7 @@ class Distributor:
             print(f"#SBATCH --output {abs_path_output_folder}/%A_%a.out", file=fs)
             print(f"#SBATCH --error {abs_path_output_folder}/%A_%a.err", file=fs)
             print(f"#SBATCH --array=1-{len(self.jobs)}", file=fs)
+            print("#SBATCH --job-name=cvapipe", file=fs)
             print(
                 f"srun $(head -n $SLURM_ARRAY_TASK_ID {self.abs_path_jobs_file_as_str} | tail -n 1)", file=fs)
         return
@@ -92,7 +106,6 @@ class Distributor:
     def execute(self):
         self.write_commands_file()
         self.write_script_file()
-
         print(f"Submitting {len(self.jobs)} cvapipe_analysis jobs...")
         submission = 'sbatch ' + self.abs_path_to_script_as_str
         process = subprocess.Popen(submission, stdout=subprocess.PIPE, shell=True)
@@ -105,13 +118,34 @@ class Distributor:
         print(f"\nDistributing dataframe of shape: {self.df.shape}")
         print(f"in chunks of size {self.chunk_size}.\n")
         for chunk, df_chunk in self.get_next_chunk():
-            abs_path_to_dataframe = self.abs_path_to_distribute / \
-                f"dataframes/{chunk}.csv"
+            abs_path_to_dataframe = self.abs_path_to_distribute/f"dataframes/{chunk}.csv"
             df_chunk.to_csv(abs_path_to_dataframe)
             self.append_job(chunk)
         self.execute()
         return
 
+    def distribute_by_row(self):
+        print("\nCleaning distribute directory.\n")
+        self.clean_distribute_folder()
+        print(f"\nDistributing dataframe of shape: {self.df.shape} by row.")
+        for chunk, (_, row) in enumerate(self.df.iterrows()):
+            abs_path_to_dataframe = self.abs_path_to_distribute/f"dataframes/{chunk}.csv"
+            pd.DataFrame(row).to_csv(abs_path_to_dataframe)
+            self.append_job(chunk)
+        self.execute()
+        return
+
+    def distribute_by_blocks(self):
+        print("\nCleaning distribute directory.\n")
+        self.clean_distribute_folder()
+        print(f"\nDistributing dataframe of shape: {self.df.shape}")
+        print(f"in {self.nworkers} blocks.\n")
+        for block, df_block in self.get_next_block():
+            abs_path_to_dataframe = self.abs_path_to_distribute/f"dataframes/{block}.csv"
+            df_block.to_csv(abs_path_to_dataframe)
+            self.append_job(block)
+        self.execute()
+        return
 
 class FeaturesDistributor(Distributor):
     def __init__(self, control):
@@ -141,3 +175,9 @@ class ConcordanceDistributor(Distributor):
     def __init__(self, control):
         super().__init__(control)
         self.rel_path_to_python_file = "cvapipe_analysis/steps/concordance/concordance_tools.py"
+
+class CorrelationDistributor(Distributor):
+    # Requires blocks distribution instead of chunks
+    def __init__(self, control):
+        super().__init__(control)
+        self.rel_path_to_python_file = "cvapipe_analysis/steps/correlation/correlation_tools.py"

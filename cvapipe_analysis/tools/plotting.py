@@ -7,6 +7,7 @@ from tqdm import tqdm
 from pathlib import Path
 from typing import Optional
 from functools import reduce
+from skimage import io as skio
 import matplotlib.pyplot as plt
 from matplotlib import animation
 from matplotlib import lines as pltlines
@@ -14,14 +15,14 @@ from scipy import stats as spstats
 from scipy import cluster as spcluster
 from aicsimageio import AICSImage, writers
 from vtk.util import numpy_support as vtknp
-from cvapipe_analysis.tools import io
+from cvapipe_analysis.tools import io, shapespace
 
 plt.rcParams['ps.fonttype'] = 42
 plt.rcParams['pdf.fonttype'] = 42
 plt.rcParams['font.sans-serif'] = "Arial"
 plt.rcParams['font.family'] = "sans-serif"
 
-class PlotMaker(io.LocalStagingIO):
+class PlotMaker(io.DataProducer):
     """
     Support class. Should not be instantiated directly.
 
@@ -32,13 +33,16 @@ class PlotMaker(io.LocalStagingIO):
     their are saved.
     """
 
-    figs = []
-    df = None
     dpi = 72
+    heatmap_vmin = -1.0
+    heatmap_vmax = 1.0
 
     def __init__(self, control):
         super().__init__(control)
-        self.genes = self.control.get_gene_names()
+        self.df = None
+        self.figs = []
+        self.dataframes = []
+        self.device = io.LocalStagingIO(control)
 
     def workflow(self):
         pass
@@ -73,6 +77,16 @@ class PlotMaker(io.LocalStagingIO):
                 fig.savefig(save_dir/f"{fname}.png", facecolor="white")
                 fig.savefig(save_dir/f"{fname}.pdf", facecolor="white")
                 plt.close(fig)
+        for (df, signature) in self.dataframes:
+            fname = signature
+            if hasattr(self, "full_path_provided") and self.full_path_provided:
+                save_dir = self.output_folder
+            else:
+                save_dir = self.control.get_staging()/self.subfolder
+            save_dir.mkdir(parents=True, exist_ok=True)
+            if prefix is not None:
+                fname = f"{prefix}_{signature}"
+            df.to_csv(save_dir/f"{fname}.csv")
 
     def check_dataframe_exists(self):
         if self.df is None:
@@ -82,6 +96,10 @@ class PlotMaker(io.LocalStagingIO):
     def filter_dataframe(self, filters):
         self.check_dataframe_exists()
         self.df = self.control.get_filtered_dataframe(self.df_original, filters)
+
+    def set_heatmap_min_max_values(self, vmin, vmax):
+        self.heatmap_vmin = vmin
+        self.heatmap_vmax = vmax
 
     @staticmethod
     def get_correlation_matrix(df, rank):
@@ -93,18 +111,27 @@ class PlotMaker(io.LocalStagingIO):
         for s1, name1 in enumerate(rank):
             for s2, name2 in enumerate(rank):
                 if (name1 in names1) and (name2 in names2):
-                    indexes = df.loc[(df.structure1 == name1) &
-                                     (df.structure2 == name2)].index
+                    indexes = df.loc[(df.structure1 == name1) & (df.structure2 == name2)].index
                     matrix[s1, s2] = df.at[indexes[0], "Pearson"]
         return matrix
 
     @staticmethod
+    def get_aggregated_matrix_from_df(genes, df_corr):
+        matrix = np.zeros((len(genes), len(genes)))
+        for gid1, gene1 in enumerate(genes):
+            for gid2, gene2 in enumerate(genes):
+                if gid2 >= gid1:
+                    values = df_corr.loc[(gene1, gene2)].values
+                    avg = np.nanmean(values)
+                    std = np.nanstd(values)
+                    matrix[gid1, gid2] = matrix[gid2, gid1] = avg
+        return matrix
+
+    @staticmethod
     def get_dataframe_desc(df):
-        desc = "-".join([str(sorted(df[f].unique()))
-                         for f in ["alias", "shape_mode", "mpId"]])
+        desc = "-".join([str(sorted(df[f].unique())) for f in ["alias", "shape_mode", "mpId"]])
         desc = desc.replace("[", "").replace("]", "").replace("'", "")
         return desc
-
 
 class ConcordancePlotMaker(PlotMaker):
     """
@@ -114,114 +141,177 @@ class ConcordancePlotMaker(PlotMaker):
     the local_staging folder is.
     """
 
-    heatmap_vmin = -1.0
-    heatmap_vmax = 1.0
-
     def __init__(self, control, subfolder: Optional[str] = None):
         super().__init__(control)
+        self.work_with_avg_reps = False
         self.subfolder = "concordance/plots" if subfolder is None else subfolder
+        self.ncells = dict([(gene, None) for gene in control.get_structure_names()])
 
     def workflow(self):
+        suffix = "_AVG_CORR_OF_REPS"
+        if self.work_with_avg_reps:
+            suffix = "_CORR_OF_AVG_REP"
         self.check_dataframe_exists()
-        self.check_and_store_parameters()
-        self.build_correlation_matrix()
-        self.make_heatmap(diagonal=self.multiple_mps)
-        if self.multiple_mps:
-            self.make_relative_heatmap()
+        self.matrix = self.get_agg_correlation_matrix(update_ncells=True)
+        # self.matrix = self.normalize_by_diagonal(self.matrix)
+        if not self.work_with_avg_reps:
+            self.set_heatmap_min_max_values(-0.2, 0.2)
+        prefix = self.make_heatmap(self.matrix, suffix=suffix)
+        genes = self.control.get_gene_names()
+        df_corrs = pd.DataFrame(self.matrix, columns=genes, index=genes)
+        self.dataframes.append((df_corrs, prefix))
+        self.make_dendrogram(self.matrix, suffix=suffix)
+        if self.row.mpId < self.control.get_center_map_point_index():
+            self.matrix_mirrored = self.get_agg_correlation_matrix(create_mirrored_matrix=True)
+            self.make_heatmap(self.matrix_mirrored, diagonal=True, suffix=f"_mirrored{suffix}")
+            self.matrix_relative = self.get_agg_correlation_matrix(create_mirrored_matrix=True, relative_to_center=True)
+            if not self.work_with_avg_reps:
+                self.set_heatmap_min_max_values(-0.1, 0.1)
+            self.make_heatmap(self.matrix_relative, diagonal=True, cmap="PRGn", suffix=f"_relative{suffix}")
+        return
+
+    def use_average_representations(self, value):
+        self.work_with_avg_reps = value
+
+    @staticmethod
+    def normalize_by_diagonal(matrix):
+        for i in range(matrix.shape[0]):
+            for j in range(matrix.shape[1]):
+                if j != i:
+                    matrix[i, j] /= matrix[i, i]
+        np.fill_diagonal(matrix, 1)
+        matrix = 0.5*(matrix+matrix.T)
+        return matrix
+
+    def get_agg_correlation_matrix(self, create_mirrored_matrix=False, relative_to_center=False, update_ncells=False):
+        row = self.row.copy()
+        mpIdc = self.control.get_center_map_point_index()
+        if create_mirrored_matrix:
+            row.mpId = mpIdc-(row.mpId-mpIdc)
+        df_corr = self.device.read_corelation_matrix(row)
+        if update_ncells:
+            for struct, gene in zip(self.control.get_structure_names(), self.control.get_gene_names()):
+                self.ncells[struct] = len(df_corr.loc[gene])
+        if df_corr is None:
+            return
+        genes = self.control.get_gene_names()
+        if self.work_with_avg_reps:
+            matrix = self.device.build_correlation_matrix_of_avg_reps_from_corr_values(row)
         else:
-            self.make_dendrogram()
-        return
+            matrix = self.get_aggregated_matrix_from_df(genes, df_corr)
+        if relative_to_center:
+            row_center = row.copy()
+            row_center.mpId = mpIdc
+            df_corr_center = self.device.read_corelation_matrix(row_center)
+            if self.work_with_avg_reps:
+                matrix_center = self.device.build_correlation_matrix_of_avg_reps_from_corr_values(row_center)
+            else:
+                matrix_center = self.get_aggregated_matrix_from_df(genes, df_corr_center)
+            matrix =  matrix_center - matrix
+            self.matrix = matrix_center - self.matrix
+        if create_mirrored_matrix:
+            matrix_inf = np.tril(self.matrix, -1)
+            matrix_sup = np.triu(matrix, 1)
+            matrix = matrix_inf + matrix_sup
+        return matrix
 
-    def get_heatmap_as_matrix(self):
-        df = pd.DataFrame(self.matrix)
-        df.index = self.control.get_gene_names()
-        return df
-
-    def set_heatmap_min_max_values(self, vmin, vmax):
-        self.heatmap_vmin = vmin
-        self.heatmap_vmax = vmax
-
-    def check_and_store_parameters(self):
-        mpIds = self.df.mpId.unique()
-        if len(mpIds) > 2:
-            raise ValueError(f"More than 2 map points found in the dataframe: {mpIds}")
-        aliases = self.df.alias.unique()
-        if len(aliases) > 1:
-            raise ValueError(
-                f"Multiples aliases found in the dataframe: {aliases}"
-            )
-        shape_modes = self.df.shape_mode.unique()
-        if len(shape_modes) > 1:
-            raise ValueError(
-                f"Multiples shape modes found in the dataframe: {shape_modes}"
-            )
-        self.alias = aliases[0]
-        self.shape_mode = shape_modes[0]
-        self.mpIds = mpIds
-        self.multiple_mps = len(mpIds) > 1
-        return
-
-    def build_correlation_matrix(self):
-        matrices = []
-        for mpId in self.mpIds:
-            df_mp = self.df.loc[self.df.mpId == mpId]
-            matrices.append(self.get_correlation_matrix(df_mp, self.genes))
-        self.matrix = matrices[0]
-        if self.multiple_mps:
-            matrix_inf = np.tril(matrices[0], -1)
-            matrix_sup = np.triu(matrices[1], 1)
-            self.matrix = matrix_inf + matrix_sup
-        return
-
-    def make_heatmap(self, diagonal=False, cmap="RdBu", **kwargs):
-        ns = self.matrix.shape[0]
+    def make_heatmap(self, matrix, diagonal=False, cmap="RdBu", **kwargs):
+        ns = matrix.shape[0]
         fig, ax = plt.subplots(1, 1, figsize=(8, 8), dpi=self.dpi)
-        ax.imshow(-self.matrix, cmap=cmap, vmin=self.heatmap_vmin, vmax=self.heatmap_vmax)
-        ax.set_xticks(np.arange(self.matrix.shape[0]))
-        ax.set_yticks(np.arange(self.matrix.shape[0]))
+        ax.imshow(-matrix, cmap=cmap, vmin=self.heatmap_vmin, vmax=self.heatmap_vmax)
+        ax.set_xticks(np.arange(matrix.shape[0]))
+        ax.set_yticks(np.arange(matrix.shape[0]))
         ax.get_xaxis().set_ticklabels([])
-        ax.get_yaxis().set_ticklabels(self.control.get_structure_names())
+        names = self.control.get_structure_names()
+        for i, name in enumerate(names):
+            n = self.ncells[name]
+            names[i] = f"{name} (N={n})" if n is not None else name
+        ax.get_yaxis().set_ticklabels(names)
         for _, spine in ax.spines.items():
             spine.set_visible(False)
         ax.set_xticks(np.arange(ns + 1) - 0.5, minor=True)
         ax.set_yticks(np.arange(ns + 1) - 0.5, minor=True)
         ax.grid(which="minor", color="w", linestyle="-", linewidth=2)
         ax.tick_params(which="both", bottom=False, left=False)
+        prefix = self.device.get_correlation_matrix_file_prefix(self.row)
         if diagonal:
             ax.plot([-0.5, ns - 0.5], [-0.5, ns - 0.5], "k-", linewidth=2)
-        ax.set_title(self.get_dataframe_desc(self.df))
+        if "suffix" in kwargs:
+            prefix += kwargs["suffix"]
+        ax.set_title(prefix)
         plt.tight_layout()
-        prefix = "heatmap" if "prefix" not in kwargs else kwargs["prefix"]
-        self.figs.append((fig, f"{prefix}_" + self.get_dataframe_desc(self.df)))
-        return
+        self.figs.append((fig, prefix))
+        return prefix
 
-    def get_dataframe_of_center_bin(self, alias, shape_mode):
-        cidx = self.control.get_center_map_point_index()
-        fltr = {"alias": alias, "shape_mode": shape_mode, "mpId": [cidx]}
-        return self.control.get_filtered_dataframe(self.df_original, fltr)
+    def make_confidence_heatmap(self, matrix, conf_matrix, colors, size_scale=49, hide_colors=[], **kwargs):
 
-    def make_relative_heatmap(self):
-        df = self.get_dataframe_of_center_bin(self.alias, self.shape_mode)
-        corr = self.get_correlation_matrix(df, self.genes)
-        self.matrix = corr - self.matrix
-        np.fill_diagonal(self.matrix, 0)
-        self.make_heatmap(diagonal=True, cmap="PRGn", prefix="heatmap_relative")
-        return
+        yxfac = 1 if matrix.shape[0]==matrix.shape[1] else 0.36#3*matrix.shape[1]/matrix.shape[0]
+        fig, ax = plt.subplots(1, 1, figsize=(8*yxfac, 8), dpi=self.dpi)
 
-    def make_dendrogram(self):
+        y_labels = matrix.index
+        x_labels = matrix.columns
+        x_to_num = {xlab:i for i, xlab in enumerate(x_labels)} 
+        y_to_num = {ylab:i for i, ylab in enumerate(y_labels)} 
+
+        for ylab, row in matrix.iterrows():
+            for xlab, value in row.items():
+                if value not in hide_colors:
+                    ax.scatter(
+                        x=x_to_num[xlab],
+                        y=y_to_num[ylab],
+                        color=colors[value],
+                        s=conf_matrix.at[ylab,xlab] * size_scale,
+                        marker='s',
+                        ec="black"
+                    )
+                else:
+                    ax.scatter(
+                        x=x_to_num[xlab],
+                        y=y_to_num[ylab],
+                        color="k",
+                        s=size_scale,
+                        marker='.',
+                        ec="black"
+                    )
+        ns = len(conf_matrix)
+        ax.set_ylim(-1, ns+1)
+        ax.invert_yaxis()
+        ax.set_yticks([y_to_num[v] for v in y_labels])
+        names = self.control.get_structure_names()
+        for i, name in enumerate(names):
+            n = self.ncells[name]
+            names[i] = f"{name} (N={n})" if n is not None else name
+        ax.set_yticklabels(names)
+        for _, spine in ax.spines.items():
+            spine.set_visible(False)
+        ax.get_xaxis().set_ticklabels([])
+        ax.tick_params(which="both", bottom=False, left=False)
+        prefix = self.device.get_correlation_matrix_file_prefix(self.row)
+        if "suffix" in kwargs:
+            prefix += kwargs["suffix"]
+        if "xlim" in kwargs:
+            ax.set_xlim(*kwargs["xlim"])
+        ax.set_title(prefix)
+        plt.tight_layout()
+        self.figs.append((fig, prefix))
+        return prefix
+
+    def make_dendrogram(self, matrix, **kwargs):
+        method = "average"
         try:
-            Z = spcluster.hierarchy.linkage(self.matrix, "average")
+            Z = spcluster.hierarchy.linkage(matrix, method)
         except Exception as ex:
             print(f"Can't generate the dendrogram. Possible NaN in matrix: {ex}")
             return
-        Z = spcluster.hierarchy.optimal_leaf_ordering(Z, self.matrix)
+        Z = spcluster.hierarchy.optimal_leaf_ordering(Z, matrix)
         fig, ax = plt.subplots(1, 1, figsize=(8, 8))
-        _ = spcluster.hierarchy.dendrogram(
-            Z, labels=self.control.get_structure_names(), leaf_rotation=90
-        )
-        ax.set_title(self.get_dataframe_desc(self.df))
+        _ = spcluster.hierarchy.dendrogram(Z, labels=self.control.get_structure_names(), leaf_rotation=90)
+        desc = self.device.get_correlation_matrix_file_prefix(self.row)
+        if "suffix" in kwargs:
+            desc += kwargs["suffix"]
+        ax.set_title(desc)
         plt.tight_layout()
-        self.figs.append((fig, "dendrogram_" + self.get_dataframe_desc(self.df)))
+        self.figs.append((fig, "dendrogram_"+desc))
         return
 
 
@@ -236,27 +326,74 @@ class StereotypyPlotMaker(PlotMaker):
 
     def __init__(self, control, subfolder: Optional[str] = None):
         super().__init__(control)
-        self.max_number_of_pairs = 0
+        self.matrix = None
+        self.extra_values = None
         self.subfolder = "stereotypy/plots" if subfolder is None else subfolder
-
-    def set_max_number_of_pairs(self, n):
-        self.max_number_of_pairs = n if n > 0 else 0
 
     def workflow(self):
         self.make_boxplot()
+        self.load_data_for_extra_values()
+        for matrix, relative in zip([self.matrix, self.matrix_relative], [False, True]):
+            vmin, vmax = -0.2, 0.2
+            if relative:
+                vmin, vmax = -0.1, 0.1
+            self.set_heatmap_min_max_values(vmin, vmax)
+            self.make_heatmap(matrix=matrix, relative=relative)
+
+    def set_extra_values(self, values):
+        self.extra_values = values
+
+    def load_data_for_extra_values(self):
+        self.matrix, self.matrix_relative = None, None
+        if self.extra_values is None:
+            return
+        cols = []
+        heatmap = []
+        row = self.row.copy()
+        genes = self.control.get_gene_names()
+        for k, vs in self.extra_values.items():
+            for v in vs:
+                row[k] = v
+                df_corr = self.device.read_corelation_matrix(row)
+                df_corr_agg = self.get_aggregated_matrix_from_df(genes, df_corr)
+                heatmap.append(np.diag(df_corr_agg))
+                cols.append(f"{k}={v}")
+        self.matrix = np.array(heatmap).T
+
+        df_stereo = pd.DataFrame(self.matrix, columns=cols, index=self.control.get_gene_names())
+        prefix = self.device.get_correlation_matrix_file_prefix(self.row)
+        prefix += "".join([f"{k}_"+"_".join([str(v) for v in self.extra_values[k]]) for k in self.extra_values.keys()])
+        self.dataframes.append((df_stereo, prefix))
+        # Relative heatmap
+        df_stereo_relative = df_stereo.copy()
+        center_col = [f"{k}={self.control.get_center_map_point_index()}" for k in self.extra_values.keys()][0]
+        for col in cols:
+            df_stereo_relative[col] = df_stereo[center_col]-df_stereo_relative[col]
+        self.matrix_relative = df_stereo_relative.values
+        self.dataframes.append((df_stereo_relative, prefix+"_relative"))
+        return
 
     def make_boxplot(self):
+
+        df_corr = self.device.read_corelation_matrix(self.row)
+        if df_corr is None:
+            return
+
         labels = []
         self.check_dataframe_exists()
         fig, ax = plt.subplots(1, 1, figsize=(7, 8), dpi=self.dpi)
         for sid, gene in enumerate(reversed(self.control.get_gene_names())):
-            df_s = self.df.loc[self.df.structure == gene]
-            if self.max_number_of_pairs > 0:
-                df_s = df_s.sample(n=np.min([len(df_s), self.max_number_of_pairs]))
-            y = np.random.normal(size=len(df_s), loc=sid, scale=0.1)
-            ax.scatter(df_s.Pearson, y, s=1, c="k", alpha=0.1)
+
+            values = df_corr.loc[gene, gene].values
+            ncells = values.shape[0]
+            values = values[np.triu_indices(ncells, k=1)]
+
+            np.random.seed(42)
+            x = np.random.choice(values, np.min([ncells, 1024]), replace=False)
+            y = np.random.normal(size=len(x), loc=sid, scale=0.1)
+            ax.scatter(x, y, s=1, c="k", alpha=0.1)
             box = ax.boxplot(
-                df_s.Pearson,
+                values,
                 positions=[sid],
                 showmeans=True,
                 widths=0.75,
@@ -270,17 +407,43 @@ class StereotypyPlotMaker(PlotMaker):
                     "markersize": 5,
                 },
             )
-            label = f"{self.control.get_structure_name(gene)} (N={len(df_s):04d})"
+            label = f"{self.control.get_structure_name(gene)} (N={ncells:04d})"
             labels.append(label)
             box["boxes"][0].set(facecolor=self.control.get_gene_color(gene))
             box["medians"][0].set(color="black")
         ax.set_yticklabels(labels)
         ax.set_xlim(-0.2, 1.0)
         ax.set_xlabel("Pearson correlation coefficient", fontsize=14)
-        ax.set_title(self.get_dataframe_desc(self.df))
+        ax.set_title(self.device.get_correlation_matrix_file_prefix(self.row))
         ax.grid(True)
         plt.tight_layout()
-        self.figs.append((fig, self.get_dataframe_desc(self.df)))
+        self.figs.append((fig, self.device.get_correlation_matrix_file_prefix(self.row)))
+
+    def make_heatmap(self, matrix, relative=False):
+        if matrix is None:
+            return
+        nsy, nsx = matrix.shape
+        cmap = "PRGn" if relative else "RdBu"
+        fig, ax = plt.subplots(1, 1, figsize=(8, 16), dpi=self.dpi)
+        ax.imshow(-matrix, cmap=cmap, vmin=self.heatmap_vmin, vmax=self.heatmap_vmax)
+        ax.set_xticks(np.arange(matrix.shape[0]))
+        ax.set_yticks(np.arange(matrix.shape[0]))
+        ax.get_xaxis().set_ticklabels([])
+        ax.get_yaxis().set_ticklabels(self.control.get_structure_names())
+        for _, spine in ax.spines.items():
+            spine.set_visible(False)
+        ax.set_xticks(np.arange(nsx + 1) - 0.5, minor=True)
+        ax.set_yticks(np.arange(nsy + 1) - 0.5, minor=True)
+        ax.grid(which="minor", color="w", linestyle="-", linewidth=2)
+        ax.tick_params(which="both", bottom=False, left=False)
+        prefix = self.device.get_correlation_matrix_file_prefix(self.row)
+        prefix += "".join([f"{k}_"+"_".join([str(v) for v in self.extra_values[k]]) for k in self.extra_values.keys()])
+        if relative:
+            prefix += "_relative"
+        ax.set_title(prefix)
+        plt.tight_layout()
+        self.figs.append((fig, prefix))
+        return
 
 
 class ShapeSpacePlotMaker(PlotMaker):
@@ -494,6 +657,8 @@ class ShapeModePlotMaker(PlotMaker):
     def load_animated_gif(self, shape_mode, proj):
         fname = self.control.get_staging() / f"{self.subfolder}/{shape_mode}_{proj}.gif"
         image = AICSImage(fname).data.squeeze()
+        if image.ndim == 3:
+            image = np.expand_dims(image, 0)
         return image
 
     def combine_and_save_animated_gifs(self):
@@ -502,23 +667,13 @@ class ShapeModePlotMaker(PlotMaker):
             imx = self.load_animated_gif(sm, "x")
             imy = self.load_animated_gif(sm, "y")
             imz = self.load_animated_gif(sm, "z")
-            img = np.c_[imz, imy, imx]
-            print(img.shape)
-            if imx.ndim == 3:
-                img = np.expand_dims(img, 0)
-            img = np.swapaxes(img, 0, 1)# mpID -> Z
+            img = np.concatenate([imz, imy, imx], axis=-2)
             stack.append(img)
         stack = np.array(stack)
-        stack = np.concatenate(stack[:], axis=-2)[:3]
-        stack = np.concatenate([stack[:, :-1], stack[:, ::-1]], axis=1)
-        # Reduce the empty space between images
-        gaps = stack.min(axis=(0, 1, 3)) < 125
-        for _ in range(5):
-            gaps[1:-1] = gaps[2:] + gaps[:-2]
-        stack = stack[:, :, gaps > 0, :]
+        stack = np.concatenate(stack[:], axis=-3)
+        stack = np.rollaxis(stack, -1, 1)
         fname = self.control.get_staging() / f"{self.subfolder}/combined.tif"
-        with writers.ome_tiff_writer.OmeTiffWriter(fname, overwrite_file=True) as writer:
-            writer.save(stack, dimension_order='CZYX')
+        writers.ome_tiff_writer.OmeTiffWriter.save(stack, fname, overwrite_file=True, dim_order="CZYX")
         return
 
     @staticmethod
@@ -573,43 +728,46 @@ class ShapeSpaceMapperPlotMaker(PlotMaker):
         self.grouping = grouping
 
     @staticmethod
-    def comparative_hists(df1, df2, title):
+    def comparative_hists(df1, df2, title, bin_edges, display_both=True, ymax=1):
         nc = len(df1.columns)
-
-        args = {"bins": np.linspace(-4.0, 4.0, 17), "density": True}
-        fig, axs = plt.subplots(nc, 1, figsize=(1.5,1*nc), sharex=False, gridspec_kw={"hspace": 0.5})
+        args = {"bins": bin_edges, "density": True}
+        fig, axs = plt.subplots(1, nc, figsize=(1.5*nc, 1.5), sharex=False, gridspec_kw={"wspace": 0.2})
         axs = [axs] if len(axs)==1 else axs
         for sm, ax in zip(df1.columns, axs):
             ax.set_frame_on(False)
-            ax.hist(df1[sm], **args, alpha=0.5, fc="black")
-            ax.hist(df2[sm], **args, histtype="step", linewidth=1, edgecolor="#FF3264")
+            if display_both:
+                ax.hist(df1[sm], **args, alpha=0.4, fc="gray")
+                ax.hist(df2[sm], **args, histtype="step", linewidth=1, edgecolor="#FF3264")
+            else:
+                ax.hist(df1[sm], **args, histtype="step", linewidth=1, edgecolor="black")
             # ax.set_xlabel(sm, fontsize=12)
-            ax.set_ylim(0, 1)
-            ax.set_xlim(-4, 4)
+            ax.set_ylim(0, ymax)
+            ax.set_xlim(int(bin_edges[0]-1), int(bin_edges[-1]+1))
             ax.get_xaxis().tick_bottom()
-            ax.set_xticks([-4, -2, 0, 2, 4])
+            ax.set_xticks([-2, 0, 2])
             ax.axes.get_yaxis().set_visible(False)
             xmin, xmax = ax.get_xaxis().get_view_interval()
             ymin, ymax = ax.get_yaxis().get_view_interval()
             ax.add_artist(pltlines.Line2D((xmin, xmax), (ymin, ymin), color='black', linewidth=1))
-
-        plt.suptitle(title, fontsize=18)
-        plt.tight_layout()
+        # plt.tight_layout()
         return fig
 
-    def plot_mapping_1d(self):
+    def plot_mapping_1d(self, display_both=True, ymax=1):
         df_base = self.df.loc["base"]
         sms = self.control.get_shape_modes()
+        bin_centers = self.control.get_map_points()
+        binw = 0.5*np.diff(bin_centers).mean() if len(bin_centers) > 1 else 1
+        bin_edges = np.unique([(b-binw, b+binw) for b in bin_centers])
         for dsname, df in self.df.groupby(level="dataset", sort=False):
             if dsname != "base":
-                fig = self.comparative_hists(df_base[sms], df[sms], dsname)
+                fig = self.comparative_hists(df_base[sms], df[sms], dsname, bin_edges, ymax=ymax)
                 self.figs.append((fig, f"mapping_{dsname}"))
                 # Same plots for matching pairs
                 ds_ids = df.loc[df.Match==True].index
                 NNCellIds = df.loc[ds_ids].NNCellId.values
                 bs_ids = [(sname, nnid) for ((_, sname, _), nnid) in zip(ds_ids, NNCellIds)]
                 bs_ids = pd.MultiIndex.from_tuples(bs_ids).drop_duplicates()
-                fig = self.comparative_hists(df_base.loc[bs_ids, sms], df.loc[ds_ids, sms], dsname)
+                fig = self.comparative_hists(df_base.loc[bs_ids, sms], df.loc[ds_ids, sms], dsname, bin_edges, display_both, ymax=ymax)
                 self.figs.append((fig, f"mapping_{dsname}_match"))
 
     def plot_mapping_2d(self):

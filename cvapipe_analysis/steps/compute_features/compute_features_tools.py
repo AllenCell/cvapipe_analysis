@@ -159,7 +159,7 @@ class FeatureCalculator(io.DataProducer):
         dz = np.array([-1, 0, 0, 0, 0, 1])
         surface_area = 0
         for (k, j, i) in zip(pxl_z, pxl_y, pxl_x):
-            surface_area += 6 - input_img_surface[k+dz, j+dy, i+dx].sum()
+            surface_area += 6 - (input_img[k+dz, j+dy, i+dx]>0).sum()
         return int(surface_area)
 
 if __name__ == "__main__":
