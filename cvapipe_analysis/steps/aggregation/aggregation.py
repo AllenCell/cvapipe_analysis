@@ -47,7 +47,7 @@ class Aggregation(Step):
                 '''Setting chunk size to 1 here so that each job has to generate
                 a single file. Otherwise Slurm crashes for reasons that I don't
                 yet know. It seems to me that aggregation_tools.py is leaking
-                memory. To be investigated.'''
+                memory. To be investigated...'''
                 distributor.set_chunk_size(1)
                 distributor.distribute()
                 log.info(f"Multiple jobs have been launched. Please come back when the calculation is complete.")
@@ -55,6 +55,10 @@ class Aggregation(Step):
                 return None
 
             aggregator = Aggregator(control)
+            aggregator.execute(df_agg.loc[df_agg.index[0]])
+
+            import pdb; pdb.set_trace()
+
             for index, row in tqdm(df_agg.iterrows(), total=len(df_agg)):
                 '''Concurrent processes inside. Do not use concurrent here.'''
                 aggregator.execute(row)

@@ -41,21 +41,30 @@ class Aggregator(io.DataProducer):
     def workflow(self):
         self.set_agg_function()
         self.aggregate_parameterized_intensities()
-        self.morph_on_shapemode_shape()
+        #self.morph_on_shapemode_shape()
 
     def get_output_file_name(self):
         return f"{self.get_prefix_from_row(self.row)}.tif"
 
     def save(self):
-        img = self.morphed
         n = len(self.CellIds)
         save_as = self.get_output_file_path()
+        '''
+        # Save morphed cell
+        img = self.morphed
         self.write_ome_tif(save_as, img, ['domain', save_as.stem], f"N{n}")
+        '''
+        # Save agg representation
         img = self.aggregated_parameterized_intensity
-        img = img.reshape(1, *img.shape)
+        # img = img.reshape(1, *img.shape)
         save_as = Path(str(save_as).replace('aggmorph', 'repsagg'))
-        self.write_ome_tif(
-            save_as, img, [save_as.stem], f"N{n}")
+        self.write_ome_tif(save_as, img, [save_as.stem], f"N{n}")
+        # Save norm agg representation
+        img = self.aggregated_norm_parameterized_intensity
+        # img = img.reshape(1, *img.shape)
+        save_as = Path(str(save_as).replace('.tif', '_norm.tif'))
+        self.write_ome_tif(save_as, img, [save_as.stem], f"N{n}")
+        import pdb; pdb.set_trace()
         return save_as
 
     def set_shape_space(self, space):
@@ -68,12 +77,15 @@ class Aggregator(io.DataProducer):
             raise ValueError("No cells found for parameterization.")
         with concurrent.futures.ProcessPoolExecutor(nc) as executor:
             pints = list(executor.map(self.read_parameterized_intensity, self.CellIds))
-        pints = [p for p in pints if p is not None]
-        agg_pint = self.agg_func(np.array(pints), axis=0)
-        if agg_pint.ndim == 2:
-            agg_pint = agg_pint.reshape(1, *agg_pint.shape)
+        pints = np.array([p for p in pints if p is not None])
+        pints_norm = self.normalized_representations(pints)
+        agg_pint = self.agg_func(pints, axis=0)
+        agg_pint_norm = self.agg_func(pints_norm, axis=0)
+        # if agg_pint.ndim == 2:
+        #     agg_pint = agg_pint.reshape(1, *agg_pint.shape)
         ch = self.control.get_aliases_to_parameterize().index(self.row.alias)
-        self.aggregated_parameterized_intensity = agg_pint[ch].copy()
+        self.aggregated_parameterized_intensity = agg_pint#[ch].copy()
+        self.aggregated_norm_parameterized_intensity = agg_pint_norm#[ch].copy()
         return
 
     def set_agg_function(self):
