@@ -1,5 +1,6 @@
 import os
 import vtk
+import logging
 import errno
 import concurrent
 import numpy as np
@@ -14,6 +15,8 @@ from aicsimageio.writers import OmeTiffWriter
 try:
     from aicsfiles import FileManagementSystem
 except: pass
+
+log = logging.getLogger(__name__)
 
 class LocalStagingIO:
     """
@@ -67,7 +70,27 @@ class LocalStagingIO:
     def get_abs_path_to_step_manifest(self, step):
         return self.control.get_staging() / f"{step}/manifest.csv"
 
+    def write_compute_features_manifest_from_distributed_results(self):
+        df = self.load_step_manifest("loaddata")
+        path = self.control.get_staging() / "computefeatures/cell_features"
+        df_results = self.load_results_in_single_dataframe(path=path)
+        df_results = df_results.set_index('CellId')
+
+        if len(df) != len(df_results):
+            df_miss = df.loc[~df.index.isin(df_results.index)]
+            log.info("Missing feature for indices:")
+            for index in df_miss.index:
+                log.info(f"\t{index}")
+            log.info(f"Total of {len(df_miss)} indices.")
+
+        manifest = df.merge(df_results, left_index=True, right_index=True, how="outer")
+        manifest_path = self.get_abs_path_to_step_manifest("computefeatures")
+        manifest.to_csv(manifest_path)
+        return manifest
+        
     def load_step_manifest(self, step, clean=False, **kwargs):
+        if step == 'computefeatures' and not self.get_abs_path_to_step_manifest(step).is_file():
+            df = self.write_compute_features_manifest_from_distributed_results()
         df = pd.read_csv(
             self.get_abs_path_to_step_manifest(step),
             index_col="CellId", low_memory=False, **kwargs
@@ -137,11 +160,12 @@ class LocalStagingIO:
         code = code.data.squeeze()
         return code
 
-    def load_results_in_single_dataframe(self):
+    def load_results_in_single_dataframe(self, path=None):
         ''' Not sure this function is producing a column named index when
         the concordance results are loaded. Further investigation is needed
         here'''
-        path = self.control.get_staging() / self.subfolder
+        if path is None:
+            path = self.control.get_staging() / self.subfolder
         files = [{"csv": path/f} for f in os.listdir(path)]
         with concurrent.futures.ProcessPoolExecutor(self.control.get_ncores()) as executor:
             df = pd.concat(
