@@ -243,7 +243,7 @@ class ConcordancePlotMaker(PlotMaker):
         self.figs.append((fig, prefix))
         return prefix
 
-    def make_confidence_heatmap(self, matrix, conf_matrix, colors, size_scale=49, hide_colors=[], **kwargs):
+    def make_confidence_heatmap(self, matrix, conf_matrix, colors, size_scale=49, hide_colors=[], markers=None, **kwargs):
 
         yxfac = 1 if matrix.shape[0]==matrix.shape[1] else 0.36#3*matrix.shape[1]/matrix.shape[0]
         fig, ax = plt.subplots(1, 1, figsize=(8*yxfac, 8), dpi=self.dpi)
@@ -261,7 +261,7 @@ class ConcordancePlotMaker(PlotMaker):
                         y=y_to_num[ylab],
                         color=colors[value],
                         s=conf_matrix.at[ylab,xlab] * size_scale,
-                        marker='s',
+                        marker='s' if markers is None else markers[value],
                         ec="black"
                     )
                 else:
