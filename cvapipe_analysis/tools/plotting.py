@@ -389,7 +389,10 @@ class StereotypyPlotMaker(PlotMaker):
             values = values[np.triu_indices(ncells, k=1)]
 
             np.random.seed(42)
-            x = np.random.choice(values, np.min([ncells, 1024]), replace=False)
+            if ncells > 2:
+                x = np.random.choice(values, np.min([ncells, 1024]), replace=False)
+            else:
+                x = values.copy()
             y = np.random.normal(size=len(x), loc=sid, scale=0.1)
             ax.scatter(x, y, s=1, c="k", alpha=0.1)
             box = ax.boxplot(
