@@ -60,7 +60,6 @@ class Aggregator(io.DataProducer):
         img = self.aggregated_norm_parameterized_intensity
         save_as = Path(str(save_as).replace('.tif', '_norm.tif'))
         self.write_ome_tif(save_as, img, [save_as.stem], f"N{n}")
-        import pdb; pdb.set_trace()
         return save_as
 
     def set_shape_space(self, space):
@@ -113,7 +112,6 @@ class Aggregator(io.DataProducer):
         return
 
     def morph_on_shapemode_shape(self):
-        import pdb; pdb.set_trace()
         self.voxelize_and_parameterize_shapemode_shape()
         self.morphed = cytoparam.morph_representation_on_shape(
             img=self.domain,

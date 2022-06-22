@@ -55,10 +55,6 @@ class Aggregation(Step):
                 return None
 
             aggregator = Aggregator(control)
-            aggregator.execute(df_agg.loc[df_agg.index[0]])
-
-            import pdb; pdb.set_trace()
-
             for index, row in tqdm(df_agg.iterrows(), total=len(df_agg)):
                 '''Concurrent processes inside. Do not use concurrent here.'''
                 aggregator.execute(row)
