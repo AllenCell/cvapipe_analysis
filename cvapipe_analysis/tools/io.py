@@ -109,7 +109,7 @@ class LocalStagingIO:
         return code
 
     @staticmethod
-    def normalized_representations(reps):
+    def normalize_representations(reps):
         # Expected shape is SCMN
         if reps.ndim != 4:
             raise ValueError(f"Input shape {reps.shape} does not match expected SCMN format.")

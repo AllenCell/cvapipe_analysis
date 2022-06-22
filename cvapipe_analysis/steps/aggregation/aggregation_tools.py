@@ -73,7 +73,7 @@ class Aggregator(io.DataProducer):
         with concurrent.futures.ProcessPoolExecutor(nc) as executor:
             pints = list(executor.map(self.read_parameterized_intensity, self.CellIds))
         pints = np.array([p for p in pints if p is not None])
-        pints_norm = self.normalized_representations(pints)
+        pints_norm = self.normalize_representations(pints)
         agg_pint = self.agg_func(pints, axis=0)
         agg_pint_norm = self.agg_func(pints_norm, axis=0)
         ch = self.control.get_aliases_to_parameterize().index(self.row.alias)
