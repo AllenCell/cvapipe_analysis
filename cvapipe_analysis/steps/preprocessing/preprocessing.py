@@ -35,6 +35,9 @@ class Preprocessing(Step):
             device = io.LocalStagingIO(control)
             df = device.load_step_manifest("computefeatures")
             log.info(f"Shape of manifest: {df.shape}")
+
+            if control.is_filtering_on():
+                df = filtering(df, control)
             
             if control.remove_mitotics():
 
@@ -51,7 +54,14 @@ class Preprocessing(Step):
                 path_to_df_outliers = self.step_local_staging_dir/"outliers.csv"
                 if not path_to_df_outliers.is_file() or control.overwrite():
                     log.info("Computing outliers...")
-                    df_outliers = outliers_removal(df=df, output_dir=path_to_outliers_folder, log=log)
+                    if len(df) < 1000:
+                        detect_based_on_structure_features_flag = False
+                    else:
+                        detect_based_on_structure_features_flag = True
+                    df_outliers = outliers_removal(df=df, 
+                                                   output_dir=path_to_outliers_folder, 
+                                                   log=log,
+                                                   detect_based_on_structure_features=detect_based_on_structure_features_flag)
                     df_outliers.to_csv(path_to_df_outliers)
                 else:
                     log.info("Using pre-detected outliers.")
@@ -63,9 +73,6 @@ class Preprocessing(Step):
                 df = df.drop(columns=['Outlier'])
                 log.info(f"Shape of data without outliers: {df.shape}")
             
-            if control.is_filtering_on():
-
-                df = filtering(df, control)
 
             # Remove rows for which any feature is nan
             aliases = control.get_aliases_for_pca()

@@ -877,7 +877,32 @@ def outliers_removal(df, output_dir, log, detect_based_on_structure_features=Tru
 
     # %% Plot and remove outliers
     plotname = "Structures"
-    splot(
+    if detect_based_on_structure_features:
+        splot(
+            selected_metrics,
+            selected_metrics_abb,
+            selected_structures[0:7],
+            structure_metric,
+            cells,
+            True,
+            output_dir,
+            f"{plotname}_1_org_fine",
+            0.5,
+            [],
+        )
+        splot(
+            selected_metrics,
+            selected_metrics_abb,
+            selected_structures[0:7],
+            structure_metric,
+            cells,
+            True,
+            output_dir,
+            f"{plotname}_1_org_thick",
+            2,
+            [],
+        )
+        splot(
         selected_metrics,
         selected_metrics_abb,
         selected_structures[0:7],
@@ -885,10 +910,10 @@ def outliers_removal(df, output_dir, log, detect_based_on_structure_features=Tru
         cells,
         True,
         output_dir,
-        f"{plotname}_1_org_fine",
-        0.5,
-        [],
-    )
+        f"{plotname}_1_outliers",
+        2,
+        CellIds_remove_dict,
+        )
     splot(
         selected_metrics,
         selected_metrics_abb,
@@ -904,18 +929,6 @@ def outliers_removal(df, output_dir, log, detect_based_on_structure_features=Tru
     splot(
         selected_metrics,
         selected_metrics_abb,
-        selected_structures[0:7],
-        structure_metric,
-        cells,
-        True,
-        output_dir,
-        f"{plotname}_1_org_thick",
-        2,
-        [],
-    )
-    splot(
-        selected_metrics,
-        selected_metrics_abb,
         selected_structures[7:14],
         structure_metric,
         cells,
@@ -924,18 +937,6 @@ def outliers_removal(df, output_dir, log, detect_based_on_structure_features=Tru
         f"{plotname}_2_org_thick",
         2,
         [],
-    )
-    splot(
-        selected_metrics,
-        selected_metrics_abb,
-        selected_structures[0:7],
-        structure_metric,
-        cells,
-        True,
-        output_dir,
-        f"{plotname}_1_outliers",
-        2,
-        CellIds_remove_dict,
     )
     splot(
         selected_metrics,
@@ -959,18 +960,31 @@ def outliers_removal(df, output_dir, log, detect_based_on_structure_features=Tru
     cells = cells.drop(cells.index[cells["CellId"].isin(CellIds_remove)])
     log.info(f"Removing {len(CellIds_remove)} cells due to structure volume metrics")
     log.info(cells.shape)
-    splot(
-        selected_metrics,
-        selected_metrics_abb,
-        selected_structures[0:7],
-        structure_metric,
-        cells,
-        True,
-        output_dir,
-        f"{plotname}_1_clean_fine",
-        0.5,
-        [],
-    )
+    if detect_based_on_structure_features:
+        splot(
+            selected_metrics,
+            selected_metrics_abb,
+            selected_structures[0:7],
+            structure_metric,
+            cells,
+            True,
+            output_dir,
+            f"{plotname}_1_clean_fine",
+            0.5,
+            [],
+        )
+        splot(
+            selected_metrics,
+            selected_metrics_abb,
+            selected_structures[0:7],
+            structure_metric,
+            cells,
+            True,
+            output_dir,
+            f"{plotname}_1_clean_thick",
+            2,
+            [],
+        )
     splot(
         selected_metrics,
         selected_metrics_abb,
@@ -981,18 +995,6 @@ def outliers_removal(df, output_dir, log, detect_based_on_structure_features=Tru
         output_dir,
         f"{plotname}_2_clean_fine",
         0.5,
-        [],
-    )
-    splot(
-        selected_metrics,
-        selected_metrics_abb,
-        selected_structures[0:7],
-        structure_metric,
-        cells,
-        True,
-        output_dir,
-        f"{plotname}_1_clean_thick",
-        2,
         [],
     )
     splot(
@@ -1038,18 +1040,19 @@ def outliers_removal(df, output_dir, log, detect_based_on_structure_features=Tru
                 | (cells_ao["Outlier"] == "yes_abnormal_cell_or_nuclear_metric")
             ).to_numpy()
         )
-    splot(
-        selected_metrics,
-        selected_metrics_abb,
-        selected_structures[0:7],
-        structure_metric,
-        cells,
-        True,
-        output_dir,
-        "Check_structures_1",
-        2,
-        CellIds_remove_dict,
-    )
+    if detect_based_on_structure_features:
+        splot(
+            selected_metrics,
+            selected_metrics_abb,
+            selected_structures[0:7],
+            structure_metric,
+            cells,
+            True,
+            output_dir,
+            "Check_structures_1",
+            2,
+            CellIds_remove_dict,
+        )
     splot(
         selected_metrics,
         selected_metrics_abb,
