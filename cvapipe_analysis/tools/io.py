@@ -102,9 +102,20 @@ class LocalStagingIO:
             code = AICSImage(path)
             intensity_names = code.channel_names
             code = code.data.squeeze()
+            if code.ndim == 2:
+                code = code.reshape(1, *code.shape)
         if return_intensity_names:
             return code, intensity_names
         return code
+
+    @staticmethod
+    def normalize_representations(reps):
+        # Expected shape is SCMN
+        if reps.ndim != 4:
+            raise ValueError(f"Input shape {reps.shape} does not match expected SCMN format.")
+        count = np.sum(reps, axis=(-2,-1), keepdims=True)
+        reps_norm = np.divide(reps, count, out=np.zeros_like(reps), where=count>0)
+        return reps_norm
 
     def read_normalized_parameterized_intensity_of_alias(self, index, alias):
         reps, names = self.read_parameterized_intensity(index, return_intensity_names=True)
