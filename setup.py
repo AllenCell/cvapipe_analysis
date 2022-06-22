@@ -65,7 +65,7 @@ requirements = [
     "imgkit==1.0.2",
     "xvfbwrapper==0.2.9",
     "aicsshparam>=0.1.1",
-    "aicscytoparam>=0.1.3",
+    "aicscytoparam>=0.1.5",
     "vtk==9.0.1",
     "quilt3",
     "ffmpeg",
