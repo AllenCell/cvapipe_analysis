@@ -1,9 +1,6 @@
 # default local data staging directory
 /local_staging*
 
-# notebooks bcz eww (force add them if you must?)
-*.ipynb
-
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
