@@ -139,13 +139,18 @@ class LocalStagingIO:
         rep = reps[names.index(alias)]
         return rep
 
-    def read_agg_parameterized_intensity(self, row):
-        path = f"aggregation/repsagg/{self.get_aggrep_file_name(row)}"
+    def read_agg_parameterized_intensity(self, row, normalized=False):
+        fname = self.get_aggrep_file_name(row)
+        if normalized:
+            fname = fname.replace(".tif", "_norm.tif")
+        path = f"aggregation/repsagg/{fname}"
         path = self.control.get_staging() / path
         if not path.is_file():
             raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), path)
         code = AICSImage(path)
         code = code.data.squeeze()
+        if code.ndim == 2:
+            code = code.reshape(1, *code.shape)
         return code
 
     def load_results_in_single_dataframe(self):

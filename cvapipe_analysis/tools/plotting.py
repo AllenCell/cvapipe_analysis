@@ -243,7 +243,7 @@ class ConcordancePlotMaker(PlotMaker):
         self.figs.append((fig, prefix))
         return prefix
 
-    def make_confidence_heatmap(self, matrix, conf_matrix, colors, size_scale=49, hide_colors=[], markers=None, **kwargs):
+    def make_confidence_heatmap(self, matrix, conf_matrix, colors, size_scale=49, dotted=[], hide=[], markers=None, highlight=[], ec_on=True, **kwargs):
 
         yxfac = 1 if matrix.shape[0]==matrix.shape[1] else 0.36#3*matrix.shape[1]/matrix.shape[0]
         fig, ax = plt.subplots(1, 1, figsize=(8*yxfac, 8), dpi=self.dpi)
@@ -255,24 +255,34 @@ class ConcordancePlotMaker(PlotMaker):
 
         for ylab, row in matrix.iterrows():
             for xlab, value in row.items():
-                if value not in hide_colors:
-                    ax.scatter(
-                        x=x_to_num[xlab],
-                        y=y_to_num[ylab],
-                        color=colors[value],
-                        s=conf_matrix.at[ylab,xlab] * size_scale,
-                        marker='s' if markers is None else markers[value],
-                        ec="black"
-                    )
-                else:
-                    ax.scatter(
-                        x=x_to_num[xlab],
-                        y=y_to_num[ylab],
-                        color="k",
-                        s=size_scale,
-                        marker='.',
-                        ec="black"
-                    )
+                if value not in hide:
+                    if value not in dotted:
+                        ax.scatter(
+                            x=x_to_num[xlab],
+                            y=y_to_num[ylab],
+                            facecolor=(0.8, 0.8, 0.8),
+                            s=conf_matrix.at[ylab,xlab] * size_scale,
+                            marker='o',
+                            ec=(0.8, 0.8, 0.8) if value not in highlight else "red",
+                            lw=2
+                        )                        
+                        ax.scatter(
+                            x=x_to_num[xlab],
+                            y=y_to_num[ylab],
+                            color=colors[value],
+                            s=conf_matrix.at[ylab,xlab] * size_scale,
+                            marker='s' if markers is None else markers[value],
+                            ec="black" if ec_on else None
+                        )
+                    else:
+                        ax.scatter(
+                            x=x_to_num[xlab],
+                            y=y_to_num[ylab],
+                            color="k",
+                            s=size_scale,
+                            marker='.',
+                            ec="black"
+                        )
         ns = len(conf_matrix)
         ax.set_ylim(-1, ns+1)
         ax.invert_yaxis()
