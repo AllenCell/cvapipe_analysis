@@ -7,7 +7,6 @@ from datastep import Step, log_run_params
 from typing import Dict, List, Optional, Union
 
 import concurrent
-import pandas as pd
 from cvapipe_analysis.tools import io, general, cluster
 from .compute_features_tools import FeatureCalculator
 

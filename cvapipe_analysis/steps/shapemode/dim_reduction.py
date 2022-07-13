@@ -3,9 +3,9 @@ import pandas as pd
 from pathlib import Path
 import matplotlib.pyplot as plt
 from sklearn.decomposition import PCA
-from typing import Dict, List, Optional, Union
+from typing import List, Optional
 
-from cvapipe_analysis.tools import general, cluster, shapespace
+from cvapipe_analysis.tools import general
 
 class ShapeModesCalculator(general.DataProducer):
     """
