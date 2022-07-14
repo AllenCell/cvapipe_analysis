@@ -252,7 +252,21 @@ Two output folders are produced by this step:
 
 - `avg-SEG-TUBA1B-DNA_MEM_PC4-B5.tif`: Same as above but the representation has been morphed into the cell shape corresponding to bin number 5 of shape mode 4.
 
-### 7. Stereotypy analysis
+### 7. Compute correlations
+```
+cvapipe_analysis correlation run
+```
+
+This step correlates cells via their parameterized intensity representations. This step depends on step 5.
+
+One output folder is produced by this step:
+
+**Folder: `local_staging/correlation/values/`**
+
+- `avg-STR-NUC_MEM_PC8-1.tif`: Example of file generated. Correlation matrix of the average parameterized intensity representations for bin number 1 and shape mode 8. 
+- `avg-STR-NUC_MEM_PC8-1.csv`: Example of file generated. Provides the cell indices for the correlation matrix above. 
+
+### 8. Stereotypy analysis
 ```
 cvapipe_analysis stereotypy run
 ```
@@ -269,7 +283,7 @@ Two output folders are produced by this step:
 
 - Resulting plots.
 
-### 8. Concordance analysis
+### 9. Concordance analysis
 ```
 cvapipe_analysis concordance run
 ```
