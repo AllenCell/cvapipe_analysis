@@ -252,7 +252,7 @@ Two output folders are produced by this step:
 
 - `avg-SEG-TUBA1B-DNA_MEM_PC4-B5.tif`: Same as above but the representation has been morphed into the cell shape corresponding to bin number 5 of shape mode 4.
 
-### 7. Compute correlations
+### 7. Correlate parameterized intensity representations
 ```
 cvapipe_analysis correlation run
 ```
