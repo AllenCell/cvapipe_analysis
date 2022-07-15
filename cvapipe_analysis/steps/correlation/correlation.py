@@ -1,18 +1,11 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-import os
-import sys
-import errno
 import logging
 from pathlib import Path
 from typing import Dict, List, Optional, Union
 from datastep import Step, log_run_params
 
-import numpy as np
-import pandas as pd
 from tqdm import tqdm
-from skimage import io as skio
-from joblib import Parallel, delayed
 
 from cvapipe_analysis.tools import io, general, cluster, shapespace
 from .correlation_tools import CorrelationCalculator

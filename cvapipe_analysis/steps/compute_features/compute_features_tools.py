@@ -1,11 +1,8 @@
-import os
-import json
 import argparse
 import concurrent
 import numpy as np
 import pandas as pd
-from pathlib import Path
-from aicsshparam import shtools, shparam
+from aicsshparam import shparam
 from skimage import measure as skmeasure
 from skimage import morphology as skmorpho
 

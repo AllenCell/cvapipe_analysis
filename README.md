@@ -195,9 +195,9 @@ This step saves the features in the file `local_staging/computefeatures/manifest
 cvapipe_analysis preprocessing run
 ```
 
-This step removes outliers and mitotic cells from the single cell dataset. This step saves results in the file `local_staging/preprocessing/manifest.csv` and
+This step removes outliers and mitotic cells from the single cell dataset. This step depends on step 2. 
 
-**Folder: `local_staging/shapemode/outliers/`**
+This step saves results in the file `local_staging/preprocessing/manifest.csv` and the **folder: `local_staging/preprocessing/outliers/`**
 
 - `xx.png`: Diagnostic plots for outlier detection.
 
@@ -206,18 +206,19 @@ This step removes outliers and mitotic cells from the single cell dataset. This 
 cvapipe_analysis shapemode run
 ```
 
-Here we implement a few pre-processing steps. First, all mitotic cells are removed from the dataset. Next we use a feature-based outlier detection to detect and remove outliers form the dataset. The remaining dataset is used as input for principal component analysis. Finally, we compute cell and nuclear shape modes. This step depends on step 2.
+Here we implement a few pre-processing steps. First, all mitotic cells are removed from the dataset. Next we use a feature-based outlier detection to detect and remove outliers form the dataset. The remaining dataset is used as input for principal component analysis. Finally, we compute cell and nuclear shape modes. This step depends on step 3.
 
-A couple of output files are produced on this step:
+Two output folders are produced by this step:
 
 **Folder: `local_staging/shapemode/pca/`**
 
 - `explained_variance.png`: Explained variance by each principal component.
 - `feature_importance.txt`: Importance of first few features of each principal component.
+- `pairwise_correlations.png`: Pairwise correlations between all principal components.
 
-**Folder: `local_staging/shapemode/avgcell/`**
+**Folder: `local_staging/shapemode/avgshape/`**
 
-- `xx.vtk`: vtkPolyData files corresponding to 3D cell and nuclear meshes. We recommend [Paraview](https://www.paraview.org) to open this files.
+- `xx.vtk`: vtkPolyData files corresponding to 3D cell and nuclear meshes. We recommend [Paraview](https://www.paraview.org) to open these files.
 - `xx.gif`: Animated GIF illustrating cell and nuclear shape modes from 3 different projections.
 - `combined.tif`: Multichannel TIF that combines all animated GIFs in the same image.
 
@@ -226,7 +227,9 @@ A couple of output files are produced on this step:
 cvapipe_analysis parameterization run
 ```
 
-Here we use `aics-cytoparam` [(link)](https://github.com/AllenCell/aics-cytoparam) to create parameterization for all the single-cell data. This steps depends on step 2.
+Here we use `aics-cytoparam` [(link)](https://github.com/AllenCell/aics-cytoparam) to create parameterizations for all of the single-cell data. This steps depends on step 4 and step 3.
+
+One output folder is produced by this step: 
 
 **Folder: `local_staging/parameterization/representations/`**
 
@@ -237,11 +240,9 @@ Here we use `aics-cytoparam` [(link)](https://github.com/AllenCell/aics-cytopara
 cvapipe_analysis aggregation run
 ```
 
-This step generates aggregation of multiple cells representations and morph them into idealized shapes from the shape space. This step depends on steps 3 and 4.
+This step aggregates multiple cell representations and morphs them into idealized shapes from the shape space. This step depends on step 5.
 
-**Folder: `local_staging/aggregation/`**
-
-- `manifest.csv`: Manifest with combinations of parameters used for aggregation and path to TIF file generated.
+Two output folders are produced by this step: 
 
 **Folder: `local_staging/aggregation/repsagg/`**
 
@@ -251,12 +252,28 @@ This step generates aggregation of multiple cells representations and morph them
 
 - `avg-SEG-TUBA1B-DNA_MEM_PC4-B5.tif`: Same as above but the representation has been morphed into the cell shape corresponding to bin number 5 of shape mode 4.
 
-### 7. Stereotypy analysis
+### 7. Correlate parameterized intensity representations
+```
+cvapipe_analysis correlation run
+```
+
+This step correlates cells via their parameterized intensity representations. This step depends on step 5.
+
+One output folder is produced by this step:
+
+**Folder: `local_staging/correlation/values/`**
+
+- `avg-STR-NUC_MEM_PC8-1.tif`: Example of file generated. Correlation matrix of the average parameterized intensity representations for bin number 1 and shape mode 8. 
+- `avg-STR-NUC_MEM_PC8-1.csv`: Example of file generated. Provides the cell indices for the correlation matrix above. 
+
+### 8. Stereotypy analysis
 ```
 cvapipe_analysis stereotypy run
 ```
 
-This calculates the extent to which a structure’s individual location varied. This step depends on step 4.
+This step calculates the extent to which a structure’s individual location varies. This step depends on step 5.
+
+Two output folders are produced by this step: 
 
 **Folder: `local_staging/stereotypy/values`**
 
@@ -266,12 +283,14 @@ This calculates the extent to which a structure’s individual location varied. 
 
 - Resulting plots.
 
-### 8. Concordance analysis
+### 9. Concordance analysis
 ```
 cvapipe_analysis concordance run
 ```
 
-This calculates the extent to which the structure localized relative to all the other cellular structures. This step depends on step 5.
+This step calculates the extent to which the structure localized relative to all the other cellular structures. This step depends on step 6.
+
+Two output folders are produced by this step:
 
 **Folder: `local_staging/concordance/values/`**
 
