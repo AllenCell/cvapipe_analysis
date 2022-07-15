@@ -134,34 +134,34 @@ First we specify which alias should be used as internal and external references 
 **Structures**
 ```
 structures:
-    "FBL": ["nucleoli [DFC)", "#A9D1E5"]
-    "NPM1": ["nucleoli [GC)", "#88D1E5"]
-    "SON": ["nuclear speckles", "#3292C9"]
-    "SMC1A": ["cohesins", "#306598"]
-    "HIST1H2BJ": ["histones", "#305098"]
-    "LMNB1": ["nuclear envelope", "#084AE7"]
-    "NUP153": ["nuclear pores", "#0840E7"]
-    "SEC61B": ["ER [Sec61 beta)", "#FFFFB5"]
-    "ATP2A2": ["ER [SERCA2)", "#FFFFA0"]
-    "TOMM20": ["mitochondria", "#FFD184"]
-    "SLC25A17": ["peroxisomes", "#FFD16E"]
-    "RAB5A": ["endosomes", "#FFD150"]
-    "LAMP1": ["lysosomes", "#AD952A"]
-    "ST6GAL1": ["Golgi", "#B7952A"]
-    "CETN2": ["centrioles", "#9D7000"]
-    "TUBA1B": ["microtubules", "#6B4500"]
-    "AAVS1": ["plasma membrane", "#FFD2FF"]
-    "ACTB": ["actin filaments", "#FFB1FF"]
-    "ACTN1": ["actin bundles", "#FF96FF"]
-    "MYH10": ["actomyosin bundles", "#FF82FF"]
-    "GJA1": ["gap junctions", "#A850C0"]
-    "TJP1": ["tight junctions", "#A850D4"]
-    "DSP": ["desmosomes", "#A850E8"]
-    "CTNNB1": ["adherens junctions", "#CB1CCC"]
-    "PXN": ["matrix adhesions", "#77207C"]
+    "FBL": ["nucleoli [DFC)", "#A9D1E5", "{'raw': (420, 2610), 'seg': (0,30), 'avgseg': (80,160)}"]
+    "NPM1": ["nucleoli [GC)", "#88D1E5", "{'raw': (480, 8300), 'seg': (0,30), 'avgseg': (80,160)}"]
+    "SON": ["nuclear speckles", "#3292C9", "{'raw': (420, 1500), 'seg': (0,10), 'avgseg': (10,60)}"]
+    "SMC1A": ["cohesins", "#306598", "{'raw': (450, 630), 'seg': (0,2), 'avgseg': (0,15)}"]
+    "HIST1H2BJ": ["histones", "#305098", "{'raw': (450, 2885), 'seg': (0,30), 'avgseg': (10,100)}"]
+    "LMNB1": ["nuclear envelope", "#084AE7", "{'raw': (475,1700), 'seg': (0,30), 'avgseg': (0,60)}"]
+    "NUP153": ["nuclear pores", "#0840E7", "{'raw': (420, 600), 'seg': (0,15), 'avgseg': (0,50)}"]
+    "SEC61B": ["ER [Sec61 beta)", "#FFFFB5", "{'raw': (490,1070), 'seg': (0,30), 'avgseg': (0,100)}"]
+    "ATP2A2": ["ER [SERCA2)", "#FFFFA0", "{'raw': (430,670), 'seg': (0,25), 'avgseg': (0,80)}"]
+    "SLC25A17": ["peroxisomes", "#FFD184", "{'raw': (400,515), 'seg': (0,7), 'avgseg': (0,15)}"]
+    "RAB5A": ["endosomes", "#FFC846", "{'raw': (420,600), 'seg': (0,7), 'avgseg': (0,10)}"]
+    "TOMM20": ["mitochondria", "#FFBE37", "{'raw': (410,815), 'seg': (0,27), 'avgseg': (0,50)}"]
+    "LAMP1": ["lysosomes", "#AD952A", "{'raw': (440,800), 'seg': (0,27), 'avgseg': (0,30)}"]
+    "ST6GAL1": ["Golgi", "#B7952A", "{'raw': (400,490), 'seg': (0,17), 'avgseg': (0,30)}"]
+    "TUBA1B": ["microtubules", "#9D7000", "{'raw': (1100,3200), 'seg': (0,22), 'avgseg': (0,60)}"]
+    "CETN2": ["centrioles", "#C8E1AA", "{'raw': (440,800), 'seg': (0, 2), 'avgseg': (0,2)}"]
+    "GJA1": ["gap junctions", "#BEE18C", "{'raw': (420,2200), 'seg': (0,4), 'avgseg': (0,8)}"]
+    "TJP1": ["tight junctions", "#B4C878", "{'raw': (420,1500), 'seg': (0,8), 'avgseg': (0,20)}"]
+    "DSP": ["desmosomes", "#B4C864", "{'raw': (410,620), 'seg': (0,5), 'avgseg': (0,3)}"]
+    "CTNNB1": ["adherens junctions", "#96AA46", "{'raw': (410,750), 'seg': (0,22), 'avgseg': (5,40)}"]
+    "AAVS1": ["plasma membrane", "#FFD2FF", "{'raw': (505,2255), 'seg': (0,30), 'avgseg': (10,120)}"]
+    "ACTB": ["actin filaments", "#E6A0FF", "{'raw': (550,1300), 'seg': (0,18), 'avgseg': (0,35)}"]
+    "ACTN1": ["actin bundles", "#E696FF", "{'raw': (440,730), 'seg': (0,13), 'avgseg': (0,25)}"]
+    "MYH10": ["actomyosin bundles", "#FF82FF", "{'raw': (440,900), 'seg': (0,13), 'avgseg': (0,25)}"]
+    "PXN": ["matrix adhesions", "#CB1CCC", "{'raw': (410,490), 'seg': (0,5), 'avgseg': (0,5)}"]
 ```
 
-Here we specify a dictionary with the gene names, description and color for each structure. Again, in case you are applying to your own data, make sure you specify here the values you use in the column `structure_name` of your manifest file (see the section "Running the pipeline on your own data").
+Here we specify a dictionary with the gene names, description and color for each structure. Again, in case you are applying to your own data, make sure you specify here the values you use in the column `structure_name` of your manifest file (see the section "Running the pipeline on your own data"). A list with contrast values (min, max) for each structure is also specified here and will be used for the plotting functions to display single cell images of raw data, segmentation or average morphed cells (avgseg).
 
 ## Running the pipeline to reproduce the paper
 
@@ -222,7 +222,7 @@ Two output folders are produced by this step:
 - `xx.gif`: Animated GIF illustrating cell and nuclear shape modes from 3 different projections.
 - `combined.tif`: Multichannel TIF that combines all animated GIFs in the same image.
 
-### 5. Create parameterized intensity representation
+### 5. Create the parameterized intracellular location representation (PILR)
 ```
 cvapipe_analysis parameterization run
 ```
@@ -233,44 +233,43 @@ One output folder is produced by this step:
 
 **Folder: `local_staging/parameterization/representations/`**
 
-- `xx.tif`: Multichannels TIFF image with the cell representation.
+- `xx.tif`: Multichannels TIFF image with the cell PILR.
 
-### 6. Create aggregated parameterized intensity representations
+### 6. Create average PILRs
 ```
 cvapipe_analysis aggregation run
 ```
 
-This step aggregates multiple cell representations and morphs them into idealized shapes from the shape space. This step depends on step 5.
+This step average multiple cell PILRs and morphs them into idealized shapes from the shape space. This step depends on step 5.
 
 Two output folders are produced by this step: 
 
 **Folder: `local_staging/aggregation/repsagg/`**
 
-- `avg-SEG-TUBA1B-DNA_MEM_PC4-B5-CODE.tif`: Example of file generated. This represents the average parameterized intensity representation generated from segmented images of all TUBA1B cells that fall into bin number 5 from shape mode 4.
+- `avg-SEG-TUBA1B-DNA_MEM_PC4-B5-CODE.tif`: Example of file generated. This represents the average PILR from segmented images of all TUBA1B cells that fall into bin number 5 from shape mode 4.
 
 **Folder: `local_staging/aggregation/aggmorph/`**
 
-- `avg-SEG-TUBA1B-DNA_MEM_PC4-B5.tif`: Same as above but the representation has been morphed into the cell shape corresponding to bin number 5 of shape mode 4.
+- `avg-SEG-TUBA1B-DNA_MEM_PC4-B5.tif`: Same as above but the PILR has been morphed into the cell shape corresponding to bin number 5 of shape mode 4.
 
-### 7. Correlate parameterized intensity representations
+### 7. Correlate single-cells PIRL
 ```
 cvapipe_analysis correlation run
 ```
 
-This step correlates cells via their parameterized intensity representations. This step depends on step 5.
+This step computes the pair-wise correlation between PILRs of cells. This step depends on step 5.
 
 One output folder is produced by this step:
 
 **Folder: `local_staging/correlation/values/`**
 
-- `avg-STR-NUC_MEM_PC8-1.tif`: Example of file generated. Correlation matrix of the average parameterized intensity representations for bin number 1 and shape mode 8. 
+- `avg-STR-NUC_MEM_PC8-1.tif`: Example of file generated. Correlation matrix of between PILRs of all cells that fall into bin number 1 and shape mode 8. 
 - `avg-STR-NUC_MEM_PC8-1.csv`: Example of file generated. Provides the cell indices for the correlation matrix above. 
 
 ### 8. Stereotypy analysis
 ```
 cvapipe_analysis stereotypy run
 ```
-
 This step calculates the extent to which a structure’s individual location varies. This step depends on step 5.
 
 Two output folders are produced by this step: 
