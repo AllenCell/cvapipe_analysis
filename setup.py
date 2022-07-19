@@ -69,6 +69,8 @@ requirements = [
     "vtk==9.0.1",
     "quilt3",
     "ffmpeg",
+    "jupyterlab", 
+    "ipywidgets"
 ]
 
 extra_requirements = {
