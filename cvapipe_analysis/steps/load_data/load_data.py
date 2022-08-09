@@ -13,6 +13,7 @@ log = logging.getLogger(__name__)
 class LoadData(Step):
     def __init__(
         self,
+        ignore_raw_data = False,
         direct_upstream_tasks: List["Step"] = [],
         config: Optional[Union[str, Path, Dict[str, str]]] = None,
     ):
@@ -24,6 +25,8 @@ class LoadData(Step):
         with general.configuration(self.step_local_staging_dir) as control:
 
             loader = DataLoader(control)
+            if ignore_raw_data:
+                loader.disable_download_of_raw_data()
             df = loader.load(kwargs)
 
             self.manifest = df

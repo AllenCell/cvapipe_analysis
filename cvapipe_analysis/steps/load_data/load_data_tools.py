@@ -29,10 +29,14 @@ class DataLoader(io.LocalStagingIO):
         'crop_seg',
         'crop_raw'
     ]
+    download_raw_data = True
 
     def __init__(self, control):
         super().__init__(control)
         self.subfolder = 'loaddata'
+
+    def disable_download_of_raw_data():
+        self.download_raw_data = False
 
     def load(self, parameters):
         if any(p in parameters for p in ["csv", "fmsid"]):
@@ -62,16 +66,20 @@ class DataLoader(io.LocalStagingIO):
             print('Downloading test dataset with 12 interphase cell images per structure.')
             df_meta = self.get_interphase_test_set(df_meta)
             for i, row in tqdm(df_meta.iterrows(), total=len(df_meta)):
-                self.pkg[row["crop_raw"]].fetch(self.control.get_staging()/f"loaddata/{row.crop_raw}")
                 self.pkg[row["crop_seg"]].fetch(self.control.get_staging()/f"loaddata/{row.crop_seg}")
+                if self.download_raw_data:
+                    self.pkg[row["crop_raw"]].fetch(self.control.get_staging()/f"loaddata/{row.crop_raw}")
         else:
             self.pkg["crop_seg"].fetch(seg_folder)
-            self.pkg["crop_raw"].fetch(raw_folder)
+            if self.download_raw_data:
+                self.pkg["crop_raw"].fetch(raw_folder)
 
         # Append full path to file paths
+        df_meta["crop_raw"] = np.nan
         for index, row in tqdm(df_meta.iterrows(), total=len(df_meta)):
             df_meta.at[index, "crop_seg"] = str(self.control.get_staging()/f"loaddata/{row.crop_seg}")
-            df_meta.at[index, "crop_raw"] = str(self.control.get_staging()/f"loaddata/{row.crop_raw}")
+            if self.download_raw_data:
+                df_meta.at[index, "crop_raw"] = str(self.control.get_staging()/f"loaddata/{row.crop_raw}")
 
         return df_meta
 
