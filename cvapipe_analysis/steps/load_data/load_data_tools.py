@@ -35,7 +35,7 @@ class DataLoader(io.LocalStagingIO):
         super().__init__(control)
         self.subfolder = 'loaddata'
 
-    def disable_download_of_raw_data():
+    def disable_download_of_raw_data(self):
         self.download_raw_data = False
 
     def load(self, parameters):
@@ -75,7 +75,7 @@ class DataLoader(io.LocalStagingIO):
                 self.pkg["crop_raw"].fetch(raw_folder)
 
         # Append full path to file paths
-        df_meta["crop_raw"] = np.nan
+        df_meta["crop_raw"] = ""
         for index, row in tqdm(df_meta.iterrows(), total=len(df_meta)):
             df_meta.at[index, "crop_seg"] = str(self.control.get_staging()/f"loaddata/{row.crop_seg}")
             if self.download_raw_data:

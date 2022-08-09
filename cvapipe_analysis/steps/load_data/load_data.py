@@ -13,14 +13,17 @@ log = logging.getLogger(__name__)
 class LoadData(Step):
     def __init__(
         self,
-        ignore_raw_data = False,
         direct_upstream_tasks: List["Step"] = [],
         config: Optional[Union[str, Path, Dict[str, str]]] = None,
     ):
         super().__init__(direct_upstream_tasks=direct_upstream_tasks, config=config)
 
     @log_run_params
-    def run(self, **kwargs):
+    def run(
+        self,
+        ignore_raw_data = False,
+        **kwargs
+        ):
 
         with general.configuration(self.step_local_staging_dir) as control:
 
