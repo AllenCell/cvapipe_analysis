@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Union
 from datastep import Step, log_run_params
 
-from cvapipe_analysis.tools import general
+from cvapipe_analysis.tools import general, controller
 from .load_data_tools import DataLoader
 
 log = logging.getLogger(__name__)
@@ -21,19 +21,18 @@ class LoadData(Step):
     @log_run_params
     def run(
         self,
+        staging,
         ignore_raw_data = False,
         **kwargs
         ):
 
-        with general.configuration(self.step_local_staging_dir) as control:
+        config = general.load_config_file()
+        config["project"]["local_staging"] = staging
+        control = controller.Controller(config)
 
-            loader = DataLoader(control)
-            if ignore_raw_data:
-                loader.disable_download_of_raw_data()
-            df = loader.load(kwargs)
+        loader = DataLoader(control)
+        if ignore_raw_data:
+            loader.disable_download_of_raw_data()
+        df = loader.load(kwargs)
 
-            self.manifest = df
-            manifest_path = self.step_local_staging_dir / 'manifest.csv'
-            self.manifest.to_csv(manifest_path)
-
-        return manifest_path
+        df.to_csv(Path(staging) / f"{self.step_name}/manifest.csv")

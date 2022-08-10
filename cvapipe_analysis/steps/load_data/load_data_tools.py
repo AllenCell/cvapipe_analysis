@@ -6,7 +6,7 @@ import pandas as pd
 from tqdm import tqdm
 from pathlib import Path
 
-from cvapipe_analysis.tools import io
+from cvapipe_analysis.tools import io, general
 
 class DataLoader(io.LocalStagingIO):
     """
@@ -75,11 +75,15 @@ class DataLoader(io.LocalStagingIO):
                 self.pkg["crop_raw"].fetch(raw_folder)
 
         # Append full path to file paths
-        df_meta["crop_raw"] = ""
         for index, row in tqdm(df_meta.iterrows(), total=len(df_meta)):
             df_meta.at[index, "crop_seg"] = str(self.control.get_staging()/f"loaddata/{row.crop_seg}")
             if self.download_raw_data:
                 df_meta.at[index, "crop_raw"] = str(self.control.get_staging()/f"loaddata/{row.crop_raw}")
+
+        if ~self.download_raw_data:
+            df_meta = df_meta.drop(columns=["crop_raw"])
+
+        general.save_config_file(path_to_folder=self.control.get_staging(), filename="config.yaml")
 
         return df_meta
 
