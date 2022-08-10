@@ -49,7 +49,8 @@ class LocalStagingIO:
             name_dict = eval(row.name_dict)
             channel_names = []
             for imtype in imtypes:
-                channel_names += name_dict[imtype]
+                if imtype in row:
+                    channel_names += name_dict[imtype]
         except Exception as ex:
             if not channel_names:
                 raise ValueError(f"Channel names not found, {ex}")
