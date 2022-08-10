@@ -36,3 +36,5 @@ class LoadData(Step):
         df = loader.load(kwargs)
 
         df.to_csv(Path(staging) / f"{self.step_name}/manifest.csv")
+
+        return

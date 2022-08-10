@@ -21,16 +21,19 @@ class ComputeFeatures(Step):
         super().__init__(direct_upstream_tasks=direct_upstream_tasks, config=config)
 
     @log_run_params
-    def run(self, distribute: Optional[bool]=False, **kwargs):
+    def run(
+        self,
+        staging: Union[str, Path],
+        distribute: Optional[bool]=False,
+        **kwargs):
 
-        with general.configuration(self.step_local_staging_dir) as control:
+        with general.configuration(staging) as control:
+
+            step_folder = control.create_step_dirs(self.step_name, ["cell_features"])
 
             device = io.LocalStagingIO(control)
             df = device.load_step_manifest("loaddata")
             log.info(f"Manifest: {df.shape}")
-
-            save_dir = self.step_local_staging_dir/"cell_features"
-            save_dir.mkdir(parents=True, exist_ok=True)
 
             if distribute:
 
@@ -57,8 +60,7 @@ class ComputeFeatures(Step):
                 log.info(f"Total of {len(df_miss)} indices.")
 
             log.info(f"Saving manifest...")
-            self.manifest = df.merge(df_results, left_index=True, right_index=True, how="outer")
-            manifest_path = self.step_local_staging_dir / 'manifest.csv'
-            self.manifest.to_csv(manifest_path)
+            df = df.merge(df_results, left_index=True, right_index=True, how="outer")
+            df.to_csv(step_folder/"manifest.csv")
 
         return
