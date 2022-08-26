@@ -23,13 +23,13 @@ class Distributor:
     the local_staging folder is.
     """
 
-    def __init__(self, control, step):
+    def __init__(self, control):
         self.jobs = []
         self.control = control
         self.rel_path_to_python_file = None
         self.stepfolders = ['log', 'dataframes']
         self.nworkers = control.get_distributed_number_of_workers()
-        self.abs_path_to_distribute = control.get_staging() / f".distribute-{step}"
+        self.abs_path_to_distribute = control.get_staging() / f".distribute-{self.step_name}"
         self.abs_path_to_script_as_str = str(self.abs_path_to_distribute / "jobs.sh")
         self.abs_path_jobs_file_as_str = str(self.abs_path_to_distribute / "jobs.txt")
         self.abs_path_to_cvapipe = Path(
@@ -149,35 +149,35 @@ class Distributor:
 
 class FeaturesDistributor(Distributor):
     def __init__(self, control):
-        super().__init__(control, 'computefeatures')
+        super().__init__(control)
         self.rel_path_to_python_file = "cvapipe_analysis/steps/compute_features/compute_features_tools.py"
 
 
 class ParameterizationDistributor(Distributor):
     def __init__(self, control):
-        super().__init__(control, 'parameterization')
+        super().__init__(control)
         self.rel_path_to_python_file = "cvapipe_analysis/steps/parameterization/parameterization_tools.py"
 
 
 class AggregationDistributor(Distributor):
     def __init__(self, control):
-        super().__init__(control, 'aggregation')
+        super().__init__(control)
         self.rel_path_to_python_file = "cvapipe_analysis/steps/aggregation/aggregation_tools.py"
 
 
 class StereotypyDistributor(Distributor):
     def __init__(self, control):
-        super().__init__(control, 'stereotypy')
+        super().__init__(control)
         self.rel_path_to_python_file = "cvapipe_analysis/steps/stereotypy/stereotypy_tools.py"
 
 
 class ConcordanceDistributor(Distributor):
     def __init__(self, control):
-        super().__init__(control, 'concordance')
+        super().__init__(control)
         self.rel_path_to_python_file = "cvapipe_analysis/steps/concordance/concordance_tools.py"
 
 class CorrelationDistributor(Distributor):
     # Requires blocks distribution instead of chunks
     def __init__(self, control):
-        super().__init__(control, 'correlation')
+        super().__init__(control)
         self.rel_path_to_python_file = "cvapipe_analysis/steps/correlation/correlation_tools.py"
