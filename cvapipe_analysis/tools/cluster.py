@@ -37,7 +37,7 @@ class Distributor:
             os.path.abspath(cvapipe_analysis.__file__)).parents[1]
 
     def extract_step_name(self):
-        return self.rel_path_to_python_file.split("/")[-2]
+        return Path(self.rel_path_to_python_file).parent.stem.replace("_", "")
 
     def set_data(self, df):
         self.df = df
