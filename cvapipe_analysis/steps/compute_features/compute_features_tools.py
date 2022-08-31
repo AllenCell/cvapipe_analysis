@@ -127,7 +127,7 @@ class FeatureCalculator(io.DataProducer):
         (coeffs, _), (_, _, _, transform) = shparam.get_shcoeffs(
             image=img,
             lmax=self.control.get_lmax(),
-            sigma=self.control.get_sigma()[alias],
+            sigma=self.control.get_sigma(alias),
             alignment_2d=False
         )
         coeffs = dict((f"{k}_lcc", v) for k, v in coeffs.items())
