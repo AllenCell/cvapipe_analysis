@@ -34,7 +34,7 @@ class ComputeFeatures(Step):
 
             if distribute:
 
-                distributor = cluster.FeaturesDistributor(control)
+                distributor = cluster.FeaturesDistributor(self, control)
                 distributor.set_data(df)
                 distributor.distribute()
                 log.info(f"Multiple jobs have been launched. Please come back when the calculation is complete.")

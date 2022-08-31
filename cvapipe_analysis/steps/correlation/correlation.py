@@ -54,7 +54,7 @@ class Correlation(Step):
 
             if distribute:
 
-                distributor = cluster.CorrelationDistributor(control)
+                distributor = cluster.CorrelationDistributor(self, control)
                 distributor.set_data(df_agg)
                 distributor.distribute_by_row()
                 log.info(

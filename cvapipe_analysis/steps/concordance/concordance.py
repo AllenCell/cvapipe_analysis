@@ -46,7 +46,7 @@ class Concordance(Step):
 
             if distribute:
 
-                distributor = cluster.ConcordanceDistributor(control)
+                distributor = cluster.ConcordanceDistributor(self, control)
                 distributor.set_data(df_agg)
                 distributor.distribute()
                 log.info(

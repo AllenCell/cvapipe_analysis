@@ -134,8 +134,8 @@ class Controller:
     def get_lmax(self):
         return self.features_section['SHE']['lmax']
 
-    def get_sigma(self):
-        return self.features_section['SHE']['sigma']
+    def get_sigma(self, alias):
+        return self.features_section['SHE']['sigma'][alias]
 
     def get_aliases_for_pca(self):
         return self.space_section['aliases']

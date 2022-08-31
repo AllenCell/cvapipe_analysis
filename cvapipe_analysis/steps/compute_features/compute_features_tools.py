@@ -64,7 +64,7 @@ class FeatureCalculator(io.DataProducer):
         else:
             features = self.get_basic_features(self.data_aligned[chId])
         if self.control.should_calculate_shcoeffs(alias):
-            coeffs = self.get_coeff_features(self.data_aligned[chId])
+            coeffs = self.get_coeff_features(self.data_aligned[chId], alias)
             features.update(coeffs)
         return features
     
@@ -123,11 +123,11 @@ class FeatureCalculator(io.DataProducer):
                 features[f'roundness_surface_area{suffix}'] = np.nan
         return features
 
-    def get_coeff_features(self, img):
+    def get_coeff_features(self, img, alias):
         (coeffs, _), (_, _, _, transform) = shparam.get_shcoeffs(
             image=img,
             lmax=self.control.get_lmax(),
-            sigma=self.control.get_sigma(),
+            sigma=self.control.get_sigma(alias),
             alignment_2d=False
         )
         coeffs = dict((f"{k}_lcc", v) for k, v in coeffs.items())

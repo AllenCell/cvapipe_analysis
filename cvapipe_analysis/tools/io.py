@@ -403,7 +403,7 @@ class DataProducer(LocalStagingIO):
             chn = self.channels.index(self.control.get_channel_from_alias(alias_ref))
             ref = self.data[chn]
             unq = self.control.make_alignment_unique()
-            _, self.angle = shtools.align_image_2d(ref, unq)
+            _, self.angle = shtools.align_image_2d(ref, make_unique=unq)
             self.data_aligned = shtools.apply_image_alignment_2d(self.data, self.angle)
         return
 
