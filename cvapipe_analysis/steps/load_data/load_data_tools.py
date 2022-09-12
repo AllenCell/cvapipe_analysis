@@ -54,13 +54,10 @@ class DataLoader(io.LocalStagingIO):
         return df[[f for f in df.columns if not any(w in f for w in self.control.get_data_aliases())]]
 
     def download_quilt_data(self, parameters):
-        # import pdb; pdb.set_trace()
         pkg_name = "default"
         if "dataset" in parameters:
             pkg_name = parameters["dataset"]
         self.pkg = quilt3.Package.browse(self.packages[pkg_name], self.registry)
-        # df_meta = pkg["metadata.csv"]()
-        # Workaround the overflow error with the line above
         self.pkg["metadata.csv"].fetch(self.control.get_staging()/"manifest.csv")
         df_meta = pd.read_csv(self.control.get_staging()/"manifest.csv", index_col="CellId")
                 
