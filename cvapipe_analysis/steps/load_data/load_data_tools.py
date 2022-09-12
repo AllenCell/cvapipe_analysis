@@ -21,7 +21,15 @@ class DataLoader(io.LocalStagingIO):
     their are saved.
     """
 
-    package_name = "aics/hipsc_single_cell_image_dataset"
+    packages = {
+        "default": "aics/hipsc_single_cell_image_dataset",
+        "non-edges": "aics/hipsc_single_nonedge_cell_image_dataset",
+        "edges": "aics/hipsc_single_edge_cell_image_dataset",
+        "i1": "aics/hipsc_single_i1_cell_image_dataset",
+        "i2": "aics/hipsc_single_i2_cell_image_dataset",
+        "m1": "aics/hipsc_single_m1_cell_image_dataset",
+        "m2": "aics/hipsc_single_m2_cell_image_dataset"
+    }
     registry = "s3://allencell"
     required_df_columns = [
         'CellId',
@@ -38,15 +46,19 @@ class DataLoader(io.LocalStagingIO):
         if any(p in parameters for p in ["csv", "fmsid"]):
             df = self.download_local_data(parameters)
         else:
-            df = self.download_quilt_data('test' in parameters)
+            df = self.download_quilt_data(parameters)
         df = self.drop_aliases_related_columns(df)
         return df
 
     def drop_aliases_related_columns(self, df):
         return df[[f for f in df.columns if not any(w in f for w in self.control.get_data_aliases())]]
 
-    def download_quilt_data(self, test=False):
-        self.pkg = quilt3.Package.browse(self.package_name, self.registry)
+    def download_quilt_data(self, parameters):
+        # import pdb; pdb.set_trace()
+        pkg_name = "default"
+        if "dataset" in parameters:
+            pkg_name = parameters["dataset"]
+        self.pkg = quilt3.Package.browse(self.packages[pkg_name], self.registry)
         # df_meta = pkg["metadata.csv"]()
         # Workaround the overflow error with the line above
         self.pkg["metadata.csv"].fetch(self.control.get_staging()/"manifest.csv")
@@ -58,9 +70,12 @@ class DataLoader(io.LocalStagingIO):
         raw_folder = self.control.get_staging()/f"{self.subfolder}/crop_raw"
         raw_folder.mkdir(parents=True, exist_ok=True)
 
-        if test:
-            print('Downloading test dataset with 12 interphase cell images per structure.')
-            df_meta = self.get_interphase_test_set(df_meta)
+        if "test" in parameters:
+            ncells = 12
+            if "ncells" in parameters:
+                ncells = int(parameters["ncells"])
+            print(f"Downloading test subset of {pkg_name} dataset.")
+            df_meta = self.get_interphase_test_set(df_meta, n=ncells)
             for i, row in tqdm(df_meta.iterrows(), total=len(df_meta)):
                 self.pkg[row["crop_raw"]].fetch(self.control.get_staging()/f"loaddata/{row.crop_raw}")
                 self.pkg[row["crop_seg"]].fetch(self.control.get_staging()/f"loaddata/{row.crop_seg}")
@@ -104,9 +119,9 @@ class DataLoader(io.LocalStagingIO):
         return df
 
     @staticmethod
-    def get_interphase_test_set(df):
+    def get_interphase_test_set(df, n=3):
         df_test = pd.DataFrame([])
         df = df.loc[df.cell_stage=='M0']# M0 = interphase
         for _, df_struct in df.groupby('structure_name'):
-            df_test = df_test.append(df_struct.sample(n=12, random_state=666, replace=False))
+            df_test = df_test.append(df_struct.sample(n=n, random_state=666, replace=False))
         return df_test.copy()
