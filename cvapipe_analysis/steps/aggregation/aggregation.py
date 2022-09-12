@@ -14,6 +14,7 @@ log = logging.getLogger(__name__)
 class Aggregation(Step):
     def __init__(
         self,
+        staging: Union[str, Path],
         direct_upstream_tasks: List["Step"] = [],
         config: Optional[Union[str, Path, Dict[str, str]]] = None,
     ):
@@ -22,11 +23,9 @@ class Aggregation(Step):
     @log_run_params
     def run(self, distribute: Optional[bool]=False, **kwargs):
 
-        with general.configuration(self.step_local_staging_dir) as control:
+        with general.configuration(staging) as control:
 
-            for folder in ["repsagg", "aggmorph"]:
-                save_dir = self.step_local_staging_dir / folder
-                save_dir.mkdir(parents=True, exist_ok=True)
+            step_folder = control.create_step_dirs(self.step_name, ["repsagg", "aggmorph"])
 
             device = io.LocalStagingIO(control)
             df = device.load_step_manifest("preprocessing")
