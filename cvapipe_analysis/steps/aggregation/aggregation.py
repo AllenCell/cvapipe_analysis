@@ -38,7 +38,7 @@ class Aggregation(Step):
 
             if distribute:
 
-                distributor = cluster.AggregationDistributor(control)
+                distributor = cluster.AggregationDistributor(self, control)
                 distributor.set_data(df_agg)
                 '''Setting chunk size to 1 here so that each job has to generate
                 a single file. Otherwise Slurm crashes for reasons that I don't
