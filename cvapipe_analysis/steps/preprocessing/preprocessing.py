@@ -25,13 +25,17 @@ class Preprocessing(Step):
     @log_run_params
     def run(
         self,
+        staging: Union[str, Path],
+        verbose: Optional[bool]=False,
         filter = None,
         debug: bool=False,
         **kwargs
         ):
         
-        with general.configuration(self.step_local_staging_dir) as control:
+        with general.configuration(staging) as control:
             
+            step_folder = control.create_step_dirs(self.step_name, [])
+
             device = io.LocalStagingIO(control)
             df = device.load_step_manifest("computefeatures")
             log.info(f"Shape of manifest: {df.shape}")
@@ -45,10 +49,10 @@ class Preprocessing(Step):
         
             if control.remove_outliers():
 
-                path_to_outliers_folder = self.step_local_staging_dir/"outliers"
+                path_to_outliers_folder = step_folder/"outliers"
                 path_to_outliers_folder.mkdir(parents=True, exist_ok=True)
                 
-                path_to_df_outliers = self.step_local_staging_dir/"outliers.csv"
+                path_to_df_outliers = step_folder/"outliers.csv"
                 if not path_to_df_outliers.is_file() or control.overwrite():
                     log.info("Computing outliers...")
                     df_outliers = outliers_removal(df=df, output_dir=path_to_outliers_folder, log=log)
@@ -79,7 +83,7 @@ class Preprocessing(Step):
 
             log.info(f"Saving manifest...")
             self.manifest = df
-            manifest_path = self.step_local_staging_dir/'manifest.csv'
+            manifest_path = step_folder/'manifest.csv'
             self.manifest.to_csv(manifest_path)
 
             return manifest_path

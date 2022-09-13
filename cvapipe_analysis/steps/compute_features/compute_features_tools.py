@@ -24,9 +24,13 @@ class FeatureCalculator(io.DataProducer):
         self.subfolder = "computefeatures/cell_features"
 
     def workflow(self):
+        self.print("Loading single cell images...")
         self.load_single_cell_data()
+        self.print("Aligning data...")
         self.align_data()
+        self.print("Computing features...")
         self.compute_all_features()
+        self.print("Done.")
         return
 
     def get_output_file_name(self):
@@ -42,6 +46,7 @@ class FeatureCalculator(io.DataProducer):
     def compute_all_features(self):
         features = {}
         for alias in self.control.get_aliases_for_feature_extraction():
+            self.print(f"\tRunning alias {alias}.")
             fs = self.compute_features_for_alias(alias)
             fs = dict((f"{alias}_{k}", v) for k, v in fs.items())
             features.update(fs)
@@ -53,6 +58,7 @@ class FeatureCalculator(io.DataProducer):
         chId = self.channels.index(channel)
         # RAW
         if self.control.should_calculate_intensity_features(alias):
+            self.print("\t\tIntensity features...")
             mask_alias = self.control.get_mask_alias(alias)
             mask_channel = self.control.get_channel_from_alias(mask_alias)
             mask_chId = self.channels.index(mask_channel)
@@ -62,8 +68,10 @@ class FeatureCalculator(io.DataProducer):
             )
         # SEG
         else:
+            self.print("\t\tBasic features...")
             features = self.get_basic_features(self.data_aligned[chId])
         if self.control.should_calculate_shcoeffs(alias):
+            self.print("\t\tSHE...")
             coeffs = self.get_coeff_features(self.data_aligned[chId], alias)
             features.update(coeffs)
         return features
