@@ -14,14 +14,18 @@ log = logging.getLogger(__name__)
 class Aggregation(Step):
     def __init__(
         self,
-        staging: Union[str, Path],
         direct_upstream_tasks: List["Step"] = [],
         config: Optional[Union[str, Path, Dict[str, str]]] = None,
     ):
         super().__init__(direct_upstream_tasks=direct_upstream_tasks, config=config)
 
     @log_run_params
-    def run(self, distribute: Optional[bool]=False, **kwargs):
+    def run(
+        self,
+        staging: Union[str, Path],
+        verbose: Optional[bool]=False,
+        distribute: Optional[bool]=False,
+        **kwargs):
 
         with general.configuration(staging) as control:
 
@@ -46,11 +50,13 @@ class Aggregation(Step):
                 memory. To be investigated...'''
                 distributor.set_chunk_size(1)
                 distributor.distribute()
-                log.info(f"Multiple jobs have been launched. Please come back when the calculation is complete.")
+                distributor.jobs_warning()
 
                 return None
 
             aggregator = Aggregator(control)
+            if verbose: 
+                aggregator.set_verbose_mode_on()
             for index, row in tqdm(df_agg.iterrows(), total=len(df_agg)):
                 '''Concurrent processes inside. Do not use concurrent here.'''
                 aggregator.execute(row)

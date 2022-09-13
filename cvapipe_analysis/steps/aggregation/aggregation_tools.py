@@ -29,7 +29,9 @@ class Aggregator(io.DataProducer):
 
     def workflow(self):
         self.set_agg_function()
+        self.print("Aggregating representations...")
         self.aggregate_parameterized_intensities()
+        self.print("Generating average morphed cells...")
         self.morph_on_shapemode_shape()
 
     def get_output_file_name(self):
