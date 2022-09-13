@@ -147,6 +147,9 @@ class Distributor:
         self.execute()
         return
 
+    def jobs_warning(self):
+        print("Multiple jobs have been launched. Please come back when the calculation is complete.")
+
 class FeaturesDistributor(Distributor):
     def __init__(self, step, control):
         super().__init__(step, control)
