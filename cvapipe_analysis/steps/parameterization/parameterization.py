@@ -21,16 +21,20 @@ class Parameterization(Step):
         super().__init__(direct_upstream_tasks=direct_upstream_tasks, config=config)
 
     @log_run_params
-    def run(self, distribute: Optional[bool]=False, **kwargs):
+    def run(
+        self,
+        staging: Union[str, Path],
+        verbose: Optional[bool]=False,
+        distribute: Optional[bool]=False,
+        **kwargs):
 
-        with general.configuration(self.step_local_staging_dir) as control:
+        with general.configuration(staging) as control:
+
+            step_folder = control.create_step_dirs(self.step_name, ["representations"])
 
             device = io.LocalStagingIO(control)
             df = device.load_step_manifest("preprocessing")
             log.info(f"Manifest: {df.shape}")
-
-            save_dir = self.step_local_staging_dir/"representations"
-            save_dir.mkdir(parents=True, exist_ok=True)
 
             if distribute:
 
@@ -42,5 +46,7 @@ class Parameterization(Step):
                 return None
 
             parameterizer = Parameterizer(control)
+            if verbose:
+                parameterizer.set_verbose_mode_on()
             with concurrent.futures.ProcessPoolExecutor(control.get_ncores()) as executor:
                 executor.map(parameterizer.execute, [row for _,row in df.iterrows()])
