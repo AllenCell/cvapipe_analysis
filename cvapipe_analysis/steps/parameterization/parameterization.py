@@ -41,7 +41,7 @@ class Parameterization(Step):
                 distributor = cluster.ParameterizationDistributor(self, control)
                 distributor.set_data(df)
                 distributor.distribute()
-                log.info(f"Multiple jobs have been launched. Please come back when the calculation is complete.")
+                distributor.jobs_warning()
                 
                 return None
 
