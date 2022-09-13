@@ -35,6 +35,7 @@ class LoadData(Step):
             loader.disable_download_of_raw_data()
         df = loader.load(kwargs)
 
-        df.to_csv(Path(staging) / f"{self.step_name}/manifest.csv")
-
+        path = Path(staging)
+        df.to_csv(path/f"{self.step_name}/manifest.csv")
+        general.save_config(config, path)
         return

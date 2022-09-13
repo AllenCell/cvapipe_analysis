@@ -52,6 +52,7 @@ class DataLoader(io.LocalStagingIO):
         else:
             df = self.download_quilt_data(parameters)
         df = self.drop_aliases_related_columns(df)
+
         return df
 
     def drop_aliases_related_columns(self, df):
@@ -92,10 +93,8 @@ class DataLoader(io.LocalStagingIO):
             if self.download_raw_data:
                 df_meta.at[index, "crop_raw"] = str(self.control.get_staging()/f"loaddata/{row.crop_raw}")
 
-        if ~self.download_raw_data:
+        if not self.download_raw_data:
             df_meta = df_meta.drop(columns=["crop_raw"])
-
-        general.save_config_file(path_to_folder=self.control.get_staging(), filename="config.yaml")
 
         return df_meta
 
