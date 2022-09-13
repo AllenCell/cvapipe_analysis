@@ -44,18 +44,23 @@ class ShapeModeCalculator(io.DataProducer):
         return path_to_output_file
         
     def workflow(self):
+        self.print("Creating shape space...")
         self.space.execute(self.df)
         self.space.save_summary("shapemode/summary.html")
+        self.print("Making initial plots...")
         self.plot_maker_sp.save_feature_importance(self.space)
         self.plot_maker_sp.plot_explained_variance(self.space)
         self.plot_maker_sp.plot_pairwise_correlations(self.space)
         self.plot_maker_sp.execute(display=False)
-
+        self.print("Getting SHE for shape modes...")
         self.compute_shcoeffs_for_all_shape_modes()
+        self.print("Correcting alias location based on reference...")
         self.compute_displacement_vector_relative_to_reference()
-        print("Generating 3D meshes. This might take some time...")
+        self.print("Generating 3D meshes. This might take some time...")
         self.recontruct_meshes()
+        self.print("Generating animated contours...")
         self.generate_and_save_animated_2d_contours()
+        self.print("Generating GIFs...")
         self.plot_maker_sm.combine_and_save_animated_gifs()
         return
 
