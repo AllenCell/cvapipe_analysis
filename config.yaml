@@ -51,7 +51,9 @@ features:
         aliases: ["NUC", "MEM"]
         # Size of Gaussian kernal used to smooth the
         # images before SHE coefficients calculation
-        sigma: 2
+        sigma:
+            NUC: 2
+            MEM: 2
         # Number of SHE coefficients used to describe cell
         # and nuclear shape
         lmax: 16

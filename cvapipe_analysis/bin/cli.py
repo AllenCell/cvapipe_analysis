@@ -7,6 +7,7 @@ This script will convert all the steps into CLI callables.
 You should not edit this script.
 """
 
+import sys
 import inspect
 import logging
 
@@ -22,7 +23,14 @@ logging.basicConfig(
     level=logging.INFO, format="[%(levelname)4s:%(lineno)4s %(asctime)s] %(message)s"
 )
 
-tools.general.create_workflow_file_from_config()
+# Creates a json file for datastep to know where the staging
+# folder is located. This is used for datastep to store its
+# own information -- not really important for cvapipe.
+args = sys.argv
+if "--staging" not in args:
+    raise ValueError("Please provide a staging folder.")
+staging = sys.argv[sys.argv.index("--staging")+1]
+tools.general.create_workflow_file_from_config(staging)
 log.info("Workflow file created.")
 
 def cli():

@@ -346,6 +346,8 @@ class DataProducer(LocalStagingIO):
     their are saved.
     """
 
+    debug = False
+
     def __init__(self, control):
         super().__init__(control)
 
@@ -357,6 +359,13 @@ class DataProducer(LocalStagingIO):
 
     def save(self):
         return None
+
+    def set_verbose_mode_on(self):
+        self.verbose = True
+
+    def print(self, text):
+        if self.verbose:
+            print(text)
 
     def set_row(self, row):
         self.row = row
