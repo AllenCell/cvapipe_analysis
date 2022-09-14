@@ -121,9 +121,11 @@ class PlotMaker(io.DataProducer):
         for gid1, gene1 in enumerate(genes):
             for gid2, gene2 in enumerate(genes):
                 if gid2 >= gid1:
-                    values = df_corr.loc[(gene1, gene2)].values
-                    avg = np.nanmean(values)
-                    std = np.nanstd(values)
+                    avg = np.nan
+                    if (gene1 in df_corr.columns) & (gene2 in df_corr.columns):
+                        values = df_corr.loc[(gene1, gene2)].values
+                        avg = np.nanmean(values)
+                        std = np.nanstd(values)
                     matrix[gid1, gid2] = matrix[gid2, gid1] = avg
         return matrix
 
@@ -395,33 +397,34 @@ class StereotypyPlotMaker(PlotMaker):
         fig, ax = plt.subplots(1, 1, figsize=(7, 8), dpi=self.dpi)
         for sid, gene in enumerate(reversed(self.control.get_gene_names())):
 
-            values = df_corr.loc[gene, gene].values
-            ncells = values.shape[0]
-            values = values[np.triu_indices(ncells, k=1)]
+            if gene in df_corr.columns:
+                values = df_corr.loc[gene, gene].values
+                ncells = values.shape[0]
+                values = values[np.triu_indices(ncells, k=1)]
 
-            np.random.seed(42)
-            x = np.random.choice(values, np.min([ncells, 1024]), replace=False)
-            y = np.random.normal(size=len(x), loc=sid, scale=0.1)
-            ax.scatter(x, y, s=1, c="k", alpha=0.1)
-            box = ax.boxplot(
-                values,
-                positions=[sid],
-                showmeans=True,
-                widths=0.75,
-                sym="",
-                vert=False,
-                patch_artist=True,
-                meanprops={
-                    "marker": "s",
-                    "markerfacecolor": "black",
-                    "markeredgecolor": "white",
-                    "markersize": 5,
-                },
-            )
-            label = f"{self.control.get_structure_name(gene)} (N={ncells:04d})"
-            labels.append(label)
-            box["boxes"][0].set(facecolor=self.control.get_gene_color(gene))
-            box["medians"][0].set(color="black")
+                np.random.seed(42)
+                x = np.random.choice(values, np.min([ncells-1, 1024]), replace=False)
+                y = np.random.normal(size=len(x), loc=sid, scale=0.1)
+                ax.scatter(x, y, s=1, c="k", alpha=0.1)
+                box = ax.boxplot(
+                    values,
+                    positions=[sid],
+                    showmeans=True,
+                    widths=0.75,
+                    sym="",
+                    vert=False,
+                    patch_artist=True,
+                    meanprops={
+                        "marker": "s",
+                        "markerfacecolor": "black",
+                        "markeredgecolor": "white",
+                        "markersize": 5,
+                    },
+                )
+                label = f"{self.control.get_structure_name(gene)} (N={ncells:04d})"
+                labels.append(label)
+                box["boxes"][0].set(facecolor=self.control.get_gene_color(gene))
+                box["medians"][0].set(color="black")
         ax.set_yticklabels(labels)
         ax.set_xlim(-0.2, 1.0)
         ax.set_xlabel("Pearson correlation coefficient", fontsize=14)
