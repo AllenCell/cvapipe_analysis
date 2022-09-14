@@ -28,15 +28,14 @@ class Stereotypy(Step):
     @log_run_params
     def run(
         self,
-        distribute: Optional[bool] = False,
-        **kwargs
-    ):
+        staging: Union[str, Path],
+        verbose: Optional[bool]=False,
+        distribute: Optional[bool]=False,
+        **kwargs):
 
-        with general.configuration(self.step_local_staging_dir) as control:
+        with general.configuration(staging) as control:
 
-            for folder in ['values', 'plots']:
-                save_dir = self.step_local_staging_dir / folder
-                save_dir.mkdir(parents=True, exist_ok=True)
+            step_folder = control.create_step_dirs(self.step_name, ["values", "plots"])
 
             device = io.LocalStagingIO(control)
             df = device.load_step_manifest("preprocessing")
