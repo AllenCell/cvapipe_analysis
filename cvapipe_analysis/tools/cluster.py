@@ -94,6 +94,7 @@ class Distributor:
             print(f"#SBATCH --mem-per-cpu {self.control.get_distributed_memory()}", file=fs)
             print(f"#SBATCH --cpus-per-task {self.control.get_distributed_cores()}", file=fs)
             print(f"#SBATCH --output {abs_path_output_folder}/%A_%a.out", file=fs)
+            print("#SBATCH --exclude=n81,n84,n88,n185,n178,n85", file=fs)
             print(f"#SBATCH --error {abs_path_output_folder}/%A_%a.err", file=fs)
             print(f"#SBATCH --array=1-{len(self.jobs)}", file=fs)
             print("#SBATCH --job-name=cvapipe", file=fs)
