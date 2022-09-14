@@ -346,7 +346,7 @@ class DataProducer(LocalStagingIO):
     their are saved.
     """
 
-    debug = False
+    verbose = False
 
     def __init__(self, control):
         super().__init__(control)

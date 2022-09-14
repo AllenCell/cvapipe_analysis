@@ -78,23 +78,21 @@ class Distributor:
         self.jobs.append(job)
 
     def write_commands_file(self):
-        crtl = self.control
-        python__env_path_as_str = crtl.get_distributed_python_env_as_str()
+        python__env_path_as_str = self.control.get_distributed_python_env_as_str()
         with open(self.abs_path_jobs_file_as_str, "w") as fs:
             for job in self.jobs:
                 abs_path_to_dataframe = str(
                     self.abs_path_to_distribute / f"dataframes/{job}.csv")
                 print(
-                    f"{python__env_path_as_str} {self.get_abs_path_to_python_file_as_str()} --csv {abs_path_to_dataframe}", file=fs)
+                    f"{python__env_path_as_str} {self.get_abs_path_to_python_file_as_str()} --csv {abs_path_to_dataframe} --staging {self.control.get_staging()}", file=fs)
 
     def write_script_file(self):
-        crtl = self.control
         abs_path_output_folder = self.abs_path_to_distribute / "log"
         with open(self.abs_path_to_script_as_str, "w") as fs:
             print("#!/bin/bash", file=fs)
             print("#SBATCH --partition aics_cpu_general", file=fs)
-            print(f"#SBATCH --mem-per-cpu {crtl.get_distributed_memory()}", file=fs)
-            print(f"#SBATCH --cpus-per-task {crtl.get_distributed_cores()}", file=fs)
+            print(f"#SBATCH --mem-per-cpu {self.control.get_distributed_memory()}", file=fs)
+            print(f"#SBATCH --cpus-per-task {self.control.get_distributed_cores()}", file=fs)
             print(f"#SBATCH --output {abs_path_output_folder}/%A_%a.out", file=fs)
             print(f"#SBATCH --error {abs_path_output_folder}/%A_%a.err", file=fs)
             print(f"#SBATCH --array=1-{len(self.jobs)}", file=fs)
