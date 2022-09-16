@@ -230,9 +230,13 @@ class LocalStagingIO:
         for gid1, gene1 in enumerate(genes):
             for gid2, gene2 in enumerate(genes):
                 if gid2 > gid1:
+                    person = np.nan
                     fname = self.get_correlation_matrix_file_prefix(row, genes=(gene1,gene2))
-                    df = pd.read_csv(f"{self.control.get_staging()}/concordance/values/{fname}.csv")
-                    matrix[gid1, gid2] = matrix[gid2, gid1] = df.Pearson.values[0]
+                    fname = f"{self.control.get_staging()}/concordance/values/{fname}.csv"
+                    if os.path.exists(fname):
+                        df = pd.read_csv(fname)
+                        person = df.Pearson.values[0]
+                    matrix[gid1, gid2] = matrix[gid2, gid1] = person
         return matrix
 
     def get_correlation_of_mean_reps(self, row, return_ncells=False):

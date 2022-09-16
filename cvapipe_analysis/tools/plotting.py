@@ -193,7 +193,8 @@ class ConcordancePlotMaker(PlotMaker):
         df_corr = self.device.read_corelation_matrix(row)
         if update_ncells:
             for struct, gene in zip(self.control.get_structure_names(), self.control.get_gene_names()):
-                self.ncells[struct] = len(df_corr.loc[gene])
+                if gene in df_corr.columns:
+                    self.ncells[struct] = len(df_corr.loc[gene])
         if df_corr is None:
             return
         genes = self.control.get_gene_names()
