@@ -42,12 +42,13 @@ class ConcordanceCalculator(io.DataProducer):
 
 if __name__ == "__main__":
 
-    config = general.load_config_file()
-    control = controller.Controller(config)
-
-    parser = argparse.ArgumentParser(description='Batch concordance calculation.')
-    parser.add_argument('--csv', help='Path to the dataframe.', required=True)
+    parser = argparse.ArgumentParser(description="Batch single cell feature extraction.")
+    parser.add_argument("--staging", help="Path to staging.", required=True)
+    parser.add_argument("--csv", help="Path to the dataframe.", required=True)
     args = vars(parser.parse_args())
+
+    config = general.load_config_file(args["staging"])
+    control = controller.Controller(config)
 
     df = pd.read_csv(args['csv'], index_col=0)
 
