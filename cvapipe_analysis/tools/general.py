@@ -20,7 +20,7 @@ def save_config_file(path_to_folder, filename="parameters.yaml"):
 
 def save_config(config, path, filename="config.yaml"):
     with open(path/filename, "w") as f:
-        yaml.dump(config, f)
+        yaml.dump(config, f, sort_keys=False)
 
 def get_date_time():
     return datetime.now().strftime("%d/%m/%Y %H:%M:%S")
