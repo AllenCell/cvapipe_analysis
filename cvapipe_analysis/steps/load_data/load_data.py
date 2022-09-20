@@ -2,9 +2,10 @@
 # -*- coding: utf-8 -*-
 import logging
 from pathlib import Path
-from typing import Dict, List, Optional, Union
 from datastep import Step, log_run_params
+from typing import Dict, List, Optional, Union
 
+import cvapipe_analysis
 from cvapipe_analysis.tools import general, controller
 from .load_data_tools import DataLoader
 
@@ -26,7 +27,9 @@ class LoadData(Step):
         **kwargs
         ):
 
-        config = general.load_config_file()
+        path_to_master_config = Path(cvapipe_analysis.__file__).parent.parent
+
+        config = general.load_config_file(path=path_to_master_config)
         config["project"]["local_staging"] = staging
         control = controller.Controller(config)
 
