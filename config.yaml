@@ -1,7 +1,7 @@
 appName: cvapipe_analysis
 
 project:
-    local_staging: "your_path_to/local_staging_variance"
+    local_staging:
     overwrite: off
 
 data:
