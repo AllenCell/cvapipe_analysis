@@ -64,7 +64,7 @@ class DataLoader(io.LocalStagingIO):
             pkg_name = parameters["dataset"]
         self.pkg = quilt3.Package.browse(self.packages[pkg_name], self.registry)
         self.pkg["metadata.csv"].fetch(self.control.get_staging()/"manifest.csv")
-        df_meta = pd.read_csv(self.control.get_staging()/"manifest.csv", index_col="CellId")
+        df_meta = pd.read_csv(self.control.get_staging()/"manifest.csv", index_col="CellId", low_memory=False)
                 
         seg_folder = self.control.get_staging()/f"{self.subfolder}/crop_seg"
         seg_folder.mkdir(parents=True, exist_ok=True)
