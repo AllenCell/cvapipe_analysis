@@ -6,9 +6,10 @@ from datetime import datetime
 from contextlib import contextmanager
 from cvapipe_analysis.tools import controller
 
-def load_config_file(path: Path="./", fname="config.yaml"):
-    with open(Path(path)/fname, "r") as f:
+def load_config_file(staging, fname="config.yaml"):
+    with open(Path(staging)/fname, "r") as f:
         config = yaml.load(f, Loader=yaml.FullLoader)
+    config["project"]["local_staging"] = staging
     return config
 
 def save_config_file(path_to_folder, filename="parameters.yaml"):
@@ -30,13 +31,13 @@ def create_workflow_file_from_config(staging):
         json.dump({"project_local_staging_dir": staging}, fj)
 
 @contextmanager
-def configuration(path=None):
-    config = load_config_file(path=path)
+def configuration(step_dir):
+    staging = step_dir.parent
+    config = load_config_file(staging)
     control = controller.Controller(config)
     try:
         control.log({"start": get_date_time()})
         yield control
     finally:
-        if path is not None:
-            control.log({"end": get_date_time()})
-            save_config(config, Path(path), filename="parameters.yaml")
+        control.log({"end": get_date_time()})
+        save_config(config, step_dir, filename="parameters.yaml")
