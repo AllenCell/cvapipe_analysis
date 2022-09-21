@@ -265,12 +265,10 @@ class Controller:
     def get_optimal_raw_contrast(self, gene):
         return eval(self.config["structures"][gene][2])["raw"]
 
-    def create_step_dirs(self, step_name, dirs):
-        step_dir = self.get_staging() / step_name
-        for dir in dirs:
-            path = step_dir / dir
+    def create_step_subdirs(self, step_dir, subdirs):
+        for subdir in subdirs:
+            path = step_dir / subdir
             path.mkdir(parents=True, exist_ok=True)
-        return step_dir
 
     @staticmethod
     def get_ncores():
