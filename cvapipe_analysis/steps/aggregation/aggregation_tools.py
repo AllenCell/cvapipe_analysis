@@ -59,17 +59,20 @@ class Aggregator(io.DataProducer):
 
     def aggregate_parameterized_intensities(self):
         nc = self.control.get_ncores()
-        if not len(self.CellIds):
+        ncells = len(self.CellIds)
+        self.print(f"\t{ncells} cells found for {self.row.structure}")
+        if not ncells:
             raise ValueError("No cells found for parameterization.")
+        self.print(f"\tLoading PILRs...")
         with concurrent.futures.ProcessPoolExecutor(nc) as executor:
             pints = list(executor.map(self.read_parameterized_intensity, self.CellIds))
         pints = np.array([p for p in pints if p is not None])
+        self.print(f"\tAggregating...")
         pints_norm = self.normalize_representations(pints)
         agg_pint = self.agg_func(pints, axis=0)
         agg_pint_norm = self.agg_func(pints_norm, axis=0)
-        ch = self.control.get_aliases_to_parameterize().index(self.row.alias)
-        self.aggregated_parameterized_intensity = agg_pint#[ch].copy()
-        self.aggregated_norm_parameterized_intensity = agg_pint_norm#[ch].copy()
+        self.aggregated_parameterized_intensity = agg_pint
+        self.aggregated_norm_parameterized_intensity = agg_pint_norm
         return
 
     def set_agg_function(self):
@@ -103,7 +106,9 @@ class Aggregator(io.DataProducer):
         return
 
     def morph_on_shapemode_shape(self):
+        self.print("\tVoxelizing shape mode...")
         self.voxelize_and_parameterize_shapemode_shape()
+        self.print("\tMorphing...")
         self.morphed = cytoparam.morph_representation_on_shape(
             img=self.domain,
             param_img_coords=self.coords_param,

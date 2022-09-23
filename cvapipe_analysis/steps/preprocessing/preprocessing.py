@@ -32,9 +32,11 @@ class Preprocessing(Step):
         **kwargs
         ):
         
-        with general.configuration(staging) as control:
+        step_dir = Path(staging) / self.step_name
+
+        with general.configuration(step_dir) as control:
             
-            step_folder = control.create_step_dirs(self.step_name, [])
+            control.create_step_subdirs(step_dir, ["outliers"])
 
             device = io.LocalStagingIO(control)
             df = device.load_step_manifest("computefeatures")
@@ -48,14 +50,11 @@ class Preprocessing(Step):
                 log.info(f"Manifest without mitotics: {df.shape}")
         
             if control.remove_outliers():
-
-                path_to_outliers_folder = step_folder/"outliers"
-                path_to_outliers_folder.mkdir(parents=True, exist_ok=True)
                 
-                path_to_df_outliers = step_folder/"outliers.csv"
+                path_to_df_outliers = step_dir/"outliers.csv"
                 if not path_to_df_outliers.is_file() or control.overwrite():
                     log.info("Computing outliers...")
-                    df_outliers = outliers_removal(df=df, output_dir=path_to_outliers_folder, log=log)
+                    df_outliers = outliers_removal(df=df, output_dir=step_dir/"outliers", log=log)
                     df_outliers.to_csv(path_to_df_outliers)
                 else:
                     log.info("Using pre-detected outliers.")
@@ -83,7 +82,7 @@ class Preprocessing(Step):
 
             log.info(f"Saving manifest...")
             self.manifest = df
-            manifest_path = step_folder/'manifest.csv'
+            manifest_path = step_dir/'manifest.csv'
             self.manifest.to_csv(manifest_path)
 
             return manifest_path

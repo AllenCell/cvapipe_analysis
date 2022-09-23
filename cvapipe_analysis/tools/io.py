@@ -43,8 +43,10 @@ class LocalStagingIO:
             if imtype in row:
                 path = Path(row[imtype])
                 if not path.is_file():
-                    path = self.control.get_staging() / f"loaddata/{row[imtype]}"
-                reader = AICSImage(path)
+                    raise FileNotFoundError(path)
+                try:
+                    reader = AICSImage(path)
+                except: ValueError(f"File {path} seems corrupted.")
                 channel_names += reader.channel_names
                 img = reader.get_image_data('CZYX', S=0, T=0)
                 imgs.append(img)
@@ -125,12 +127,16 @@ class LocalStagingIO:
         code, intensity_names = None, []
         path = f"parameterization/representations/{index}.tif"
         path = self.control.get_staging() / path
-        if path.is_file():
+        if not path.is_file():
+            raise FileNotFoundError(path)
+        try:
             code = AICSImage(path)
-            intensity_names = code.channel_names
-            code = code.data.squeeze()
-            if code.ndim == 2:
-                code = code.reshape(1, *code.shape)
+        except:
+            raise ValueError(f"File {path} seems corrupted. Consider re-running parameterization.")
+        intensity_names = code.channel_names
+        code = code.data.squeeze()
+        if code.ndim == 2:
+            code = code.reshape(1, *code.shape)            
         if return_intensity_names:
             return code, intensity_names
         return code

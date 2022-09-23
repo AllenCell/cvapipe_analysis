@@ -103,8 +103,8 @@ class DataLoader(io.LocalStagingIO):
         df = self.load_data_from_csv(parameters, use_fms)
         self.is_dataframe_valid(df)
         df = df.set_index('CellId', drop=True)
-        if not use_fms:
-            self.create_symlinks(df)
+        # if not use_fms:
+        #     self.create_symlinks(df)
         return df
 
     def is_dataframe_valid(self, df):

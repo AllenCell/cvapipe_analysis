@@ -28,22 +28,23 @@ class Correlation(Step):
         distribute: Optional[bool]=False,
         **kwargs):
 
-        with general.configuration(staging) as control:
+        step_dir = Path(staging) / self.step_name
 
-            step_folder = control.create_step_dirs(self.step_name, ["values"])
+        with general.configuration(step_dir) as control:
+
+            control.create_step_subdirs(step_dir, ["values"])
 
             device = io.LocalStagingIO(control)
             df = device.load_step_manifest("preprocessing")
             space = shapespace.ShapeSpace(control)
             if control.get_number_of_map_points() == 1:
                 # Do not remove extreme points when working on
-                # matched datasets for whcih the number of bins
+                # matched datasets for which the number of bins
                 # equals 1 (consistency with previous analysis).
                 space.set_remove_extreme_points(False)
             space.execute(df)
             variables = control.get_variables_values_for_aggregation()
             df_agg = space.get_aggregated_df(variables, include_cellIds=True)
-            df_agg = space.sample_cell_ids(df_agg, 1000)
             df_sphere = space.get_cells_inside_ndsphere_of_radius()
             df_agg = df_agg.append(df_sphere, ignore_index=True)
 

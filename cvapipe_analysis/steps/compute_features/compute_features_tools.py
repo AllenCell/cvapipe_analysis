@@ -24,7 +24,7 @@ class FeatureCalculator(io.DataProducer):
         self.subfolder = "computefeatures/cell_features"
 
     def workflow(self):
-        self.print("Loading single cell images...")
+        self.print(f"Loading images of cell {self.row.name}...")
         self.load_single_cell_data()
         self.print("Aligning data...")
         self.align_data()

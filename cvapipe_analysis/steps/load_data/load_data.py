@@ -29,7 +29,7 @@ class LoadData(Step):
 
         path_to_master_config = Path(cvapipe_analysis.__file__).parent.parent
 
-        config = general.load_config_file(path=path_to_master_config)
+        config = general.load_config_file(path_to_master_config)
         config["project"]["local_staging"] = staging
         control = controller.Controller(config)
 

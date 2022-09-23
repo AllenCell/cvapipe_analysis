@@ -28,9 +28,11 @@ class ComputeFeatures(Step):
         distribute: Optional[bool]=False,
         **kwargs):
 
-        with general.configuration(staging) as control:
+        step_dir = Path(staging) / self.step_name
 
-            step_folder = control.create_step_dirs(self.step_name, ["cell_features"])
+        with general.configuration(step_dir) as control:
+
+            control.create_step_subdirs(step_dir, ["cell_features"])
 
             device = io.LocalStagingIO(control)
             df = device.load_step_manifest("loaddata")
@@ -64,6 +66,6 @@ class ComputeFeatures(Step):
 
             log.info(f"Saving manifest...")
             df = df.merge(df_results, left_index=True, right_index=True, how="outer")
-            df.to_csv(step_folder/"manifest.csv")
+            df.to_csv(step_dir/"manifest.csv")
 
         return

@@ -33,9 +33,11 @@ class Stereotypy(Step):
         distribute: Optional[bool]=False,
         **kwargs):
 
-        with general.configuration(staging) as control:
+        step_dir = Path(staging) / self.step_name
 
-            step_folder = control.create_step_dirs(self.step_name, ["values", "plots"])
+        with general.configuration(step_dir) as control:
+
+            control.create_step_subdirs(step_dir, ["values", "plots"])
 
             device = io.LocalStagingIO(control)
             df = device.load_step_manifest("preprocessing")

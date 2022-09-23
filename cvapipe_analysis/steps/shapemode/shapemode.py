@@ -28,9 +28,11 @@ class Shapemode(Step):
         distribute: Optional[bool]=False,
         **kwargs):
 
-        with general.configuration(staging) as control:
+        step_dir = Path(staging) / self.step_name
+
+        with general.configuration(step_dir) as control:
             
-            step_folder = control.create_step_dirs(self.step_name, ["pca", "avgshape"])
+            control.create_step_subdirs(step_dir, ["pca", "avgshape"])
 
             device = io.LocalStagingIO(control)
             df = device.load_step_manifest("preprocessing")
