@@ -45,7 +45,7 @@ step_workflow_requirements = [
     "distributed>=2.18.0",
     "docutils",
     "fire",
-    "prefect",
+    "prefect==0.15.10",
     "python-dateutil",
     "aics_dask_utils",
 ]
