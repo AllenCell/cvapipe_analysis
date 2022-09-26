@@ -30,6 +30,9 @@ def create_workflow_file_from_config(staging):
     with open("workflow_config.json", "w") as fj:
         json.dump({"project_local_staging_dir": staging}, fj)
 
+def check_installation():
+    print(":: cvapipe_analysis seems to be properly installed! ::")
+
 @contextmanager
 def configuration(step_dir):
     staging = step_dir.parent
