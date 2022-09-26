@@ -59,18 +59,21 @@ class DataLoader(io.LocalStagingIO):
         return df[[f for f in df.columns if not any(w in f for w in self.control.get_data_aliases())]]
 
     def download_quilt_data(self, parameters):
-        pkg_name = "default"
-        if "dataset" in parameters:
-            pkg_name = parameters["dataset"]
-        self.pkg = quilt3.Package.browse(self.packages[pkg_name], self.registry)
-        self.pkg["metadata.csv"].fetch(self.control.get_staging()/"manifest.csv")
-        df_meta = pd.read_csv(self.control.get_staging()/"manifest.csv", index_col="CellId", low_memory=False)
-                
+
+        print("Creating data folders...")
         seg_folder = self.control.get_staging()/f"{self.subfolder}/crop_seg"
         seg_folder.mkdir(parents=True, exist_ok=True)
 
         raw_folder = self.control.get_staging()/f"{self.subfolder}/crop_raw"
         raw_folder.mkdir(parents=True, exist_ok=True)
+
+        pkg_name = "default"
+        if "dataset" in parameters:
+            pkg_name = parameters["dataset"]
+        self.pkg = quilt3.Package.browse(self.packages[pkg_name], self.registry)
+        self.pkg["metadata.csv"].fetch(self.control.get_staging()/"manifest.csv")
+        print("Reading manifest...")
+        df_meta = pd.read_csv(self.control.get_staging()/"manifest.csv", index_col="CellId", low_memory=False)
 
         if "test" in parameters:
             ncells = 12
@@ -83,11 +86,13 @@ class DataLoader(io.LocalStagingIO):
                 if self.download_raw_data:
                     self.pkg[row["crop_raw"]].fetch(self.control.get_staging()/f"loaddata/{row.crop_raw}")
         else:
-            self.pkg["crop_seg"].fetch(seg_folder)
             if self.download_raw_data:
+                print("Downloading single cell raw images...")
                 self.pkg["crop_raw"].fetch(raw_folder)
+            print("Downloading single cell segmentations...")
+            self.pkg["crop_seg"].fetch(seg_folder)
 
-        # Append full path to file paths
+        print("Appending full path to file paths...")
         for index, row in tqdm(df_meta.iterrows(), total=len(df_meta)):
             df_meta.at[index, "crop_seg"] = str(self.control.get_staging()/f"loaddata/{row.crop_seg}")
             if self.download_raw_data:
