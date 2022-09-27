@@ -51,19 +51,16 @@ class Preprocessing(Step):
         
             if control.remove_outliers():
                 
-                path_to_df_outliers = step_dir/"outliers.csv"
-                if not path_to_df_outliers.is_file() or control.overwrite():
+                if "outlier" not in df.columns:
+                    # Compute outliers in case it is not available
+                    path_to_df_outliers = step_dir/"outliers.csv"
                     log.info("Computing outliers...")
                     df_outliers = outliers_removal(df=df, output_dir=step_dir/"outliers", log=log)
-                    df_outliers.to_csv(path_to_df_outliers)
-                else:
-                    log.info("Using pre-detected outliers.")
-                    df_outliers = pd.read_csv(path_to_df_outliers, index_col='CellId')
+                    df_outliers = df_outliers.loc[df.index]
+                    df.loc[df_outliers.index, 'outlier'] = df_outliers['Outlier']
 
-                df_outliers = df_outliers.loc[df.index]
-                df.loc[df_outliers.index, 'Outlier'] = df_outliers['Outlier']
-                df = df.loc[df.Outlier == 'No']
-                df = df.drop(columns=['Outlier'])
+                df = df.loc[df.outlier == 'No']
+                df = df.drop(columns=['outlier'])
                 log.info(f"Shape of data without outliers: {df.shape}")
             
             if control.is_filtering_on():
