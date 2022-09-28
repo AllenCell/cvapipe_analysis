@@ -70,6 +70,8 @@ class DataLoader(io.LocalStagingIO):
         pkg_name = "default"
         if "dataset" in parameters:
             pkg_name = parameters["dataset"]
+        if pkg_name not in self.packages:
+            raise ValueError(f"Package {pkg_name} not found. Packages available: {[k for k in self.packages.keys()]}.")
         self.pkg = quilt3.Package.browse(self.packages[pkg_name], self.registry)
         self.pkg["metadata.csv"].fetch(self.control.get_staging()/"manifest.csv")
         print("Reading manifest...")
