@@ -9,7 +9,7 @@ from cvapipe_analysis.tools import controller
 def load_config_file(staging, fname="config.yaml"):
     with open(Path(staging)/fname, "r") as f:
         config = yaml.load(f, Loader=yaml.FullLoader)
-    config["project"]["local_staging"] = staging
+    config["project"]["local_staging"] = str(staging)
     return config
 
 def save_config_file(path_to_folder, filename="parameters.yaml"):
