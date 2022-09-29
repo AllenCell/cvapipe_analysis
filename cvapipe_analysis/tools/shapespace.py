@@ -119,7 +119,7 @@ class ShapeSpace(ShapeSpaceBasic):
     def calculate_pca(self):
         self.df_pca = self.df[self.features]
         matrix_of_features = self.df_pca.values.copy()
-        pca = PCA(self.control.get_number_of_shape_modes())
+        pca = PCA(self.control.get_number_of_shape_modes(), svd_solver="full")
         pca = pca.fit(matrix_of_features)
         axes = pca.transform(matrix_of_features)
         self.axes = pd.DataFrame(axes, columns=self.control.get_shape_modes())
