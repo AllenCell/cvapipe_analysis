@@ -2,6 +2,7 @@
 
 from .load_data import LoadData
 from .preprocessing import Preprocessing
+from .validation import Validation
 from .compute_features import ComputeFeatures
 from .shapemode import Shapemode
 from .parameterization import Parameterization
@@ -14,6 +15,7 @@ from .cellpack import Cellpack
 __all__ = [
     "LoadData",
     "Preprocessing",
+    "Validation",
     "Shapemode",
     "PcaPathCells",
     "ComputeFeatures",

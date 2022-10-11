@@ -16,6 +16,7 @@ from scipy import cluster as spcluster
 from aicsimageio import AICSImage, writers
 from vtk.util import numpy_support as vtknp
 from cvapipe_analysis.tools import io, shapespace
+from matplotlib.ticker import FormatStrFormatter
 
 plt.rcParams['ps.fonttype'] = 42
 plt.rcParams['pdf.fonttype'] = 42
@@ -879,3 +880,38 @@ class ShapeSpaceMapperPlotMaker(PlotMaker):
                 plt.suptitle(ds, fontsize=14)
                 plt.tight_layout()
                 self.figs.append((fig, f"nndist_ncells_{ds}"))
+
+class ValidationPlotMaker(PlotMaker):
+    """
+    Class for creating validation plots.
+
+    WARNING: This class should not depend on where
+    the local_staging folder is.
+    """
+
+    def __init__(self, control, subfolder: Optional[str] = None):
+        super().__init__(control)
+        self.subfolder = "validation/rec_error" if subfolder is None else subfolder
+
+    def workflow(self):
+        self.make_reconstructin_error_plots()
+
+    def make_reconstructin_error_plots(self):
+        for alias, df_alias in self.df.groupby("alias"):
+            fig, ax = plt.subplots(1,1,figsize=(3.7,3))
+            for _, df_cell in df_alias.groupby('CellId'):
+                x = (df_cell.lrec+1)**2
+                ax.plot(x, df_cell.error, '-', color='gray', linewidth=0.2)
+            df_agg = df_alias.groupby('lrec').agg(['mean','std'])
+            x = (df_agg.index+1)**2
+            ax.plot(x, df_agg[('error','mean')],'-', color='k', linewidth=2)
+            ax.set_yscale('log')
+            ax.axvline(x=289)
+            ax.set_xlim(1,33**2)
+            ax.set_ylim(0.1,10.0)
+            ax.yaxis.set_major_formatter(FormatStrFormatter('%.1f'))
+            ax.set_title(f"{alias}, @L=16: {df_agg.at[16,('error','mean')]:.2f} $\mu m$")
+            ax.set_xlabel('L (SHE order)', fontsize=14)
+            ax.set_ylabel('Mean distance to closest point($\mu m$)')
+            plt.tight_layout()
+            self.figs.append((fig, f"rec_error_{alias}"))

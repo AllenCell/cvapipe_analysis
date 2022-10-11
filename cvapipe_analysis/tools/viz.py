@@ -6,6 +6,7 @@ from functools import reduce
 from aicsshparam import shtools
 import matplotlib.pyplot as plt
 from matplotlib import animation
+from scipy import spatial as spspatial
 from vtk.util import numpy_support as vtknp
 
 class MeshToolKit():
@@ -220,3 +221,12 @@ class MeshToolKit():
             plt.close("all")
             return
         return anim
+
+    @staticmethod
+    def get_meshes_distance(mesh1, mesh2):
+        coords1 = vtknp.vtk_to_numpy(mesh1.GetPoints().GetData())
+        coords2 = vtknp.vtk_to_numpy(mesh2.GetPoints().GetData())
+        dist = spspatial.distance.cdist(coords1, coords2)
+        d12 = dist.min(axis=0)
+        d21 = dist.min(axis=1)
+        return d12, d21
