@@ -910,7 +910,9 @@ class ValidationPlotMaker(PlotMaker):
             ax.set_xlim(1,33**2)
             ax.set_ylim(0.1,10.0)
             ax.yaxis.set_major_formatter(FormatStrFormatter('%.1f'))
-            ax.set_title(f"{alias}, @L=16: {df_agg.at[16,('error','mean')]:.2f} $\mu m$")
+            err_avg = df_agg.at[16,('error','mean')]
+            err_std = df_agg.at[16,('error','std')]
+            ax.set_title(f"{alias}, @L=16: {err_avg:.2f} +/- {err_std:.2f} $\mu m$")
             ax.set_xlabel('L (SHE order)', fontsize=14)
             ax.set_ylabel('Mean distance to closest point($\mu m$)')
             plt.tight_layout()
