@@ -106,7 +106,7 @@ class DataLoader(io.LocalStagingIO):
         return df_meta
 
     def download_local_data(self, parameters):
-        use_fms = use_fms="fmsid" in parameters
+        use_fms = "fmsid" in parameters
         df = self.load_data_from_csv(parameters, use_fms)
         self.is_dataframe_valid(df)
         df = df.set_index('CellId', drop=True)
