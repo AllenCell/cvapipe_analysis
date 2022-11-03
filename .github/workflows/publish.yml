@@ -22,7 +22,7 @@ jobs:
       run: |
         python setup.py sdist bdist_wheel
     - name: Publish to PyPI
-      uses: pypa/gh-action-pypi-publish@release/v0.0.1
+      uses: pypa/gh-action-pypi-publish@release/v1
       with:
         user: aicspypi
         password: ${{ secrets.PYPI_TOKEN }}
