@@ -65,7 +65,7 @@ requirements = [
     "imgkit==1.0.2",
     "xvfbwrapper==0.2.9",
     "pyshtools==4.10",
-    "aicsshparam==0.1.1",
+    "aicsshparam==0.1.2",
     "aicscytoparam==0.1.6",
     "vtk==9.0.1",
     "quilt3",
@@ -113,6 +113,6 @@ setup(
     url="https://github.com/AllenCellModeling/cvapipe_analysis",
     # Do not edit this string manually, always use bumpversion
     # Details in CONTRIBUTING.rst
-    version="0.1.1",
+    version="0.1.2",
     zip_safe=False,
 )
