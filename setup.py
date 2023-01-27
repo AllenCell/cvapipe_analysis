@@ -45,7 +45,7 @@ step_workflow_requirements = [
     "distributed>=2.18.0",
     "docutils",
     "fire",
-    "prefect",
+    "prefect==0.14.15",
     "python-dateutil",
     "aics_dask_utils",
 ]
@@ -53,7 +53,7 @@ step_workflow_requirements = [
 requirements = [
     *step_workflow_requirements,
     # project requires
-    "numpy",
+    "numpy1.23",
     "pandas",
     "Pillow",
     "matplotlib",
