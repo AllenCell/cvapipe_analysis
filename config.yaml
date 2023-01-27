@@ -1,7 +1,7 @@
 appName: cvapipe_analysis
 
 project:
-    local_staging: "your_path_to/local_staging_variance"
+    local_staging: "/allen/aics/assay-dev/MicroscopyOtherData/Viana/projects/trash/variance-test/"
     overwrite: off
 
 data:
@@ -51,7 +51,9 @@ features:
         aliases: ["NUC", "MEM"]
         # Size of Gaussian kernal used to smooth the
         # images before SHE coefficients calculation
-        sigma: 2
+        sigma:
+            MEM: 2
+            NUC: 2
         # Number of SHE coefficients used to describe cell
         # and nuclear shape
         lmax: 16
