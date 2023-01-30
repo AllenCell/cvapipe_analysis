@@ -31,7 +31,6 @@ pip install -e .
 Alternatively, install the latest stable version from pypi by running
 
 ```
-pip install numpy
 pip install cvapipe_analysis
 ```
 
