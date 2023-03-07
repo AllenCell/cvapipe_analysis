@@ -5,9 +5,9 @@ import matplotlib.pyplot as plt
 from sklearn.decomposition import PCA
 from typing import List, Optional
 
-from cvapipe_analysis.tools import general
+from cvapipe_analysis.tools import io
 
-class ShapeModesCalculator(general.DataProducer):
+class ShapeModesCalculator(io.DataProducer):
     """
     Class for calculating shape modes.
     
