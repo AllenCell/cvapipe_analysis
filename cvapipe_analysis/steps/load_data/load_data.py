@@ -27,7 +27,7 @@ class LoadData(Step):
         **kwargs
         ):
 
-        path_to_master_config = Path(cvapipe_analysis.__file__).parent.parent
+        path_to_master_config = Path(cvapipe_analysis.__path__)/"resources"
 
         config = general.load_config_file(path_to_master_config)
         config["project"]["local_staging"] = staging
