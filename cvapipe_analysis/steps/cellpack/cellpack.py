@@ -16,8 +16,8 @@ from aicscytoparam import cytoparam
 from datastep import Step, log_run_params
 from aicsimageio import AICSImage, writers
 
-from cvapipe_analysis.tools import general, cluster, shapespace
 from .cellpack_tools import ObjectCollector
+from ...tools import general, cluster, shapespace
 
 tr = pdb.set_trace
 log = logging.getLogger(__name__)

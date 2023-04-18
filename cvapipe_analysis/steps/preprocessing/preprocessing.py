@@ -7,7 +7,7 @@ from datastep import Step, log_run_params
 from typing import Dict, List, Optional, Union
 
 import pandas as pd
-from cvapipe_analysis.tools import io, general
+from ...tools import io, general
 from .outliers_tools import outliers_removal
 from .filtering_tools import filtering
 

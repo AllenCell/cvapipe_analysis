@@ -6,7 +6,7 @@ import pandas as pd
 from tqdm import tqdm
 from pathlib import Path
 
-from cvapipe_analysis.tools import io, general
+from ...tools import io, general
 
 class DataLoader(io.LocalStagingIO):
     """

@@ -6,7 +6,7 @@ from aicsshparam import shtools
 from vtk.util.numpy_support import numpy_to_vtk as np2vtk
 from vtk.util.numpy_support import vtk_to_numpy as vtk2np
 
-from cvapipe_analysis.tools import io, shapespace, plotting, viz
+from ...tools import io, shapespace, plotting, viz
 
 class ShapeModeCalculator(io.DataProducer):
     """

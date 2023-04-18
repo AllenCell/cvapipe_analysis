@@ -7,7 +7,7 @@ from typing import Dict, List, Optional, Union
 
 import concurrent
 from tqdm import tqdm
-from cvapipe_analysis.tools import io, general, cluster, shapespace, plotting
+from ...tools import io, general, cluster, shapespace, plotting
 from .concordance_tools import ConcordanceCalculator
 
 log = logging.getLogger(__name__)

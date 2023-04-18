@@ -5,9 +5,8 @@ from pathlib import Path
 from datastep import Step, log_run_params
 from typing import Dict, List, Optional, Union
 
-import cvapipe_analysis
-from cvapipe_analysis.tools import general, controller
 from .load_data_tools import DataLoader
+from ...tools import general, controller
 
 log = logging.getLogger(__name__)
 
@@ -27,9 +26,8 @@ class LoadData(Step):
         **kwargs
         ):
 
-        path_to_master_config = Path(cvapipe_analysis.__path__)/"resources"
-
-        config = general.load_config_file(path_to_master_config)
+        path = general.get_path_to_default_config()
+        config = general.load_config_file(path)
         config["project"]["local_staging"] = staging
         control = controller.Controller(config)
 

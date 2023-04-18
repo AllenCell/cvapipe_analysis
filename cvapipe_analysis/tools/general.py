@@ -4,7 +4,13 @@ import shutil
 from pathlib import Path
 from datetime import datetime
 from contextlib import contextmanager
-from cvapipe_analysis.tools import controller
+
+import cvapipe_analysis as cvapipe
+from . import controller
+
+def get_path_to_default_config():
+    path = Path(cvapipe.__path__[0])/"tools"
+    return path
 
 def load_config_file(staging, fname="config.yaml"):
     with open(Path(staging)/fname, "r") as f:

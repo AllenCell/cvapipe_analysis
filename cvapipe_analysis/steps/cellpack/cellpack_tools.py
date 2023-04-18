@@ -2,7 +2,7 @@ import numpy as np
 from skimage import measure as skmeasure
 from aicsimageio import writers
 
-from cvapipe_analysis.tools import io
+from ...tools import io
 
 class ObjectCollector(io.DataProducer):
     """

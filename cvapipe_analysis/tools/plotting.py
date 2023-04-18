@@ -15,8 +15,9 @@ from scipy import stats as spstats
 from scipy import cluster as spcluster
 from aicsimageio import AICSImage, writers
 from vtk.util import numpy_support as vtknp
-from cvapipe_analysis.tools import io, shapespace
 from matplotlib.ticker import FormatStrFormatter
+
+from . import io, shapespace
 
 plt.rcParams['ps.fonttype'] = 42
 plt.rcParams['pdf.fonttype'] = 42

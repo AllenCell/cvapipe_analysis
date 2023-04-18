@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Union
 from datastep import Step, log_run_params
 
-from cvapipe_analysis.tools import io, general
+from ...tools import io, general
 from .shapemode_tools import ShapeModeCalculator
 
 log = logging.getLogger(__name__)

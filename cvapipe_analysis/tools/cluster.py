@@ -5,7 +5,8 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 from pathlib import Path
-import cvapipe_analysis
+
+import cvapipe_analysis as cvapipe
 
 
 class Distributor:
@@ -33,7 +34,7 @@ class Distributor:
         self.abs_path_to_script_as_str = str(self.abs_path_to_distribute / "jobs.sh")
         self.abs_path_jobs_file_as_str = str(self.abs_path_to_distribute / "jobs.txt")
         self.abs_path_to_cvapipe = Path(
-            os.path.abspath(cvapipe_analysis.__file__)).parents[1]
+            os.path.abspath(cvapipe.__file__)).parents[1]
 
     def set_data(self, df):
         self.df = df

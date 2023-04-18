@@ -7,7 +7,7 @@ from datastep import Step, log_run_params
 from typing import Dict, List, Optional, Union
 
 import concurrent
-from cvapipe_analysis.tools import io, general, cluster
+from ...tools import io, general, cluster
 from .parameterization_tools import Parameterizer
 
 log = logging.getLogger(__name__)

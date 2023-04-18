@@ -6,7 +6,7 @@ from tqdm import tqdm
 from skimage import io as skio
 from joblib import Parallel, delayed
 
-from cvapipe_analysis.tools import io, general, controller
+from ...tools import io, general, controller
 
 class CorrelationCalculator(io.DataProducer):
     """

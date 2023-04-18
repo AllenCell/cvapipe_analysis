@@ -11,8 +11,8 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 
-from cvapipe_analysis.tools import io, general, cluster, shapespace, plotting
 from .stereotypy_tools import StereotypyCalculator
+from ...tools import io, general, cluster, shapespace, plotting
 
 log = logging.getLogger(__name__)
 

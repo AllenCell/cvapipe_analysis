@@ -7,7 +7,7 @@ from datastep import Step, log_run_params
 
 from tqdm import tqdm
 
-from cvapipe_analysis.tools import io, general, cluster, shapespace
+from ...tools import io, general, cluster, shapespace
 from .correlation_tools import CorrelationCalculator
 
 log = logging.getLogger(__name__)

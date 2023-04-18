@@ -6,8 +6,8 @@ from datastep import Step, log_run_params
 from typing import Dict, List, Optional, Union
 
 from tqdm import tqdm
-from cvapipe_analysis.tools import io, general, cluster, shapespace
 from .aggregation_tools import Aggregator
+from ...tools import io, general, cluster, shapespace
 
 log = logging.getLogger(__name__)
 
