@@ -104,7 +104,7 @@ setup(
     keywords="cvapipe_analysis",
     name="cvapipe_analysis",
     packages=find_packages(exclude=["tests", "*.tests", "*.tests.*"]),
-    package_data={"resources": ["config.yaml"]},
+    package_data={"": ["resources/config.yaml"]},
     python_requires=">=3.7",
     setup_requires=setup_requirements,
     test_suite="cvapipe_analysis/tests",
