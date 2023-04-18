@@ -9,7 +9,7 @@ import cvapipe_analysis as cvapipe
 from . import controller
 
 def get_path_to_default_config():
-    path = Path(cvapipe.__path__[0])/"tools"
+    path = Path(cvapipe.__path__[0])/"resources"
     return path
 
 def load_config_file(staging, fname="config.yaml"):
