@@ -3,7 +3,7 @@ import concurrent
 import pandas as pd
 from aicscytoparam import cytoparam
 
-from ...tools import io, general, controller
+from cvapipe_analysis.tools import io, general, controller
 
 class Parameterizer(io.DataProducer):
     """

@@ -6,7 +6,7 @@ from pathlib import Path
 from aicscytoparam import cytoparam
 import concurrent
 
-from ...tools import io, general, controller
+from cvapipe_analysis.tools import io, general, controller
 
 class Aggregator(io.DataProducer):
     """

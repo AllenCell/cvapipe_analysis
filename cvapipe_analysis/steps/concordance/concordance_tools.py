@@ -2,7 +2,7 @@ import argparse
 import concurrent
 import pandas as pd
 
-from ...tools import io, general, controller
+from cvapipe_analysis.tools import io, general, controller
 
 
 class ConcordanceCalculator(io.DataProducer):

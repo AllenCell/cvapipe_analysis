@@ -6,7 +6,7 @@ from aicsshparam import shparam, shtools
 from skimage import measure as skmeasure
 from skimage import morphology as skmorpho
 
-from ...tools import io, general, controller, viz
+from cvapipe_analysis.tools import io, general, controller, viz
 
 class Validator(io.DataProducer):
     """

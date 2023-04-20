@@ -6,7 +6,7 @@ from aicsshparam import shparam
 from skimage import measure as skmeasure
 from skimage import morphology as skmorpho
 
-from ...tools import io, general, controller
+from cvapipe_analysis.tools import io, general, controller
 
 class FeatureCalculator(io.DataProducer):
     """
