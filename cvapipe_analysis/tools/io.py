@@ -38,7 +38,7 @@ class LocalStagingIO:
     def get_single_cell_images(self, row, return_stack=False):
         imgs = []
         channel_names = []
-        imtypes = ["crop_raw", "crop_seg"]
+        imtypes = ["crop_raw", "crop_seg", "crop_path"]
         for imtype in imtypes:
             if imtype in row:
                 path = Path(row[imtype])
