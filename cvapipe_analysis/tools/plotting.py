@@ -749,7 +749,8 @@ class ShapeSpaceMapperPlotMaker(PlotMaker):
         nc = len(df1.columns)
         args = {"bins": bin_edges, "density": True}
         fig, axs = plt.subplots(1, nc, figsize=(1.5*nc, 1.5), sharex=False, gridspec_kw={"wspace": 0.2})
-        axs = [axs] if len(axs)==1 else axs
+        if not isinstance(axs, list):
+            axs = [axs]
         for sm, ax in zip(df1.columns, axs):
             ax.set_frame_on(False)
             if display_both:
