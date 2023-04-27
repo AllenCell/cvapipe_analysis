@@ -24,6 +24,7 @@ class ComputeFeatures(Step):
     def run(
         self,
         staging: Union[str, Path],
+        debug: Optional[bool]=False,
         verbose: Optional[bool]=False,
         distribute: Optional[bool]=False,
         **kwargs):
@@ -50,6 +51,11 @@ class ComputeFeatures(Step):
             calculator = FeatureCalculator(control)
             if verbose:
                 calculator.set_verbose_mode_on()
+            if debug:
+                for index, row in df.iterrows():
+                    calculator.set_row(row)
+                    calculator.workflow()
+                return
             with concurrent.futures.ProcessPoolExecutor(control.get_ncores()) as executor:
                 executor.map(calculator.execute, [row for _,row in df.iterrows()])
 
