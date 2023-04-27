@@ -459,8 +459,9 @@ class ShapeSpaceMapper():
             from the baseline dataset.
             '''
             # Start by reading the config file from perturbed dataset
-            path_step = Path(self.datasets[ds]) / "shapemode"
-            config_pt = general.load_config_file(path_step, fname="parameters.yaml")
+            # import pdb; pdb.set_trace()
+            # path_step = Path(self.datasets[ds]) / "shapemode"
+            config_pt = general.load_config_file(self.datasets[ds])
             control_pt = controller.Controller(config_pt)
             # Now we merge the two datasets together
             device_pt = io.LocalStagingIO(control_pt)
@@ -513,6 +514,6 @@ class ShapeSpaceMapper():
                 df_map.loc[df_Y.index, "Dist"] = dist.min(axis=0)
                 df_map.loc[df_Y.index, "SelfDist"] = self_distance
                 df_map.loc[df_Y.index, "NNCellId"] = df_X.index[dist.argmin(axis=0)]
-        df_map.NNCellId = df_map.fillna(-1).NNCellId.astype(np.int64)
+        df_map.NNCellId = df_map.fillna(-1).NNCellId#.astype(np.int64) CellId does not need to be int
         self.result = df_map
         self.result.reset_index().set_index(["dataset", "CellId"])
