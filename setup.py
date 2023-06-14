@@ -54,7 +54,7 @@ requirements = [
     *step_workflow_requirements,
     # project requires
     "numpy==1.23",
-    "pandas",
+    "pandas==1.5.3",
     "Pillow",
     "matplotlib",
     "seaborn",
