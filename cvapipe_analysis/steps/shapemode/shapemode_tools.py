@@ -1,6 +1,7 @@
 import concurrent
 import numpy as np
 import pandas as pd
+import pickle as pk
 from tqdm import tqdm
 from aicsshparam import shtools
 from vtk.util.numpy_support import numpy_to_vtk as np2vtk
@@ -46,6 +47,8 @@ class ShapeModeCalculator(io.DataProducer):
     def workflow(self):
         self.space.execute(self.df)
         self.space.save_summary("shapemode/summary.html")
+        pk.dump(self.space.pca, open(f"{self.control.get_staging()}/shapemode/pca/pca.pkl","wb"))
+        self.space.axes.to_csv(f"{self.control.get_staging()}/shapemode/pca/shape_modes_df.csv")
         self.plot_maker_sp.save_feature_importance(self.space)
         self.plot_maker_sp.plot_explained_variance(self.space)
         self.plot_maker_sp.plot_pairwise_correlations(self.space)
