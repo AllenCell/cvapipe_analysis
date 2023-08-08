@@ -1,5 +1,6 @@
 import argparse
 import concurrent
+import pyshtools
 import numpy as np
 import pandas as pd
 from aicsshparam import shparam
@@ -124,13 +125,40 @@ class FeatureCalculator(io.DataProducer):
         return features
 
     def get_coeff_features(self, img, alias):
+        def get_coeffs_from_series(row, lmax):
+            coeffs = np.zeros((2, lmax, lmax), dtype=np.float32)
+            for l in range(lmax):
+                for m in range(l + 1):
+                    try:
+                        # Cosine SHE coefficients
+                        coeffs[0, l, m] = row[
+                            [f for f in row.keys() if f"shcoeffs_L{l}M{m}C" in f]
+                        ]
+                        # Sine SHE coefficients
+                        coeffs[1, l, m] = row[
+                            [f for f in row.keys() if f"shcoeffs_L{l}M{m}S" in f]
+                        ]
+                    # If a given (l,m) pair is not found, it is assumed to be zero
+                    except: pass
+            return coeffs
+        
         (coeffs, _), (_, _, _, transform) = shparam.get_shcoeffs(
             image=img,
             lmax=self.control.get_lmax(),
             sigma=self.control.get_sigma(alias),
-            alignment_2d=False
+            alignment_2d=False,
+            alignment_3d=(self.control.get_alignment_method() == "3d")
         )
         coeffs = dict((f"{k}_lcc", v) for k, v in coeffs.items())
+
+        coeffs_np = get_coeffs_from_series(pd.Series(coeffs),
+                                           self.control.get_lmax())
+        spec_energy = pyshtools.spectralanalysis.spectrum(coeffs_np)
+        keys = []
+        for k in range(self.control.get_lmax()):
+            keys.append(f"spec_energy_{k}")
+        spec_dict = dict(zip(keys, spec_energy))
+        
         transform = {
             'transform_xc_lcc': np.nan if transform is None else transform[0],
             'transform_yc_lcc': np.nan if transform is None else transform[1],
@@ -138,6 +166,7 @@ class FeatureCalculator(io.DataProducer):
         }
         transform['transform_angle_lcc'] = self.angle
         coeffs.update(transform)
+        coeffs.update(spec_dict)
         return coeffs
     
     @staticmethod

@@ -42,8 +42,6 @@ class LocalStagingIO:
         for imtype in imtypes:
             if imtype in row:
                 path = Path(row[imtype])
-                if not path.is_file():
-                    path = self.control.get_staging() / f"loaddata/{row[imtype]}"
                 reader = AICSImage(path)
                 channel_names += reader.channel_names
                 img = reader.get_image_data('CZYX', S=0, T=0)
@@ -402,9 +400,17 @@ class DataProducer(LocalStagingIO):
                 raise ValueError("Specify a reference alias for alignment.")
             chn = self.channels.index(self.control.get_channel_from_alias(alias_ref))
             ref = self.data[chn]
-            unq = self.control.make_alignment_unique()
-            _, self.angle = shtools.align_image_2d(ref, make_unique=unq)
-            self.data_aligned = shtools.apply_image_alignment_2d(self.data, self.angle)
+            if self.control.should_use_precomputed_alignment_angle():
+                self.angle = self.row["precomputed_angle"]
+            else:
+                unq = self.control.make_alignment_unique()
+                _, self.angle = shtools.align_image_2d(ref, make_unique=unq)
+            if self.control.get_alignment_method == "3d":
+                #TODO: image 3d alignment
+                self.angle = 0
+                self.data_aligned = self.data
+            else:
+                self.data_aligned = shtools.apply_image_alignment_2d(self.data, self.angle)
         return
 
     @staticmethod

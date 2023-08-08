@@ -102,6 +102,12 @@ class Controller:
     def get_alignment_reference_name(self):
         return self.features_section['SHE']['alignment']['reference']
 
+    def get_alignment_method(self):
+        return self.features_section['SHE']['alignment']['type']
+
+    def should_use_precomputed_alignment_angle(self):
+        return self.features_section['SHE']['alignment']['use_precomputed']
+
     def get_alignment_reference_alias(self):
         name = self.get_alignment_reference_name()
         if name:
