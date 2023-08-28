@@ -121,3 +121,9 @@ ENV/
 .mypy_cache/
 workflow_config.json
 .distribute/*
+
+# results
+*.png
+*.pdf
+*.vtk
+*.gif
