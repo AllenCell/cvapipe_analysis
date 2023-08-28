@@ -557,7 +557,7 @@ class ShapeSpacePlotMaker(PlotMaker):
                     ymax = y[valids].max()
                     yrange.append([ymin, ymax])
                     ax.plot(x[valids], y[valids], ".",
-                            markersize=2, color="black", alpha=0.8)
+                            markersize=2, color="black", alpha=0.05)
                     ax.plot([xmin, xmax], [xmin, xmax], "--")
                     if f2id:
                         plt.setp(ax.get_yticklabels(), visible=False)

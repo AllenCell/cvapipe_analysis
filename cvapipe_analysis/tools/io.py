@@ -38,7 +38,7 @@ class LocalStagingIO:
     def get_single_cell_images(self, row, return_stack=False):
         imgs = []
         channel_names = []
-        imtypes = ["crop_raw", "crop_seg", "crop_path"]
+        imtypes = ["crop_path"]#["crop_seg","crop_raw","crop_path"]
         for imtype in imtypes:
             if imtype in row:
                 path = Path(row[imtype])
@@ -190,9 +190,10 @@ class LocalStagingIO:
         ''' Not sure this function is producing a column named index when
         the concordance results are loaded. Further investigation is needed
         here'''
+        df_full = self.load_step_manifest("loaddata")
         if path is None:
             path = self.control.get_staging() / self.subfolder
-        files = [{"csv": path/f} for f in os.listdir(path)]
+        files = [{"csv": f"{path/f}.csv"} for f in df_full.index]
         with concurrent.futures.ProcessPoolExecutor(self.control.get_ncores()) as executor:
             df = pd.concat(
                 tqdm(executor.map(self.load_data_from_csv, files), total=len(files)),
@@ -286,8 +287,6 @@ class LocalStagingIO:
             if not path.is_file():
                 raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), path)
         df = pd.read_csv(path)
-        # Backwards compatibility for new DVC data
-        df = df.rename(columns={"crop_seg_path": "crop_seg", "crop_raw_path": "crop_raw"})
         return df
 
     @staticmethod

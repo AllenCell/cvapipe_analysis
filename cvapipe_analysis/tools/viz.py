@@ -39,8 +39,12 @@ class MeshToolKit():
         # Get all mesh points
         points = vtknp.vtk_to_numpy(mesh.GetPoints().GetData())
 
+        print("\t\t\tChecking if points exist...")
+
         if not np.abs(points[:, axis]).sum():
             raise Exception("Only zeros found in the plane axis.")
+
+        print("\t\t\tOK")
 
         if use_vtk_for_intersection:
 
@@ -49,13 +53,13 @@ class MeshToolKit():
             Without this the code hangs when the mesh has any edge aligned with the
             projection plane. Also add a little of noisy to the coordinates to
             help with the same problem.'''
-            mid += 0.75
+            # mid += 0.75
             offset = 0.1 * np.ptp(points, axis=0).max()
 
             # Create a vtkPlaneSource
             plane = vtk.vtkPlaneSource()
-            plane.SetXResolution(4)
-            plane.SetYResolution(4)
+            plane.SetXResolution(32)
+            plane.SetYResolution(32)
             if axis == 0:
                 plane.SetOrigin(
                     mid, points[:, 1].min() - offset, points[:, 2].min() - offset
@@ -89,6 +93,20 @@ class MeshToolKit():
             plane.Update()
             plane = plane.GetOutput()
 
+            print("\t\t\tJittering plane coordinates...")
+
+            coords = vtknp.vtk_to_numpy(plane.GetPoints().GetData())
+            coords[:, axis] = 0.5 * (np.random.rand(coords.shape[0])-0.5)*2
+            plane.GetPoints().SetData(vtknp.numpy_to_vtk(coords))
+
+            print("\t\t\tSaving shapes...")
+
+            from aicsshparam import shtools
+            shtools.save_polydata(plane, "/allen/aics/assay-dev/MicroscopyOtherData/Viana/projects/trash/0debug_plane.vtk")
+            shtools.save_polydata(mesh, "/allen/aics/assay-dev/MicroscopyOtherData/Viana/projects/trash/0debug_mesh.vtk")
+
+            print("\t\t\tChecking intersection...")
+
             # Trangulate the plane
             triangulate = vtk.vtkTriangleFilter()
             triangulate.SetInputData(plane)
@@ -101,6 +119,8 @@ class MeshToolKit():
             intersection.SetInputData(1, plane)
             intersection.Update()
             intersection = intersection.GetOutput()
+
+            print("\t\t\tDone...")
 
             # Get coordinates of intersecting points
             points = vtknp.vtk_to_numpy(intersection.GetPoints().GetData())
@@ -174,11 +194,14 @@ class MeshToolKit():
         if swapxy_on_zproj:
             projs = [[0, 1], [1, 2], [0, 2]]
         for dim, proj in zip(["z", "y", "x"], projs):
+            print(f"Running proj: {proj}")
             contours[dim] = {}
             for alias, meshes in named_meshes.items():
                 contours[dim][alias] = []
-                for mesh in meshes:
+                for mid, mesh in enumerate(meshes):
+                    print(f"\t\tRunning alias: {alias} for mesh: {mid}")
                     coords = MeshToolKit.find_plane_mesh_intersection(mesh, proj)
+                    print(f"\t\tComplete")
                     if swapxy_on_zproj and dim == 'z':
                         coords = coords[:, ::-1]
                     contours[dim][alias].append(coords)
