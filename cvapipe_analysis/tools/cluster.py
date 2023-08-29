@@ -1,5 +1,6 @@
 import os
 import shutil
+import concurrent
 import subprocess
 import numpy as np
 import pandas as pd
@@ -149,6 +150,12 @@ class Distributor:
 
     def jobs_warning(self):
         print("Multiple jobs have been launched. Please come back when the calculation is complete.")
+
+    @staticmethod
+    def execute_in_parallel(func, it, njobs):
+        with concurrent.futures.ProcessPoolExecutor(njobs) as executor:
+            result = list(tqdm(executor.map(func, it), total=len(it)))
+        return result
 
 class FeaturesDistributor(Distributor):
     def __init__(self, step, control):
