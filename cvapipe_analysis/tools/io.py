@@ -97,9 +97,7 @@ class LocalStagingIO:
             df = self.write_compute_features_manifest_from_distributed_results()
         else:
             df = pd.read_csv(
-                self.get_abs_path_to_step_manifest(step),
-                index_col="CellId", low_memory=False, **kwargs
-            )
+                self.get_abs_path_to_step_manifest(step), index_col="CellId", dtype={"CellId": str}, low_memory=False, **kwargs)
         
         if clean:
             feats = ['mem_', 'dna_', 'str_'] #TODO: fix the aliases here
@@ -209,7 +207,7 @@ class LocalStagingIO:
             print(f"Correlation matrix {fname} not found.")
             return None
         np.fill_diagonal(corr, np.nan)
-        corr_idx = pd.read_csv(f"{self.control.get_staging()}/correlation/values/{fname}.csv", index_col=0)
+        corr_idx = pd.read_csv(f"{self.control.get_staging()}/correlation/values/{fname}.csv", index_col=0, dtype={"CellId": str})
         df_corr = pd.DataFrame(corr)
         # Include structure name information into the correlation matrix
         df = self.load_step_manifest("loaddata")
@@ -286,7 +284,7 @@ class LocalStagingIO:
             path = Path(parameters['csv'])
             if not path.is_file():
                 raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), path)
-        df = pd.read_csv(path)
+        df = pd.read_csv(path, dtype={"CellId": str})
         return df
 
     @staticmethod
@@ -316,7 +314,7 @@ class LocalStagingIO:
     def load_csv_file_as_dataframe(fpath):
         df = None
         try:
-            df = pd.read_csv(fpath)
+            df = pd.read_csv(fpath, dtype={"CellId": str})
         except:
             pass
         return df
