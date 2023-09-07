@@ -38,19 +38,20 @@ class Aggregator(io.DataProducer):
         return f"{self.get_prefix_from_row(self.row)}.tif"
 
     def save(self):
+        # TODO: update aicsimageio and use TIF metadata for channel names
         n = len(self.CellIds)
         save_as = self.get_output_file_path()
         # Save morphed cell
         img = self.morphed
-        self.write_ome_tif(save_as, img, ['domain', save_as.stem], f"N{n}")
+        self.write_ome_tif(save_as, img, ["domain", self.row.alias], f"N{n}")
         # Save agg representation
         img = self.aggregated_parameterized_intensity
         save_as = Path(str(save_as).replace('aggmorph', 'repsagg'))
-        self.write_ome_tif(save_as, img, [save_as.stem], f"N{n}")
+        self.write_ome_tif(save_as, img, self.row.alias, f"N{n}")
         # Save norm agg representation
         img = self.aggregated_norm_parameterized_intensity
         save_as = Path(str(save_as).replace('.tif', '_norm.tif'))
-        self.write_ome_tif(save_as, img, [save_as.stem], f"N{n}")
+        self.write_ome_tif(save_as, img, self.row.alias, f"N{n}")
         return save_as
 
     def set_shape_space(self, space):
@@ -71,6 +72,10 @@ class Aggregator(io.DataProducer):
         pints_norm = self.normalize_representations(pints)
         agg_pint = self.agg_func(pints, axis=0)
         agg_pint_norm = self.agg_func(pints_norm, axis=0)
+        # Selecting the channel according to the alias of interest
+        ch = self.control.get_aliases_to_parameterize().index(self.row.alias)
+        agg_pint = np.expand_dims(agg_pint[ch], 0)
+        agg_pint_norm = np.expand_dims(agg_pint_norm[ch], 0)
         self.aggregated_parameterized_intensity = agg_pint
         self.aggregated_norm_parameterized_intensity = agg_pint_norm
         return
