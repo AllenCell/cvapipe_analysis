@@ -39,8 +39,15 @@ class Distributor:
 
     def set_data(self, df):
         self.df = df
+        self.validate_data()
         self.nrows = len(df)
         self.chunk_size = round(0.5 + self.nrows / self.nworkers)
+
+    def validate_data(self):
+        if self.df.index.is_unique:
+            return
+        raise ValueError("Dataframe indexes are not unique.")
+        return
 
     def set_chunk_size(self, n):
         self.chunk_size = n
