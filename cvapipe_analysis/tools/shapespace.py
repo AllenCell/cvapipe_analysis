@@ -295,7 +295,7 @@ class ShapeSpace(ShapeSpaceBasic):
         # number of center per structure averaged over 8 center bins.
         # Refer to notebook Optimization8DimSphere for more
         # details on the optimization process.
-        df_agg = pd.DataFrame([])
+        df_agg = []
         dist = self.shape_modes.copy()
         if dims_to_use is not None:
             dist = dist[dims_to_use]
@@ -315,7 +315,8 @@ class ShapeSpace(ShapeSpaceBasic):
                 "structure": gene,
                 "CellIds": CellIds
             }
-            df_agg = df_agg.append(row, ignore_index=True)
+            df_agg.append(row)
+        df_agg = pd.DataFrame(df_agg)
         df_agg.mpId = df_agg.mpId.astype(np.int64)
         if return_dist:
             return df_agg, df_dist
