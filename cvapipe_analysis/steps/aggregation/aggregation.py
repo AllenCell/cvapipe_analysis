@@ -5,6 +5,7 @@ from pathlib import Path
 from datastep import Step, log_run_params
 from typing import Dict, List, Optional, Union
 
+import pandas as pd
 from tqdm import tqdm
 from .aggregation_tools import Aggregator
 from ...tools import io, general, cluster, shapespace
@@ -40,7 +41,10 @@ class Aggregation(Step):
             variables = control.get_variables_values_for_aggregation()
             df_agg = space.get_aggregated_df(variables, include_cellIds=True)
             df_sphere = space.get_cells_inside_ndsphere_of_radius()
-            df_agg = df_agg.append(df_sphere, ignore_index=True)
+            df_agg = pd.concat([df_agg, df_sphere])
+            # Slurm can only handle arrays with max size 10K. Slurm will throw an
+            # error if df_agg is larger than that.
+            df_agg = df_agg.reset_index(drop=True)
 
             if distribute:
 
