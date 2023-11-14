@@ -1,3 +1,4 @@
+import sys
 import yaml
 import numpy as np
 import multiprocessing
@@ -224,6 +225,12 @@ class Controller:
             variables['structure'] = [k for k in structs.keys()]
         return variables
 
+    def get_parameterized_representation_size(self):
+        phi_resolution = 64 # set in aicscytoparam
+        theta_resolution = 128 # set in aicscytoparam
+        nsurfaces = 1 + 2 * self.get_number_of_interpolating_points()
+        return nsurfaces * (phi_resolution * theta_resolution + 2)
+
     def duplicate_variable(self, variables, v):
         vals = variables.pop(v)
         variables[f"{v}1"] = vals
@@ -269,6 +276,11 @@ class Controller:
         for subdir in subdirs:
             path = step_dir / subdir
             path.mkdir(parents=True, exist_ok=True)
+
+    @staticmethod
+    def display_array_size_in_mb(arr, print_func):
+        mem = int(sys.getsizeof(arr)) / float(1 << 20)
+        print_func(f"Array shape: {arr.shape} ({arr.dtype}, {mem:.1f}Mb)")
 
     @staticmethod
     def get_ncores():
