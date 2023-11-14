@@ -23,32 +23,11 @@ class CorrelationCalculator(io.DataProducer):
     correlations on binary representations only.
     """
 
-    rep_length = 532610 # Need some work to make general
-
     def __init__(self, control):
         super().__init__(control)
         self.ncores = control.get_ncores()
         self.subfolder = 'correlation/values'
-
-    def read_representation_as_boolean(self, eindex):
-        i, index = eindex
-        rep = self.read_parameterized_intensity(index).astype(bool).flatten()
-        self.reps[i] = rep
-        return
-
-    def load_representations(self):
-        self.ncells = len(self.row.CellIds)
-        self.reps = np.zeros((self.ncells, self.rep_length), dtype=bool)
-        repsize = int(sys.getsizeof(self.reps)) / float(1 << 20)
-        print(f"Representations shape: {self.reps.shape} ({self.reps.dtype}, {repsize:.1f}Mb)")
-
-        _ = Parallel(n_jobs=self.ncores, backend="threading")(
-            delayed(self.read_representation_as_boolean)(eindex)
-            for eindex in tqdm(enumerate(self.row.CellIds), total=self.ncells)
-        )
-
-    def correlate_all(self):
-        self.corrs = np.corrcoef(self.reps, dtype=np.float32)
+        self.pilr_size = control.get_parameterized_representation_size() # 532610 in the paper
 
     def workflow(self):
         self.load_representations()
@@ -64,6 +43,26 @@ class CorrelationCalculator(io.DataProducer):
         skio.imsave(f"{save_as}.tif", self.corrs)
         pd.DataFrame({"CellIds": self.row.CellIds}).to_csv(f"{save_as}.csv")
         return f"{save_as}.tif"
+
+    def read_pilr(self, eCellId):
+        i, CellId = eCellId
+        pilr, names = self.read_parameterized_intensity(CellId, return_intensity_names=True)
+        self.pilrs[i] = pilr[names.index(self.row.alias)].flatten()
+        return
+
+    def load_representations(self):
+        self.ncells = len(self.row.CellIds)
+        self.pilrs = np.zeros((self.ncells, self.pilr_size), dtype=np.float32)
+        self.control.display_array_size_in_mb(self.pilrs, self.print)
+
+        _ = Parallel(n_jobs=self.ncores, backend="threading")(
+            delayed(self.read_pilr)(eindex)
+            for eindex in tqdm(enumerate(self.row.CellIds), total=self.ncells)
+        )
+        return
+
+    def correlate_all(self):
+        self.corrs = np.corrcoef(self.pilrs, dtype=np.float32)
 
 if __name__ == "__main__":
 
