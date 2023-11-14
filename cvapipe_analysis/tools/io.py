@@ -143,7 +143,8 @@ class LocalStagingIO:
     def normalize_representations(reps):
         # Expected shape is SCMN
         if reps.ndim != 4:
-            raise ValueError(f"Input shape {reps.shape} does not match expected SCMN format.")
+            # CAMN = Cell, Alias, Theta and Phi resolutions
+            raise ValueError(f"Input shape {reps.shape} does not match expected CAMN format.")
         count = np.sum(reps, axis=(-2,-1), keepdims=True)
         reps_norm = np.divide(reps, count, out=np.zeros_like(reps), where=count>0)
         return reps_norm
