@@ -35,13 +35,19 @@ class CorrelationCalculator(io.DataProducer):
         return
 
     def get_output_file_name(self):
-        fname = self.get_prefix_from_row(self.row)
+        '''
+        This function has to return a file name with extension
+        so that the resulting string can be used as output
+        verification. If class writes multiple files, then the
+        file extension have to be manually altered.
+        '''
+        fname = f"{self.get_prefix_from_row(self.row)}.tif"
         return fname
 
     def save(self):
         save_as = self.get_output_file_path()
-        skio.imsave(f"{save_as}.tif", self.corrs)
-        pd.DataFrame({"CellIds": self.row.CellIds}).to_csv(f"{save_as}.csv")
+        skio.imsave(save_as, self.corrs)
+        pd.DataFrame({"CellIds": self.row.CellIds}).to_csv(save_as.replace(".tif",".csv"))
         return f"{save_as}.tif"
 
     def read_pilr(self, eCellId):
