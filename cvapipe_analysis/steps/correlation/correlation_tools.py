@@ -47,7 +47,7 @@ class CorrelationCalculator(io.DataProducer):
     def save(self):
         save_as = self.get_output_file_path()
         skio.imsave(save_as, self.corrs)
-        pd.DataFrame({"CellIds": self.row.CellIds}).to_csv(save_as.replace(".tif",".csv"))
+        pd.DataFrame({"CellIds": self.row.CellIds}).to_csv(str(save_as).replace(".tif",".csv"))
         return f"{save_as}.tif"
 
     def read_pilr(self, eCellId):
