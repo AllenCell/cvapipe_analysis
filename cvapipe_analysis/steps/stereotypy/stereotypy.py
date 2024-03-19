@@ -11,8 +11,8 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 
-from cvapipe_analysis.tools import io, general, cluster, shapespace, plotting
 from .stereotypy_tools import StereotypyCalculator
+from ...tools import io, general, cluster, shapespace, plotting
 
 log = logging.getLogger(__name__)
 
@@ -28,15 +28,16 @@ class Stereotypy(Step):
     @log_run_params
     def run(
         self,
-        distribute: Optional[bool] = False,
-        **kwargs
-    ):
+        staging: Union[str, Path],
+        verbose: Optional[bool]=False,
+        distribute: Optional[bool]=False,
+        **kwargs):
 
-        with general.configuration(self.step_local_staging_dir) as control:
+        step_dir = Path(staging) / self.step_name
 
-            for folder in ['values', 'plots']:
-                save_dir = self.step_local_staging_dir / folder
-                save_dir.mkdir(parents=True, exist_ok=True)
+        with general.configuration(step_dir) as control:
+
+            control.create_step_subdirs(step_dir, ["values", "plots"])
 
             device = io.LocalStagingIO(control)
             df = device.load_step_manifest("preprocessing")
@@ -49,7 +50,8 @@ class Stereotypy(Step):
             if len(control.get_map_points()) > 1:
                 variables.update({"shape_mode": ["NdSphere"], "mpId": [control.get_center_map_point_index()]})
                 df_sphere = space.get_aggregated_df(variables, include_cellIds=False)
-                df_agg = df_agg.append(df_sphere, ignore_index=True)
+                df_agg = pd.concat([df_agg, df_sphere])
+                df_agg = df_agg.reset_index(drop=True)
             df_agg =  df_agg.drop(columns=["structure"]).drop_duplicates().reset_index(drop=True)
 
             log.info(f"Generating plots...")

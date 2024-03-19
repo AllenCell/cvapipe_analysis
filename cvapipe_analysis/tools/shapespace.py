@@ -25,10 +25,18 @@ class ShapeSpaceBasic():
     active_shape_mode = None
 
     def __init__(self, control):
+        self._verbose = False
         self.control = control
         
     def set_active_shape_mode(self, sm):
         self.active_shapeMode = sm
+
+    def verbose_mode(self, verbose):
+        self._verbose = verbose
+
+    def print(self, text):
+        if self._verbose:
+            print(text)
 
     @staticmethod
     def get_aggregated_df(variables):
@@ -112,6 +120,7 @@ class ShapeSpace(ShapeSpaceBasic):
         self.calculate_feature_importance()
         pct = self.control.get_removal_pct() if self.remove_extreme_points_on else 0.0
         self.shape_modes = self.remove_extreme_points(self.axes, pct)
+        self.print("Shape space computed.")
 
     def set_remove_extreme_points(self, value):
         self.remove_extreme_points_on = value
@@ -119,13 +128,17 @@ class ShapeSpace(ShapeSpaceBasic):
     def calculate_pca(self):
         self.df_pca = self.df[self.features]
         matrix_of_features = self.df_pca.values.copy()
-        pca = PCA(self.control.get_number_of_shape_modes())
+        pca = PCA(self.control.get_number_of_shape_modes(), svd_solver="full")
         pca = pca.fit(matrix_of_features)
         axes = pca.transform(matrix_of_features)
         self.axes = pd.DataFrame(axes, columns=self.control.get_shape_modes())
         self.axes.index = self.df_pca.index
         self.pca = pca
-        self.sort_pca_axes()
+        try:
+            self.sort_pca_axes()
+        except Exception as e:
+            print(f"Failed sorting PCA axes: {e}. Skipping this step.")
+            pass
         return
 
     def transform(self, df):
@@ -295,7 +308,7 @@ class ShapeSpace(ShapeSpaceBasic):
         # number of center per structure averaged over 8 center bins.
         # Refer to notebook Optimization8DimSphere for more
         # details on the optimization process.
-        df_agg = pd.DataFrame([])
+        df_agg = []
         dist = self.shape_modes.copy()
         if dims_to_use is not None:
             dist = dist[dims_to_use]
@@ -315,7 +328,8 @@ class ShapeSpace(ShapeSpaceBasic):
                 "structure": gene,
                 "CellIds": CellIds
             }
-            df_agg = df_agg.append(row, ignore_index=True)
+            df_agg.append(row)
+        df_agg = pd.DataFrame(df_agg)
         df_agg.mpId = df_agg.mpId.astype(np.int64)
         if return_dist:
             return df_agg, df_dist
@@ -405,7 +419,7 @@ class ShapeSpaceMapper():
         self.result["dataset"] = "base"
         for ds, dspath in self.datasets.items():
             df = pd.read_csv(f"{dspath}/preprocessing/manifest.csv", index_col="CellId")
-            print(f"\t{ds} loaded. {df.shape}")            
+            self.print(f"\t{ds} loaded. {df.shape}")            
             axes = self.space.transform(df)
             axes["dataset"] = ds
             axes["structure_name"] = df["structure_name"]
@@ -459,8 +473,9 @@ class ShapeSpaceMapper():
             from the baseline dataset.
             '''
             # Start by reading the config file from perturbed dataset
-            path_step = Path(self.datasets[ds]) / "shapemode"
-            config_pt = general.load_config_file(path_step, fname="parameters.yaml")
+            # import pdb; pdb.set_trace()
+            # path_step = Path(self.datasets[ds]) / "shapemode"
+            config_pt = general.load_config_file(self.datasets[ds])
             control_pt = controller.Controller(config_pt)
             # Now we merge the two datasets together
             device_pt = io.LocalStagingIO(control_pt)
@@ -513,6 +528,6 @@ class ShapeSpaceMapper():
                 df_map.loc[df_Y.index, "Dist"] = dist.min(axis=0)
                 df_map.loc[df_Y.index, "SelfDist"] = self_distance
                 df_map.loc[df_Y.index, "NNCellId"] = df_X.index[dist.argmin(axis=0)]
-        df_map.NNCellId = df_map.fillna(-1).NNCellId.astype(np.int64)
+        df_map.NNCellId = df_map.fillna(-1).NNCellId#.astype(np.int64) CellId does not need to be int
         self.result = df_map
         self.result.reset_index().set_index(["dataset", "CellId"])

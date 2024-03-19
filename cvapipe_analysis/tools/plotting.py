@@ -15,7 +15,9 @@ from scipy import stats as spstats
 from scipy import cluster as spcluster
 from aicsimageio import AICSImage, writers
 from vtk.util import numpy_support as vtknp
-from cvapipe_analysis.tools import io, shapespace
+from matplotlib.ticker import FormatStrFormatter
+
+from . import io, shapespace
 
 plt.rcParams['ps.fonttype'] = 42
 plt.rcParams['pdf.fonttype'] = 42
@@ -121,9 +123,11 @@ class PlotMaker(io.DataProducer):
         for gid1, gene1 in enumerate(genes):
             for gid2, gene2 in enumerate(genes):
                 if gid2 >= gid1:
-                    values = df_corr.loc[(gene1, gene2)].values
-                    avg = np.nanmean(values)
-                    std = np.nanstd(values)
+                    avg = np.nan
+                    if (gene1 in df_corr.columns) & (gene2 in df_corr.columns):
+                        values = df_corr.loc[(gene1, gene2)].values
+                        avg = np.nanmean(values)
+                        std = np.nanstd(values)
                     matrix[gid1, gid2] = matrix[gid2, gid1] = avg
         return matrix
 
@@ -191,7 +195,8 @@ class ConcordancePlotMaker(PlotMaker):
         df_corr = self.device.read_corelation_matrix(row)
         if update_ncells:
             for struct, gene in zip(self.control.get_structure_names(), self.control.get_gene_names()):
-                self.ncells[struct] = len(df_corr.loc[gene])
+                if gene in df_corr.columns:
+                    self.ncells[struct] = len(df_corr.loc[gene])
         if df_corr is None:
             return
         genes = self.control.get_gene_names()
@@ -395,33 +400,34 @@ class StereotypyPlotMaker(PlotMaker):
         fig, ax = plt.subplots(1, 1, figsize=(7, 8), dpi=self.dpi)
         for sid, gene in enumerate(reversed(self.control.get_gene_names())):
 
-            values = df_corr.loc[gene, gene].values
-            ncells = values.shape[0]
-            values = values[np.triu_indices(ncells, k=1)]
+            if gene in df_corr.columns:
+                values = df_corr.loc[gene, gene].values
+                ncells = values.shape[0]
+                values = values[np.triu_indices(ncells, k=1)]
 
-            np.random.seed(42)
-            x = np.random.choice(values, np.min([ncells, 1024]), replace=False)
-            y = np.random.normal(size=len(x), loc=sid, scale=0.1)
-            ax.scatter(x, y, s=1, c="k", alpha=0.1)
-            box = ax.boxplot(
-                values,
-                positions=[sid],
-                showmeans=True,
-                widths=0.75,
-                sym="",
-                vert=False,
-                patch_artist=True,
-                meanprops={
-                    "marker": "s",
-                    "markerfacecolor": "black",
-                    "markeredgecolor": "white",
-                    "markersize": 5,
-                },
-            )
-            label = f"{self.control.get_structure_name(gene)} (N={ncells:04d})"
-            labels.append(label)
-            box["boxes"][0].set(facecolor=self.control.get_gene_color(gene))
-            box["medians"][0].set(color="black")
+                np.random.seed(42)
+                x = np.random.choice(values, np.min([ncells-1, 1024]), replace=False)
+                y = np.random.normal(size=len(x), loc=sid, scale=0.1)
+                ax.scatter(x, y, s=1, c="k", alpha=0.1)
+                box = ax.boxplot(
+                    values,
+                    positions=[sid],
+                    showmeans=True,
+                    widths=0.75,
+                    sym="",
+                    vert=False,
+                    patch_artist=True,
+                    meanprops={
+                        "marker": "s",
+                        "markerfacecolor": "black",
+                        "markeredgecolor": "white",
+                        "markersize": 5,
+                    },
+                )
+                label = f"{self.control.get_structure_name(gene)} (N={ncells:04d})"
+                labels.append(label)
+                box["boxes"][0].set(facecolor=self.control.get_gene_color(gene))
+                box["medians"][0].set(color="black")
         ax.set_yticklabels(labels)
         ax.set_xlim(-0.2, 1.0)
         ax.set_xlabel("Pearson correlation coefficient", fontsize=14)
@@ -495,7 +501,6 @@ class ShapeSpacePlotMaker(PlotMaker):
     def save_feature_importance(self, space):
         path = f"{self.subfolder}/feature_importance.txt"
         abs_path_txt_file = self.control.get_staging() / path
-        print(abs_path_txt_file)
         with open(abs_path_txt_file, "w") as flog:
             for col, sm in enumerate(self.control.iter_shape_modes()):
                 exp_var = 100 * space.pca.explained_variance_ratio_[col]
@@ -551,7 +556,7 @@ class ShapeSpacePlotMaker(PlotMaker):
                     ymax = y[valids].max()
                     yrange.append([ymin, ymax])
                     ax.plot(x[valids], y[valids], ".",
-                            markersize=2, color="black", alpha=0.8)
+                            markersize=2, color="black", alpha=0.05)
                     ax.plot([xmin, xmax], [xmin, xmax], "--")
                     if f2id:
                         plt.setp(ax.get_yticklabels(), visible=False)
@@ -743,7 +748,8 @@ class ShapeSpaceMapperPlotMaker(PlotMaker):
         nc = len(df1.columns)
         args = {"bins": bin_edges, "density": True}
         fig, axs = plt.subplots(1, nc, figsize=(1.5*nc, 1.5), sharex=False, gridspec_kw={"wspace": 0.2})
-        axs = [axs] if len(axs)==1 else axs
+        if not isinstance(axs, list):
+            axs = [axs]
         for sm, ax in zip(df1.columns, axs):
             ax.set_frame_on(False)
             if display_both:
@@ -875,3 +881,40 @@ class ShapeSpaceMapperPlotMaker(PlotMaker):
                 plt.suptitle(ds, fontsize=14)
                 plt.tight_layout()
                 self.figs.append((fig, f"nndist_ncells_{ds}"))
+
+class ValidationPlotMaker(PlotMaker):
+    """
+    Class for creating validation plots.
+
+    WARNING: This class should not depend on where
+    the local_staging folder is.
+    """
+
+    def __init__(self, control, subfolder: Optional[str] = None):
+        super().__init__(control)
+        self.subfolder = "validation/rec_error" if subfolder is None else subfolder
+
+    def workflow(self):
+        self.make_reconstructin_error_plots()
+
+    def make_reconstructin_error_plots(self):
+        for alias, df_alias in self.df.groupby("alias"):
+            fig, ax = plt.subplots(1,1,figsize=(3.7,3))
+            for _, df_cell in df_alias.groupby('CellId'):
+                x = (df_cell.lrec+1)**2
+                ax.plot(x, df_cell.error, '-', color='gray', linewidth=0.2)
+            df_agg = df_alias.groupby('lrec').agg(['mean','std'])
+            x = (df_agg.index+1)**2
+            ax.plot(x, df_agg[('error','mean')],'-', color='k', linewidth=2)
+            ax.set_yscale('log')
+            ax.axvline(x=289)
+            ax.set_xlim(1,33**2)
+            ax.set_ylim(0.1,10.0)
+            ax.yaxis.set_major_formatter(FormatStrFormatter('%.1f'))
+            err_avg = df_agg.at[16,('error','mean')]
+            err_std = df_agg.at[16,('error','std')]
+            ax.set_title(f"{alias}, @L=16: {err_avg:.2f} +/- {err_std:.2f} $\mu m$")
+            ax.set_xlabel('L (SHE order)', fontsize=14)
+            ax.set_ylabel('Mean distance to closest point($\mu m$)')
+            plt.tight_layout()
+            self.figs.append((fig, f"rec_error_{alias}"))

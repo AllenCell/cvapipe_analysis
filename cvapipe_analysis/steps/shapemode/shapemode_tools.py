@@ -6,7 +6,7 @@ from aicsshparam import shtools
 from vtk.util.numpy_support import numpy_to_vtk as np2vtk
 from vtk.util.numpy_support import vtk_to_numpy as vtk2np
 
-from cvapipe_analysis.tools import io, shapespace, plotting, viz
+from ...tools import io, shapespace, plotting, viz
 
 class ShapeModeCalculator(io.DataProducer):
     """
@@ -21,9 +21,11 @@ class ShapeModeCalculator(io.DataProducer):
 
     def __init__(self, control):
         super().__init__(control)
+        self._use_vtk_for_intersection = True
         self.space = shapespace.ShapeSpace(control)
         self.plot_maker_sm = plotting.ShapeModePlotMaker(control)
         self.plot_maker_sp = plotting.ShapeSpacePlotMaker(control)
+        control.create_step_subdirs(control.get_staging(), ["shapemode/pca", "shapemode/avgshape"])
 
     def set_data(self, df):
         self.df = df
@@ -38,24 +40,34 @@ class ShapeModeCalculator(io.DataProducer):
                 self.workflow()
                 computed = True
             except Exception as ex:
-                print(f"\n>>>{ex}\n")
+                self.print(f"\n>>>{ex}\n")
                 path_to_output_file = None
         self.status(None, path_to_output_file, computed)
         return path_to_output_file
         
     def workflow(self):
+        self.print("Creating shape space...")
+        self.space.verbose_mode(self._verbose)
         self.space.execute(self.df)
-        self.space.save_summary("shapemode/summary.html")
+        try:
+            self.space.save_summary("shapemode/summary.html")
+        except Exception as ex:
+            self.print(f"Failed while saving summary: {ex}. Skipping this step.")
+            pass
+        self.print("Making initial plots...")
         self.plot_maker_sp.save_feature_importance(self.space)
         self.plot_maker_sp.plot_explained_variance(self.space)
         self.plot_maker_sp.plot_pairwise_correlations(self.space)
         self.plot_maker_sp.execute(display=False)
-
+        self.print("Getting SHE for shape modes...")
         self.compute_shcoeffs_for_all_shape_modes()
+        self.print("Correcting alias location based on reference...")
         self.compute_displacement_vector_relative_to_reference()
-        print("Generating 3D meshes. This might take some time...")
+        self.print("Generating 3D meshes. This might take some time...")
         self.recontruct_meshes()
+        self.print("Generating animated contours...")
         self.generate_and_save_animated_2d_contours()
+        self.print("Generating GIFs...")
         self.plot_maker_sm.combine_and_save_animated_gifs()
         return
 
@@ -66,6 +78,9 @@ class ShapeModeCalculator(io.DataProducer):
     def save(self):
         # For consistency.
         return
+
+    def use_vtk_for_intersection(self, use_vtk=True):
+        self._use_vtk_for_intersection = use_vtk
 
     def get_coordinates_matrix(self, coords, comp):
         '''Coords has shape (N,). Creates a matrix of shape
@@ -154,7 +169,8 @@ class ShapeModeCalculator(io.DataProducer):
         swap = self.control.swapxy_on_zproj()
         abs_path_avgshape = self.control.get_staging()/f"shapemode/avgshape"
         for sm, meshes in tqdm(self.meshes.items(), total=len(self.meshes)):
-            projs = viz.MeshToolKit.get_2d_contours(meshes, swap)
+            projs = viz.MeshToolKit.get_2d_contours(
+                meshes, swap, use_vtk=self._use_vtk_for_intersection, verbose=self._verbose)
             for proj, contours in projs.items():
                 fname = f"{abs_path_avgshape}/{sm}_{proj}.gif"
                 viz.MeshToolKit.animate_contours(self.control, contours, save=fname)

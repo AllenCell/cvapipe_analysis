@@ -5,9 +5,10 @@ from pathlib import Path
 from datastep import Step, log_run_params
 from typing import Dict, List, Optional, Union
 
+import pandas as pd
 from tqdm import tqdm
-from cvapipe_analysis.tools import io, general, cluster, shapespace
 from .aggregation_tools import Aggregator
+from ...tools import io, general, cluster, shapespace
 
 log = logging.getLogger(__name__)
 
@@ -20,13 +21,18 @@ class Aggregation(Step):
         super().__init__(direct_upstream_tasks=direct_upstream_tasks, config=config)
 
     @log_run_params
-    def run(self, distribute: Optional[bool]=False, **kwargs):
+    def run(
+        self,
+        staging: Union[str, Path],
+        verbose: Optional[bool]=False,
+        distribute: Optional[bool]=False,
+        **kwargs):
 
-        with general.configuration(self.step_local_staging_dir) as control:
+        step_dir = Path(staging) / self.step_name
 
-            for folder in ["repsagg", "aggmorph"]:
-                save_dir = self.step_local_staging_dir / folder
-                save_dir.mkdir(parents=True, exist_ok=True)
+        with general.configuration(step_dir) as control:
+
+            control.create_step_subdirs(step_dir, ["repsagg", "aggmorph"])
 
             device = io.LocalStagingIO(control)
             df = device.load_step_manifest("preprocessing")
@@ -35,7 +41,10 @@ class Aggregation(Step):
             variables = control.get_variables_values_for_aggregation()
             df_agg = space.get_aggregated_df(variables, include_cellIds=True)
             df_sphere = space.get_cells_inside_ndsphere_of_radius()
-            df_agg = df_agg.append(df_sphere, ignore_index=True)
+            df_agg = pd.concat([df_agg, df_sphere])
+            # Slurm can only handle arrays with max size 10K. Slurm will throw an
+            # error if df_agg is larger than that.
+            df_agg = df_agg.reset_index(drop=True)
 
             if distribute:
 
@@ -47,12 +56,14 @@ class Aggregation(Step):
                 memory. To be investigated...'''
                 distributor.set_chunk_size(1)
                 distributor.distribute()
-                log.info(f"Multiple jobs have been launched. Please come back when the calculation is complete.")
+                distributor.jobs_warning()
 
                 return None
 
             aggregator = Aggregator(control)
-            for index, row in tqdm(df_agg.iterrows(), total=len(df_agg)):
+            if verbose: 
+                aggregator.set_verbose_mode_on()
+            for _, row in tqdm(df_agg.iterrows(), total=len(df_agg)):
                 '''Concurrent processes inside. Do not use concurrent here.'''
                 aggregator.execute(row)
                 

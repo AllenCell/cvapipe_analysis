@@ -2,11 +2,11 @@
 # -*- coding: utf-8 -*-
 import logging
 from pathlib import Path
-from typing import Dict, List, Optional, Union
 from datastep import Step, log_run_params
+from typing import Dict, List, Optional, Union
 
-from cvapipe_analysis.tools import general
 from .load_data_tools import DataLoader
+from ...tools import general, controller
 
 log = logging.getLogger(__name__)
 
@@ -19,15 +19,24 @@ class LoadData(Step):
         super().__init__(direct_upstream_tasks=direct_upstream_tasks, config=config)
 
     @log_run_params
-    def run(self, **kwargs):
+    def run(
+        self,
+        staging,
+        ignore_raw_data = False,
+        **kwargs
+        ):
 
-        with general.configuration(self.step_local_staging_dir) as control:
+        path = general.get_path_to_default_config()
+        config = general.load_config_file(path)
+        config["project"]["local_staging"] = staging
+        control = controller.Controller(config)
 
-            loader = DataLoader(control)
-            df = loader.load(kwargs)
+        loader = DataLoader(control)
+        if ignore_raw_data:
+            loader.disable_download_of_raw_data()
+        df = loader.load(kwargs)
 
-            self.manifest = df
-            manifest_path = self.step_local_staging_dir / 'manifest.csv'
-            self.manifest.to_csv(manifest_path)
-
-        return manifest_path
+        path = Path(staging)
+        df.to_csv(path/f"{self.step_name}/manifest.csv")
+        general.save_config(config, path)
+        return

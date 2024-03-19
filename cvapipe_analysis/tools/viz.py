@@ -6,6 +6,7 @@ from functools import reduce
 from aicsshparam import shtools
 import matplotlib.pyplot as plt
 from matplotlib import animation
+from scipy import spatial as spspatial
 from vtk.util import numpy_support as vtknp
 
 class MeshToolKit():
@@ -19,18 +20,18 @@ class MeshToolKit():
                     # Cosine SHE coefficients
                     coeffs[0, l, m] = row[
                         [f for f in row.keys() if f"{alias}_shcoeffs_L{l}M{m}C" in f]
-                    ]
+                    ].iloc[0]
                     # Sine SHE coefficients
                     coeffs[1, l, m] = row[
                         [f for f in row.keys() if f"{alias}_shcoeffs_L{l}M{m}S" in f]
-                    ]
+                    ].iloc[0]
                 # If a given (l,m) pair is not found, it is assumed to be zero
                 except: pass
         mesh, _ = shtools.get_reconstruction_from_coeffs(coeffs)
         return mesh
 
     @staticmethod
-    def find_plane_mesh_intersection(mesh, proj, use_vtk_for_intersection=True):
+    def find_plane_mesh_intersection(mesh, proj, use_vtk_for_intersection=True, verbose=False):
 
         # Find axis orthogonal to the projection of interest
         axis = [a for a in [0, 1, 2] if a not in proj][0]
@@ -38,8 +39,14 @@ class MeshToolKit():
         # Get all mesh points
         points = vtknp.vtk_to_numpy(mesh.GetPoints().GetData())
 
+        if verbose:
+            print("\t\t\tChecking if points exist...")
+
         if not np.abs(points[:, axis]).sum():
             raise Exception("Only zeros found in the plane axis.")
+
+        if verbose:
+            print("\t\t\tOK")
 
         if use_vtk_for_intersection:
 
@@ -48,13 +55,13 @@ class MeshToolKit():
             Without this the code hangs when the mesh has any edge aligned with the
             projection plane. Also add a little of noisy to the coordinates to
             help with the same problem.'''
-            mid += 0.75
+            # mid += 0.75
             offset = 0.1 * np.ptp(points, axis=0).max()
 
             # Create a vtkPlaneSource
             plane = vtk.vtkPlaneSource()
-            plane.SetXResolution(4)
-            plane.SetYResolution(4)
+            plane.SetXResolution(32)
+            plane.SetYResolution(32)
             if axis == 0:
                 plane.SetOrigin(
                     mid, points[:, 1].min() - offset, points[:, 2].min() - offset
@@ -88,6 +95,20 @@ class MeshToolKit():
             plane.Update()
             plane = plane.GetOutput()
 
+            print("\t\t\tJittering plane coordinates...")
+
+            coords = vtknp.vtk_to_numpy(plane.GetPoints().GetData())
+            coords[:, axis] = 0.5 * (np.random.rand(coords.shape[0])-0.5)*2
+            plane.GetPoints().SetData(vtknp.numpy_to_vtk(coords))
+
+            print("\t\t\tSaving shapes...")
+
+            from aicsshparam import shtools
+            shtools.save_polydata(plane, "/allen/aics/assay-dev/MicroscopyOtherData/Viana/projects/trash/0debug_plane.vtk")
+            shtools.save_polydata(mesh, "/allen/aics/assay-dev/MicroscopyOtherData/Viana/projects/trash/0debug_mesh.vtk")
+
+            print("\t\t\tChecking intersection...")
+
             # Trangulate the plane
             triangulate = vtk.vtkTriangleFilter()
             triangulate.SetInputData(plane)
@@ -100,6 +121,8 @@ class MeshToolKit():
             intersection.SetInputData(1, plane)
             intersection.Update()
             intersection = intersection.GetOutput()
+
+            print("\t\t\tDone...")
 
             # Get coordinates of intersecting points
             points = vtknp.vtk_to_numpy(intersection.GetPoints().GetData())
@@ -167,17 +190,27 @@ class MeshToolKit():
         return np.array(coords)
 
     @staticmethod
-    def get_2d_contours(named_meshes, swapxy_on_zproj=False):
+    def get_2d_contours(named_meshes, swapxy_on_zproj=False, use_vtk=True, verbose=False):
         contours = {}
         projs = [[0, 1], [0, 2], [1, 2]]
+        if verbose:
+            print(f"VTK for plane instersection: {use_vtk}")
         if swapxy_on_zproj:
             projs = [[0, 1], [1, 2], [0, 2]]
         for dim, proj in zip(["z", "y", "x"], projs):
+            if verbose:
+                print(f"Running proj: {proj}")
             contours[dim] = {}
             for alias, meshes in named_meshes.items():
                 contours[dim][alias] = []
-                for mesh in meshes:
-                    coords = MeshToolKit.find_plane_mesh_intersection(mesh, proj)
+                for mid, mesh in enumerate(meshes):
+                    if verbose:
+                        print(f"\t\tRunning alias: {alias} for mesh: {mid}")
+                    try:
+                        coords = MeshToolKit.find_plane_mesh_intersection(
+                            mesh, proj, use_vtk_for_intersection=use_vtk, verbose=verbose)
+                    except Exception as ex:
+                        raise ValueError(f"Plane intersection failed: {ex}. Try setting use_vtk=False.")
                     if swapxy_on_zproj and dim == 'z':
                         coords = coords[:, ::-1]
                     contours[dim][alias].append(coords)
@@ -220,3 +253,12 @@ class MeshToolKit():
             plt.close("all")
             return
         return anim
+
+    @staticmethod
+    def get_meshes_distance(mesh1, mesh2):
+        coords1 = vtknp.vtk_to_numpy(mesh1.GetPoints().GetData())
+        coords2 = vtknp.vtk_to_numpy(mesh2.GetPoints().GetData())
+        dist = spspatial.distance.cdist(coords1, coords2)
+        d12 = dist.min(axis=0)
+        d21 = dist.min(axis=1)
+        return d12, d21

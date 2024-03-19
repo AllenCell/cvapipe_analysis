@@ -1,11 +1,13 @@
 import os
 import shutil
+import concurrent
 import subprocess
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
 from pathlib import Path
-import cvapipe_analysis
+
+import cvapipe_analysis as cvapipe
 
 
 class Distributor:
@@ -33,12 +35,19 @@ class Distributor:
         self.abs_path_to_script_as_str = str(self.abs_path_to_distribute / "jobs.sh")
         self.abs_path_jobs_file_as_str = str(self.abs_path_to_distribute / "jobs.txt")
         self.abs_path_to_cvapipe = Path(
-            os.path.abspath(cvapipe_analysis.__file__)).parents[1]
+            os.path.abspath(cvapipe.__file__)).parents[1]
 
     def set_data(self, df):
         self.df = df
+        self.validate_data()
         self.nrows = len(df)
         self.chunk_size = round(0.5 + self.nrows / self.nworkers)
+
+    def validate_data(self):
+        if self.df.index.is_unique:
+            return
+        raise ValueError("Dataframe indexes are not unique.")
+        return
 
     def set_chunk_size(self, n):
         self.chunk_size = n
@@ -78,24 +87,23 @@ class Distributor:
         self.jobs.append(job)
 
     def write_commands_file(self):
-        crtl = self.control
-        python__env_path_as_str = crtl.get_distributed_python_env_as_str()
+        python__env_path_as_str = self.control.get_distributed_python_env_as_str()
         with open(self.abs_path_jobs_file_as_str, "w") as fs:
             for job in self.jobs:
                 abs_path_to_dataframe = str(
                     self.abs_path_to_distribute / f"dataframes/{job}.csv")
                 print(
-                    f"{python__env_path_as_str} {self.get_abs_path_to_python_file_as_str()} --csv {abs_path_to_dataframe}", file=fs)
+                    f"{python__env_path_as_str} {self.get_abs_path_to_python_file_as_str()} --csv {abs_path_to_dataframe} --staging {self.control.get_staging()}", file=fs)
 
     def write_script_file(self):
-        crtl = self.control
         abs_path_output_folder = self.abs_path_to_distribute / "log"
         with open(self.abs_path_to_script_as_str, "w") as fs:
             print("#!/bin/bash", file=fs)
             print("#SBATCH --partition aics_cpu_general", file=fs)
-            print(f"#SBATCH --mem-per-cpu {crtl.get_distributed_memory()}", file=fs)
-            print(f"#SBATCH --cpus-per-task {crtl.get_distributed_cores()}", file=fs)
+            print(f"#SBATCH --mem-per-cpu {self.control.get_distributed_memory()}", file=fs)
+            print(f"#SBATCH --cpus-per-task {self.control.get_distributed_cores()}", file=fs)
             print(f"#SBATCH --output {abs_path_output_folder}/%A_%a.out", file=fs)
+            print("#SBATCH --exclude=n81,n84,n88,n185,n178,n85", file=fs)
             print(f"#SBATCH --error {abs_path_output_folder}/%A_%a.err", file=fs)
             print(f"#SBATCH --array=1-{len(self.jobs)}", file=fs)
             print("#SBATCH --job-name=cvapipe", file=fs)
@@ -146,6 +154,15 @@ class Distributor:
             self.append_job(block)
         self.execute()
         return
+
+    def jobs_warning(self):
+        print("Multiple jobs have been launched. Please come back when the calculation is complete.")
+
+    @staticmethod
+    def execute_in_parallel(func, it, njobs):
+        with concurrent.futures.ProcessPoolExecutor(njobs) as executor:
+            result = list(tqdm(executor.map(func, it), total=len(it)))
+        return result
 
 class FeaturesDistributor(Distributor):
     def __init__(self, step, control):

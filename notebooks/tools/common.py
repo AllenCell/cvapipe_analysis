@@ -939,6 +939,12 @@ def sort_pcs(axes, groups, pca=None):
                 pca.components_[pcid] *= -1
     return axes, pca
 
+def get_managers_from_staging_path(path):
+    config = general.load_config_file(path)
+    control = controller.Controller(config)
+    device = io.LocalStagingIO(control)
+    return control, device
+
 def get_managers_from_step_path(path):
     with open(Path(path)/"parameters.yaml", "r") as f:
         config = yaml.load(f, Loader=yaml.FullLoader)
@@ -946,14 +952,10 @@ def get_managers_from_step_path(path):
     device = io.LocalStagingIO(control)
     return control, device
 
-def setup_cvapipe_for_matched_dataset(config, dataset, step_to_use="preprocessing"):
+def setup_cvapipe_for_matched_dataset(dataset, step_to_use="preprocessing"):
     dsmanagers = {}
-    for pheno, path in dataset.items():
-        step_path = Path(path) / step_to_use
-        control, device = get_managers_from_step_path(step_path)
-#         config["project"]["local_staging"] = path
-#         control = controller.Controller(config)
-#         device = io.LocalStagingIO(control)
+    for pheno, staging in dataset.items():
+        control, device = get_managers_from_staging_path(staging)
         dsmanagers[pheno] = {"control": control, "device": device}
     return dsmanagers
 

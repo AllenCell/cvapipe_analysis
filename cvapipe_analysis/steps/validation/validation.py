@@ -7,12 +7,12 @@ from datastep import Step, log_run_params
 from typing import Dict, List, Optional, Union
 
 import concurrent
-from ...tools import io, general, cluster
-from .parameterization_tools import Parameterizer
+from .validation_tools import Validator
+from ...tools import io, general, cluster, plotting
 
 log = logging.getLogger(__name__)
 
-class Parameterization(Step):
+class Validation(Step):
     def __init__(
         self,
         direct_upstream_tasks: List["Step"] = [],
@@ -32,23 +32,31 @@ class Parameterization(Step):
 
         with general.configuration(step_dir) as control:
 
-            control.create_step_subdirs(step_dir, ["representations"])
+            control.create_step_subdirs(step_dir, ["output"])
 
             device = io.LocalStagingIO(control)
             df = device.load_step_manifest("preprocessing")
             log.info(f"Manifest: {df.shape}")
 
-            if distribute:
+            df = df.sample(n=300, random_state=42)
 
-                distributor = cluster.ParameterizationDistributor(self, control)
-                distributor.set_data(df)
-                distributor.distribute()
-                distributor.jobs_warning()
-                
+            if distribute:
+                # TBD
                 return None
 
-            parameterizer = Parameterizer(control)
+            validator = Validator(control)
             if verbose:
-                parameterizer.set_verbose_mode_on()
+                validator.set_verbose_mode_on()
             with concurrent.futures.ProcessPoolExecutor(control.get_ncores()) as executor:
-                executor.map(parameterizer.execute, [row for _,row in df.iterrows()])
+                executor.map(validator.execute, [row for _,row in df.iterrows()])
+
+            log.info(f"Loading results...")
+            df_error = validator.load_results_in_single_dataframe()
+            
+            pmaker = plotting.ValidationPlotMaker(control)
+            pmaker.set_dataframe(df_error)
+            pmaker.execute(display=False)
+
+            df_error.to_csv(step_dir/"rec_error.csv", index=False)
+
+        return

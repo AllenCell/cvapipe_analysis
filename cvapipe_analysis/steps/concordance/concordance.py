@@ -7,7 +7,7 @@ from typing import Dict, List, Optional, Union
 
 import concurrent
 from tqdm import tqdm
-from cvapipe_analysis.tools import io, general, cluster, shapespace, plotting
+from ...tools import io, general, cluster, shapespace, plotting
 from .concordance_tools import ConcordanceCalculator
 
 log = logging.getLogger(__name__)
@@ -22,13 +22,18 @@ class Concordance(Step):
         super().__init__(direct_upstream_tasks=direct_upstream_tasks, config=config)
 
     @log_run_params
-    def run(self, distribute: Optional[bool] = False, **kwargs):
+    def run(
+        self,
+        staging: Union[str, Path],
+        verbose: Optional[bool]=False,
+        distribute: Optional[bool]=False,
+        **kwargs):
 
-        with general.configuration(self.step_local_staging_dir) as control:
+        step_dir = Path(staging) / self.step_name
 
-            for folder in ['values', 'plots']:
-                save_dir = self.step_local_staging_dir / folder
-                save_dir.mkdir(parents=True, exist_ok=True)
+        with general.configuration(step_dir) as control:
+
+            control.create_step_subdirs(step_dir, ["values", "plots"])
 
             device = io.LocalStagingIO(control)
             df = device.load_step_manifest("preprocessing")
@@ -49,9 +54,8 @@ class Concordance(Step):
                 distributor = cluster.ConcordanceDistributor(self, control)
                 distributor.set_data(df_agg)
                 distributor.distribute()
-                log.info(
-                    f"Multiple jobs have been launched. Please come back when the calculation is complete.")
-
+                distributor.jobs_warning()
+                
                 return None
 
             calculator = ConcordanceCalculator(control)

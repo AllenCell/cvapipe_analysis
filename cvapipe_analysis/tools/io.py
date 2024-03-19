@@ -38,13 +38,15 @@ class LocalStagingIO:
     def get_single_cell_images(self, row, return_stack=False):
         imgs = []
         channel_names = []
-        imtypes = ["crop_raw", "crop_seg"]
+        imtypes = ["crop_path"]#["crop_seg","crop_raw","crop_path"]
         for imtype in imtypes:
             if imtype in row:
                 path = Path(row[imtype])
                 if not path.is_file():
-                    path = self.control.get_staging() / f"loaddata/{row[imtype]}"
-                reader = AICSImage(path)
+                    raise FileNotFoundError(path)
+                try:
+                    reader = AICSImage(path)
+                except: ValueError(f"File {path} seems corrupted.")
                 channel_names += reader.channel_names
                 img = reader.get_image_data('CZYX', S=0, T=0)
                 imgs.append(img)
@@ -52,7 +54,8 @@ class LocalStagingIO:
             name_dict = eval(row.name_dict)
             channel_names = []
             for imtype in imtypes:
-                channel_names += name_dict[imtype]
+                if imtype in row:
+                    channel_names += name_dict[imtype]
         except Exception as ex:
             if not channel_names:
                 raise ValueError(f"Channel names not found, {ex}")
@@ -94,9 +97,7 @@ class LocalStagingIO:
             df = self.write_compute_features_manifest_from_distributed_results()
         else:
             df = pd.read_csv(
-                self.get_abs_path_to_step_manifest(step),
-                index_col="CellId", low_memory=False, **kwargs
-            )
+                self.get_abs_path_to_step_manifest(step), index_col="CellId", dtype={"CellId": str}, low_memory=False, **kwargs)
         
         if clean:
             feats = ['mem_', 'dna_', 'str_'] #TODO: fix the aliases here
@@ -124,12 +125,16 @@ class LocalStagingIO:
         code, intensity_names = None, []
         path = f"parameterization/representations/{index}.tif"
         path = self.control.get_staging() / path
-        if path.is_file():
+        if not path.is_file():
+            raise FileNotFoundError(path)
+        try:
             code = AICSImage(path)
-            intensity_names = code.channel_names
-            code = code.data.squeeze()
-            if code.ndim == 2:
-                code = code.reshape(1, *code.shape)
+        except:
+            raise ValueError(f"File {path} seems corrupted. Consider re-running parameterization.")
+        intensity_names = code.channel_names
+        code = code.data.squeeze()
+        if code.ndim == 2:
+            code = code.reshape(1, *code.shape)            
         if return_intensity_names:
             return code, intensity_names
         return code
@@ -138,7 +143,8 @@ class LocalStagingIO:
     def normalize_representations(reps):
         # Expected shape is SCMN
         if reps.ndim != 4:
-            raise ValueError(f"Input shape {reps.shape} does not match expected SCMN format.")
+            # CAMN = Cell, Alias, Theta and Phi resolutions
+            raise ValueError(f"Input shape {reps.shape} does not match expected CAMN format.")
         count = np.sum(reps, axis=(-2,-1), keepdims=True)
         reps_norm = np.divide(reps, count, out=np.zeros_like(reps), where=count>0)
         return reps_norm
@@ -183,9 +189,10 @@ class LocalStagingIO:
         ''' Not sure this function is producing a column named index when
         the concordance results are loaded. Further investigation is needed
         here'''
+        df_full = self.load_step_manifest("loaddata")
         if path is None:
             path = self.control.get_staging() / self.subfolder
-        files = [{"csv": path/f} for f in os.listdir(path)]
+        files = [{"csv": f"{path/f}.csv"} for f in df_full.index]
         with concurrent.futures.ProcessPoolExecutor(self.control.get_ncores()) as executor:
             df = pd.concat(
                 tqdm(executor.map(self.load_data_from_csv, files), total=len(files)),
@@ -201,7 +208,7 @@ class LocalStagingIO:
             print(f"Correlation matrix {fname} not found.")
             return None
         np.fill_diagonal(corr, np.nan)
-        corr_idx = pd.read_csv(f"{self.control.get_staging()}/correlation/values/{fname}.csv", index_col=0)
+        corr_idx = pd.read_csv(f"{self.control.get_staging()}/correlation/values/{fname}.csv", index_col=0, dtype={"CellId": str})
         df_corr = pd.DataFrame(corr)
         # Include structure name information into the correlation matrix
         df = self.load_step_manifest("loaddata")
@@ -229,9 +236,13 @@ class LocalStagingIO:
         for gid1, gene1 in enumerate(genes):
             for gid2, gene2 in enumerate(genes):
                 if gid2 > gid1:
+                    person = np.nan
                     fname = self.get_correlation_matrix_file_prefix(row, genes=(gene1,gene2))
-                    df = pd.read_csv(f"{self.control.get_staging()}/concordance/values/{fname}.csv")
-                    matrix[gid1, gid2] = matrix[gid2, gid1] = df.Pearson.values[0]
+                    fname = f"{self.control.get_staging()}/concordance/values/{fname}.csv"
+                    if os.path.exists(fname):
+                        df = pd.read_csv(fname)
+                        person = df.Pearson.values[0]
+                    matrix[gid1, gid2] = matrix[gid2, gid1] = person
         return matrix
 
     def get_correlation_of_mean_reps(self, row, return_ncells=False):
@@ -266,7 +277,7 @@ class LocalStagingIO:
         if use_fms:
             fms = FileManagementSystem()
             fmsid = parameters['fmsid']
-            record = fms.find_one_by_id(fmsid)
+            record = fms.get_file_by_id(fmsid)
             if record is None:
                 raise ValueError(f"Record {fmsid} not found on FMS.")
             path = record.path
@@ -274,9 +285,7 @@ class LocalStagingIO:
             path = Path(parameters['csv'])
             if not path.is_file():
                 raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), path)
-        df = pd.read_csv(path)
-        # Backwards compatibility for new DVC data
-        df = df.rename(columns={"crop_seg_path": "crop_seg", "crop_raw_path": "crop_raw"})
+        df = pd.read_csv(path, dtype={"CellId": str})
         return df
 
     @staticmethod
@@ -306,7 +315,7 @@ class LocalStagingIO:
     def load_csv_file_as_dataframe(fpath):
         df = None
         try:
-            df = pd.read_csv(fpath)
+            df = pd.read_csv(fpath, dtype={"CellId": str})
         except:
             pass
         return df
@@ -346,6 +355,7 @@ class DataProducer(LocalStagingIO):
     """
 
     def __init__(self, control):
+        self._verbose = False
         super().__init__(control)
 
     def workflow(self):
@@ -356,6 +366,16 @@ class DataProducer(LocalStagingIO):
 
     def save(self):
         return None
+
+    def set_verbose_mode_on(self):
+        self._verbose = True
+
+    def verbose_mode(self, verbose=True):
+        self._verbose = verbose
+
+    def print(self, text):
+        if self._verbose:
+            print(text)
 
     def set_row(self, row):
         self.row = row

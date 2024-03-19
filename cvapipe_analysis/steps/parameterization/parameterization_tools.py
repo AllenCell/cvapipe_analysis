@@ -23,17 +23,21 @@ class Parameterizer(io.DataProducer):
         
     def workflow(self):
 
+        self.print("Loading single cell images...")
         self.load_single_cell_data()
+        self.print("Aligning images...")
         self.align_data()
 
         alias_outer = self.control.get_outer_most_alias_to_parameterize()
         alias_inner = self.control.get_inner_most_alias_to_parameterize()
         
+        self.print("Finding SHE...")
         coeffs_outer, centroid_outer = self.find_shcoeffs_and_centroid(alias_outer)
         coeffs_inner, centroid_inner = self.find_shcoeffs_and_centroid(alias_inner)
 
         named_imgs = self.get_list_of_imgs_to_create_representation_for()
         
+        self.print("Getting representation...")
         n = self.control.get_number_of_interpolating_points()
         self.representations = cytoparam.parameterization_from_shcoeffs(
             coeffs_mem = coeffs_outer,
@@ -77,12 +81,13 @@ class Parameterizer(io.DataProducer):
     
 if __name__ == "__main__":
 
-    config = general.load_config_file()
-    control = controller.Controller(config)
-
-    parser = argparse.ArgumentParser(description='Batch single cell parameterization.')
-    parser.add_argument('--csv', help='Path to the dataframe.', required=True)
+    parser = argparse.ArgumentParser(description="Batch single cell feature extraction.")
+    parser.add_argument("--staging", help="Path to staging.", required=True)
+    parser.add_argument("--csv", help="Path to the dataframe.", required=True)
     args = vars(parser.parse_args())
+
+    config = general.load_config_file(args["staging"])
+    control = controller.Controller(config)
 
     df = pd.read_csv(args['csv'], index_col='CellId')
     print(f"Processing dataframe of shape {df.shape}")

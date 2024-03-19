@@ -29,26 +29,29 @@ class Aggregator(io.DataProducer):
 
     def workflow(self):
         self.set_agg_function()
+        self.print("Aggregating representations...")
         self.aggregate_parameterized_intensities()
+        self.print("Generating average morphed cells...")
         self.morph_on_shapemode_shape()
 
     def get_output_file_name(self):
         return f"{self.get_prefix_from_row(self.row)}.tif"
 
     def save(self):
+        # TODO: update aicsimageio and use TIF metadata for channel names
         n = len(self.CellIds)
         save_as = self.get_output_file_path()
         # Save morphed cell
         img = self.morphed
-        self.write_ome_tif(save_as, img, ['domain', save_as.stem], f"N{n}")
+        self.write_ome_tif(save_as, img, ["domain", self.row.alias], f"N{n}")
         # Save agg representation
         img = self.aggregated_parameterized_intensity
         save_as = Path(str(save_as).replace('aggmorph', 'repsagg'))
-        self.write_ome_tif(save_as, img, [save_as.stem], f"N{n}")
+        self.write_ome_tif(save_as, img, self.row.alias, f"N{n}")
         # Save norm agg representation
         img = self.aggregated_norm_parameterized_intensity
         save_as = Path(str(save_as).replace('.tif', '_norm.tif'))
-        self.write_ome_tif(save_as, img, [save_as.stem], f"N{n}")
+        self.write_ome_tif(save_as, img, self.row.alias, f"N{n}")
         return save_as
 
     def set_shape_space(self, space):
@@ -57,17 +60,24 @@ class Aggregator(io.DataProducer):
 
     def aggregate_parameterized_intensities(self):
         nc = self.control.get_ncores()
-        if not len(self.CellIds):
+        ncells = len(self.CellIds)
+        self.print(f"\t{ncells} cells found for {self.row.structure}")
+        if not ncells:
             raise ValueError("No cells found for parameterization.")
+        self.print(f"\tLoading PILRs...")
         with concurrent.futures.ProcessPoolExecutor(nc) as executor:
             pints = list(executor.map(self.read_parameterized_intensity, self.CellIds))
         pints = np.array([p for p in pints if p is not None])
+        self.print(f"\tAggregating...")
         pints_norm = self.normalize_representations(pints)
         agg_pint = self.agg_func(pints, axis=0)
         agg_pint_norm = self.agg_func(pints_norm, axis=0)
+        # Selecting the channel according to the alias of interest
         ch = self.control.get_aliases_to_parameterize().index(self.row.alias)
-        self.aggregated_parameterized_intensity = agg_pint#[ch].copy()
-        self.aggregated_norm_parameterized_intensity = agg_pint_norm#[ch].copy()
+        agg_pint = np.expand_dims(agg_pint[ch], 0)
+        agg_pint_norm = np.expand_dims(agg_pint_norm[ch], 0)
+        self.aggregated_parameterized_intensity = agg_pint
+        self.aggregated_norm_parameterized_intensity = agg_pint_norm
         return
 
     def set_agg_function(self):
@@ -101,7 +111,9 @@ class Aggregator(io.DataProducer):
         return
 
     def morph_on_shapemode_shape(self):
+        self.print("\tVoxelizing shape mode...")
         self.voxelize_and_parameterize_shapemode_shape()
+        self.print("\tMorphing...")
         self.morphed = cytoparam.morph_representation_on_shape(
             img=self.domain,
             param_img_coords=self.coords_param,
@@ -112,12 +124,13 @@ class Aggregator(io.DataProducer):
 
 if __name__ == "__main__":
 
-    config = general.load_config_file()
-    control = controller.Controller(config)
-
-    parser = argparse.ArgumentParser(description='Batch aggregation.')
-    parser.add_argument('--csv', help='Path to the dataframe.', required=True)
+    parser = argparse.ArgumentParser(description="Batch single cell feature extraction.")
+    parser.add_argument("--staging", help="Path to staging.", required=True)
+    parser.add_argument("--csv", help="Path to the dataframe.", required=True)
     args = vars(parser.parse_args())
+
+    config = general.load_config_file(args["staging"])
+    control = controller.Controller(config)
 
     df = pd.read_csv(args['csv'], index_col=0)
 
