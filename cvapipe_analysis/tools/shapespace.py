@@ -25,10 +25,18 @@ class ShapeSpaceBasic():
     active_shape_mode = None
 
     def __init__(self, control):
+        self._verbose = False
         self.control = control
         
     def set_active_shape_mode(self, sm):
         self.active_shapeMode = sm
+
+    def verbose_mode(self, verbose):
+        self._verbose = verbose
+
+    def print(self, text):
+        if self._verbose:
+            print(text)
 
     @staticmethod
     def get_aggregated_df(variables):
@@ -112,7 +120,7 @@ class ShapeSpace(ShapeSpaceBasic):
         self.calculate_feature_importance()
         pct = self.control.get_removal_pct() if self.remove_extreme_points_on else 0.0
         self.shape_modes = self.remove_extreme_points(self.axes, pct)
-        print("Shape space computed.")
+        self.print("Shape space computed.")
 
     def set_remove_extreme_points(self, value):
         self.remove_extreme_points_on = value
@@ -411,7 +419,7 @@ class ShapeSpaceMapper():
         self.result["dataset"] = "base"
         for ds, dspath in self.datasets.items():
             df = pd.read_csv(f"{dspath}/preprocessing/manifest.csv", index_col="CellId")
-            print(f"\t{ds} loaded. {df.shape}")            
+            self.print(f"\t{ds} loaded. {df.shape}")            
             axes = self.space.transform(df)
             axes["dataset"] = ds
             axes["structure_name"] = df["structure_name"]

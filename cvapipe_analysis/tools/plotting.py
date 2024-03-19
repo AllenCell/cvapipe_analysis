@@ -501,7 +501,6 @@ class ShapeSpacePlotMaker(PlotMaker):
     def save_feature_importance(self, space):
         path = f"{self.subfolder}/feature_importance.txt"
         abs_path_txt_file = self.control.get_staging() / path
-        print(abs_path_txt_file)
         with open(abs_path_txt_file, "w") as flog:
             for col, sm in enumerate(self.control.iter_shape_modes()):
                 exp_var = 100 * space.pca.explained_variance_ratio_[col]

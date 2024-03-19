@@ -31,7 +31,7 @@ class MeshToolKit():
         return mesh
 
     @staticmethod
-    def find_plane_mesh_intersection(mesh, proj, use_vtk_for_intersection=True):
+    def find_plane_mesh_intersection(mesh, proj, use_vtk_for_intersection=True, verbose=False):
 
         # Find axis orthogonal to the projection of interest
         axis = [a for a in [0, 1, 2] if a not in proj][0]
@@ -39,12 +39,14 @@ class MeshToolKit():
         # Get all mesh points
         points = vtknp.vtk_to_numpy(mesh.GetPoints().GetData())
 
-        print("\t\t\tChecking if points exist...")
+        if verbose:
+            print("\t\t\tChecking if points exist...")
 
         if not np.abs(points[:, axis]).sum():
             raise Exception("Only zeros found in the plane axis.")
 
-        print("\t\t\tOK")
+        if verbose:
+            print("\t\t\tOK")
 
         if use_vtk_for_intersection:
 
@@ -188,22 +190,25 @@ class MeshToolKit():
         return np.array(coords)
 
     @staticmethod
-    def get_2d_contours(named_meshes, swapxy_on_zproj=False, use_vtk=True):
+    def get_2d_contours(named_meshes, swapxy_on_zproj=False, use_vtk=True, verbose=False):
         contours = {}
         projs = [[0, 1], [0, 2], [1, 2]]
-        print(f"VTK for plane instersection: {use_vtk}")
+        if verbose:
+            print(f"VTK for plane instersection: {use_vtk}")
         if swapxy_on_zproj:
             projs = [[0, 1], [1, 2], [0, 2]]
         for dim, proj in zip(["z", "y", "x"], projs):
-            print(f"Running proj: {proj}")
+            if verbose:
+                print(f"Running proj: {proj}")
             contours[dim] = {}
             for alias, meshes in named_meshes.items():
                 contours[dim][alias] = []
                 for mid, mesh in enumerate(meshes):
-                    print(f"\t\tRunning alias: {alias} for mesh: {mid}")
+                    if verbose:
+                        print(f"\t\tRunning alias: {alias} for mesh: {mid}")
                     try:
                         coords = MeshToolKit.find_plane_mesh_intersection(
-                            mesh, proj, use_vtk_for_intersection=use_vtk)
+                            mesh, proj, use_vtk_for_intersection=use_vtk, verbose=verbose)
                     except Exception as ex:
                         raise ValueError(f"Plane intersection failed: {ex}. Try setting use_vtk=False.")
                     if swapxy_on_zproj and dim == 'z':

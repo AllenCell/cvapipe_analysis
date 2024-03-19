@@ -47,6 +47,7 @@ class ShapeModeCalculator(io.DataProducer):
         
     def workflow(self):
         self.print("Creating shape space...")
+        self.space.verbose_mode(self._verbose)
         self.space.execute(self.df)
         try:
             self.space.save_summary("shapemode/summary.html")
@@ -169,7 +170,7 @@ class ShapeModeCalculator(io.DataProducer):
         abs_path_avgshape = self.control.get_staging()/f"shapemode/avgshape"
         for sm, meshes in tqdm(self.meshes.items(), total=len(self.meshes)):
             projs = viz.MeshToolKit.get_2d_contours(
-                meshes, swap, use_vtk=self._use_vtk_for_intersection)
+                meshes, swap, use_vtk=self._use_vtk_for_intersection, verbose=self._verbose)
             for proj, contours in projs.items():
                 fname = f"{abs_path_avgshape}/{sm}_{proj}.gif"
                 viz.MeshToolKit.animate_contours(self.control, contours, save=fname)
