@@ -1,0 +1,9 @@
+---
+# Set update schedule for GitHub Actions dependencies
+version: 2
+updates:
+
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"

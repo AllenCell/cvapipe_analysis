@@ -112,6 +112,7 @@ class ShapeSpace(ShapeSpaceBasic):
         self.calculate_feature_importance()
         pct = self.control.get_removal_pct() if self.remove_extreme_points_on else 0.0
         self.shape_modes = self.remove_extreme_points(self.axes, pct)
+        print("Shape space computed.")
 
     def set_remove_extreme_points(self, value):
         self.remove_extreme_points_on = value
@@ -125,7 +126,11 @@ class ShapeSpace(ShapeSpaceBasic):
         self.axes = pd.DataFrame(axes, columns=self.control.get_shape_modes())
         self.axes.index = self.df_pca.index
         self.pca = pca
-        self.sort_pca_axes()
+        try:
+            self.sort_pca_axes()
+        except Exception as e:
+            print(f"Failed sorting PCA axes: {e}. Skipping this step.")
+            pass
         return
 
     def transform(self, df):

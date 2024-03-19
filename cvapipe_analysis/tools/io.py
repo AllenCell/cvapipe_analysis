@@ -354,9 +354,8 @@ class DataProducer(LocalStagingIO):
     their are saved.
     """
 
-    verbose = False
-
     def __init__(self, control):
+        self._verbose = False
         super().__init__(control)
 
     def workflow(self):
@@ -369,10 +368,13 @@ class DataProducer(LocalStagingIO):
         return None
 
     def set_verbose_mode_on(self):
-        self.verbose = True
+        self._verbose = True
+
+    def verbose_mode(self, verbose=True):
+        self._verbose = verbose
 
     def print(self, text):
-        if self.verbose:
+        if self._verbose:
             print(text)
 
     def set_row(self, row):

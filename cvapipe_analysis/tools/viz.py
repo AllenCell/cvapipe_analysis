@@ -20,11 +20,11 @@ class MeshToolKit():
                     # Cosine SHE coefficients
                     coeffs[0, l, m] = row[
                         [f for f in row.keys() if f"{alias}_shcoeffs_L{l}M{m}C" in f]
-                    ]
+                    ].iloc[0]
                     # Sine SHE coefficients
                     coeffs[1, l, m] = row[
                         [f for f in row.keys() if f"{alias}_shcoeffs_L{l}M{m}S" in f]
-                    ]
+                    ].iloc[0]
                 # If a given (l,m) pair is not found, it is assumed to be zero
                 except: pass
         mesh, _ = shtools.get_reconstruction_from_coeffs(coeffs)
@@ -188,9 +188,10 @@ class MeshToolKit():
         return np.array(coords)
 
     @staticmethod
-    def get_2d_contours(named_meshes, swapxy_on_zproj=False):
+    def get_2d_contours(named_meshes, swapxy_on_zproj=False, use_vtk=True):
         contours = {}
         projs = [[0, 1], [0, 2], [1, 2]]
+        print(f"VTK for plane instersection: {use_vtk}")
         if swapxy_on_zproj:
             projs = [[0, 1], [1, 2], [0, 2]]
         for dim, proj in zip(["z", "y", "x"], projs):
@@ -200,8 +201,11 @@ class MeshToolKit():
                 contours[dim][alias] = []
                 for mid, mesh in enumerate(meshes):
                     print(f"\t\tRunning alias: {alias} for mesh: {mid}")
-                    coords = MeshToolKit.find_plane_mesh_intersection(mesh, proj)
-                    print(f"\t\tComplete")
+                    try:
+                        coords = MeshToolKit.find_plane_mesh_intersection(
+                            mesh, proj, use_vtk_for_intersection=use_vtk)
+                    except Exception as ex:
+                        raise ValueError(f"Plane intersection failed: {ex}. Try setting use_vtk=False.")
                     if swapxy_on_zproj and dim == 'z':
                         coords = coords[:, ::-1]
                     contours[dim][alias].append(coords)

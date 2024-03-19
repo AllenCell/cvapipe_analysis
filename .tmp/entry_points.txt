@@ -1,2 +1,0 @@
-[console_scripts]
-cvapipe_analysis = cvapipe_analysis.bin.cli:cli

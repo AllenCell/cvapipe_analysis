@@ -2,6 +2,10 @@
 
 ## Analysis Pipeline for Cell Variance
 
+[![Build Status](https://github.com/AllenCell/cvapipe_analysis/workflows/Build%20Main/badge.svg)](https://github.com/AllenCell/cvapipe_analysis/actions)
+[![Documentation](https://github.com/AllenCell/cvapipe_analysis/workflows/Documentation/badge.svg)](https://AllenCell.github.io/cvapipe_analysis/)
+
+
 ![Shape modes](docs/logo.png)
 
 ---

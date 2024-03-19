@@ -5,8 +5,165 @@ import multiprocessing
 from pathlib import Path
 from aicsimageio import AICSImage
 
+class GenericController:
+    """
+    Generic controller that does not require a configuration
+    file to generate a shape space of a given dataset.
+    """
 
-class Controller:
+    def __init__(self):
+        # Default parameters
+        self.config = {"log": {}}
+        self._removal_pct = 1.0
+        self._Lmax = 16
+        self._swapxy_on_zproj = False
+        self._aliases_for_pca = ["NUC"]
+        self._aliases_for_she = ["NUC"]
+        self._alignment_reference_alias = "NUC"
+        self._number_of_shape_modes = 8
+        self._map_points = [-2.0, -1.5, -1.0, -0.5, 0.0, 0.5, 1.0, 1.5, 2.0]
+        self._shape_modes_plot_limits = [-150, 150, -80, 80]
+        self._shape_mode_plot_frames = True
+        self._colors = {"NUC": "black"}
+
+    # DIRECTORIES
+    def set_output_folder(self, path):
+        self.abs_path_local_staging = Path(path)
+
+    def get_abs_path_to_local_staging_folder(self):
+        return self.abs_path_local_staging
+
+    def get_staging(self):  # shortcut
+        return self.get_abs_path_to_local_staging_folder()
+
+    def create_step_subdirs(self, step_dir, subdirs):
+        for subdir in subdirs:
+            path = step_dir / subdir
+            path.mkdir(parents=True, exist_ok=True)
+
+    # SHE CALCULATION
+    def set_lmax(self, lmax):
+        self._Lmax = lmax
+
+    def get_lmax(self):
+        return self._Lmax
+
+    # ALIASES
+    def set_aliases_for_pca(self, aliases):
+        self._aliases_for_pca = aliases
+
+    def get_aliases_for_pca(self):
+        return self._aliases_for_pca
+
+    def get_features_for_pca(self, df):
+        prefixes = [f"{alias}_shcoeffs_L" for alias in self.get_aliases_for_pca()]
+        return [f for f in df.columns if any(w in f for w in prefixes)]
+
+    def set_number_of_shape_modes(self, n):
+        self._number_of_shape_modes = n
+
+    def get_number_of_shape_modes(self):
+        return self._number_of_shape_modes
+
+    def get_shape_modes_prefix(self):
+        return "_".join(self.get_aliases_for_pca())
+
+    def get_shape_modes(self):
+        p = self.get_shape_modes_prefix()
+        return [f"{p}_PC{s}" for s in range(1, 1 + self.get_number_of_shape_modes())]
+
+    def get_alias_for_sorting_pca_axes(self):
+        return "NUC"
+
+    def iter_shape_modes(self):
+        for s in self.get_shape_modes():
+            yield s
+
+    def alignment_reference_alias(self, alias):
+        self._alignment_reference_alias = alias
+
+    def get_alignment_reference_alias(self):
+        return self._alignment_reference_alias
+
+    def set_aliases_with_shcoeffs_available(self, aliases):
+        self._aliases_for_she = aliases
+
+    def get_aliases_with_shcoeffs_available(self):
+        return self._aliases_for_she
+
+    def get_alignment_moving_aliases(self):
+        ref = self.get_alignment_reference_alias()
+        aliases = self.get_aliases_with_shcoeffs_available()
+        return [a for a in aliases if a != ref]
+
+    # REMOVAL PCT
+    def set_removal_pct(self, pct):
+        self._removal_pct = pct
+
+    def get_removal_pct(self):
+        return self._removal_pct
+
+    # MAP POINTS
+    def set_map_points(self, points):
+        self._map_points = points
+
+    def get_map_points(self):
+        return self._map_points
+
+    def get_number_of_map_points(self):
+        return len(self.get_map_points())
+
+    def get_map_point_indexes(self):
+        return np.arange(1, 1 + self.get_number_of_map_points())
+
+    def get_number_of_map_points(self):
+        return len(self.get_map_points())
+
+    def get_center_map_point_index(self):
+        return int(0.5 * (self.get_number_of_map_points() + 1))
+
+    def get_extreme_opposite_map_point_indexes(self, off=0):
+        mpIds = self.get_map_point_indexes()
+        return [mpIds[0 + off], mpIds[-1 - off]]
+
+    # OTHER
+    def swapxy_on_zproj(self, val):
+        self._swapxy_on_zproj = val
+
+    def swapxy_on_zproj(self):
+        return self._swapxy_on_zproj
+
+    def set_plot_limits(self, limits):
+        self._shape_modes_plot_limits = limits
+
+    def get_plot_limits(self):
+        return self._shape_modes_plot_limits
+
+    def set_plot_frame(self, val):
+        self._shape_mode_plot_frames = val
+
+    def get_plot_frame(self):
+        return self._shape_mode_plot_frames
+
+    def set_color_for_alias(self, alias, color):
+        self._colors.update({alias: color})
+
+    def get_color_from_alias(self, alias):
+        return self._colors[alias]
+
+    # STATICS
+
+    @staticmethod
+    def display_array_size_in_mb(arr, print_func):
+        mem = int(sys.getsizeof(arr)) / float(1 << 20)
+        print_func(f"Array shape: {arr.shape} ({arr.dtype}, {mem:.1f}Mb)")
+
+    @staticmethod
+    def get_ncores():
+        return multiprocessing.cpu_count()
+
+
+class Controller(GenericController):
     """
     Functionalities for communicating with the config
     file.
@@ -132,7 +289,7 @@ class Controller:
     def get_mask_alias(self, alias):
         return [v for (k, v) in self.features_section['intensity'].items() if k==alias][0]
 
-    def get_lmax(self):
+    def get_Lmax(self):
         return self.features_section['SHE']['lmax']
 
     def get_sigma(self, alias):
@@ -140,13 +297,6 @@ class Controller:
 
     def get_aliases_for_pca(self):
         return self.space_section['aliases']
-
-    def get_features_for_pca(self, df):
-        prefixes = [f"{alias}_shcoeffs_L" for alias in self.get_aliases_for_pca()]
-        return [f for f in df.columns if any(w in f for w in prefixes)]
-
-    def get_shape_modes_prefix(self):
-        return "_".join(self.get_aliases_for_pca())
 
     def get_alias_for_sorting_pca_axes(self):
         return self.space_section['sorter']
@@ -160,10 +310,6 @@ class Controller:
 
     def get_number_of_shape_modes(self):
         return self.space_section['number_of_shape_modes']
-
-    def get_shape_modes(self):
-        p = self.get_shape_modes_prefix()
-        return [f"{p}_PC{s}" for s in range(1, 1 + self.get_number_of_shape_modes())]
 
     def get_map_points(self):
         return self.space_section['map_points']
@@ -197,10 +343,6 @@ class Controller:
     def iter_map_points(self):
         for m in self.get_map_points():
             yield m
-
-    def iter_shape_modes(self):
-        for s in self.get_shape_modes():
-            yield s
 
     def get_inner_most_alias_to_parameterize(self):
         return self.param_section['inner']
@@ -271,20 +413,6 @@ class Controller:
 
     def get_optimal_raw_contrast(self, gene):
         return eval(self.config["structures"][gene][2])["raw"]
-
-    def create_step_subdirs(self, step_dir, subdirs):
-        for subdir in subdirs:
-            path = step_dir / subdir
-            path.mkdir(parents=True, exist_ok=True)
-
-    @staticmethod
-    def display_array_size_in_mb(arr, print_func):
-        mem = int(sys.getsizeof(arr)) / float(1 << 20)
-        print_func(f"Array shape: {arr.shape} ({arr.dtype}, {mem:.1f}Mb)")
-
-    @staticmethod
-    def get_ncores():
-        return multiprocessing.cpu_count()
 
     def get_distributed_python_env_as_str(self):
         path = Path(self.distribute_section['python_env']) / "bin/python"

@@ -13,64 +13,33 @@ setup_requirements = [
 ]
 
 test_requirements = [
-    "black>=19.10b0",
-    "codecov>=2.1.4",
-    "flake8>=3.8.3",
-    "flake8-debugger>=3.2.1",
-    "pytest>=5.4.3",
-    "pytest-cov>=2.9.0",
-    "pytest-raises>=0.11",
+    "black",
+    "flake8",
+    "flake8-debugger",
+    "pytest",
+    "pytest-cov",
+    "pytest-raises",
 ]
 
 dev_requirements = [
     *setup_requirements,
     *test_requirements,
-    "bumpversion>=0.6.0",
-    "coverage>=5.1",
-    "ipython>=7.15.0",
-    "m2r>=0.2.1",
-    "pytest-runner>=5.2",
-    "Sphinx>=2.0.0b1,<3",
-    "sphinx_rtd_theme>=0.4.3",
-    "tox>=3.15.2",
-    "twine>=3.1.1",
-    "wheel>=0.34.2",
-]
-
-step_workflow_requirements = [
-    "bokeh>=2.0.2",
-    "dask[bag]>=2.18.1",
-    "dask_jobqueue>=0.7.0",
-    "datastep>=0.1.9",
-    "distributed>=2.18.0",
-    "docutils",
-    "fire",
-    "prefect==0.15.10",
-    "python-dateutil",
-    "aics_dask_utils",
+    "bump2version",
+    "coverage",
+    "ipython",
+    "m2r2",
+    "pytest-runner",
+    "sphinx",
+    "furo",
+    "tox",
+    "twine",
+    "wheel",
 ]
 
 requirements = [
-    *step_workflow_requirements,
-    # project requires
-    "numpy",
-    "pandas",
-    "Pillow",
-    "matplotlib",
-    "seaborn",
-    "tqdm",
-    "scipy",
-    "scikit-image",
-    "aicsimageio",
-    "imgkit==1.0.2",
-    "xvfbwrapper==0.2.9",
-    "aicsshparam>=0.1.1",
-    "aicscytoparam>=0.1.3",
-    "vtk>=9",
-    "quilt3",
-    "ffmpeg",
-    "jupyterlab", 
-    "ipywidgets"
+    "jupyter",
+    "aicsshparam",
+    "aicscytoparam",
 ]
 
 extra_requirements = {
@@ -80,22 +49,20 @@ extra_requirements = {
     "all": [
         *requirements,
         *dev_requirements,
-    ],
+    ]
 }
 
 setup(
-    author="Allen Institute for Cell Science",
-    author_email="ritvik.vasan@alleninstitute.org",
+    author="Matheus Viana",
+    author_email="matheus.viana@alleninstitute.org",
     classifiers=[
-        "Development Status :: 2 - Pre-Alpha",
-        "Intended Audience :: Developers",
+        "Development Status :: 5 - Production/Stable",
+        "Intended Audience :: Science/Research",
         "License :: Free for non-commercial use",
         "Natural Language :: English",
-        "Programming Language :: Python :: 3.7",
-        "Programming Language :: Python :: 3.8",
+        "Programming Language :: Python :: 3 :: Only"
     ],
-    description="Analysis of data produced by cvapipe for the variance paper",
-    entry_points={"console_scripts": ["cvapipe_analysis=cvapipe_analysis.bin.cli:cli"]},
+    description="Analysis pipeline usinf in Integrated intracellular organization and its variations in human iPS cells",
     install_requires=requirements,
     license="Allen Institute Software License",
     long_description=readme,
@@ -104,8 +71,7 @@ setup(
     keywords="cvapipe_analysis",
     name="cvapipe_analysis",
     packages=find_packages(exclude=["tests", "*.tests", "*.tests.*"]),
-    package_data={"": ["resources/config.yaml"]},
-    python_requires=">=3.7",
+    python_requires=">=3.9",
     setup_requires=setup_requirements,
     test_suite="cvapipe_analysis/tests",
     tests_require=test_requirements,

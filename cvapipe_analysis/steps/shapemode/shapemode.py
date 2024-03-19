@@ -32,7 +32,7 @@ class Shapemode(Step):
 
         with general.configuration(step_dir) as control:
             
-            control.create_step_subdirs(step_dir, ["pca", "avgshape"])
+            # control.create_step_subdirs(step_dir, ["pca", "avgshape"])
 
             device = io.LocalStagingIO(control)
             df = device.load_step_manifest("preprocessing")
