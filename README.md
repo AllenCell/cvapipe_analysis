@@ -1,5 +1,12 @@
 # cvapipe_analysis
 
+>[!IMPORTANT]  
+For reproducing the analysis and figures in our paper [1], please use this version of the code:
+
+https://github.com/AllenCell/cvapipe_analysis/tree/nature-paper
+
+[1] - Viana, M. P., Chen, J., Knijnenburg, T. A., Vasan, R., Yan, C., Arakaki, J. E., ... & Rafelski, S. M. (2023). Integrated intracellular organization and its variations in human iPS cells. Nature, 613(7943), 345-354.
+
 ## Analysis Pipeline for Cell Variance
 
 [![Build Status](https://github.com/AllenCell/cvapipe_analysis/workflows/Build%20Main/badge.svg)](https://github.com/AllenCell/cvapipe_analysis/actions)
@@ -41,8 +48,6 @@ pip install cvapipe_analysis
 ## Types of usage
 
 This package can be used to reproduce main results shown in [1] or to generate similar results using your own data. However, before applying to your dataset, we highly recommend you to first run it for reproducibility in our test dataset to understand how the package works.
-
-[1] - [Viana, Matheus P., et al. "Robust integrated intracellular organization of the human iPS cell: where, how much, and how variable?." bioRxiv (2020)](https://www.biorxiv.org/content/10.1101/2020.12.08.415562v1).
 
 ## The YAML configuration file
 
