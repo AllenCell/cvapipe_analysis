@@ -153,8 +153,10 @@ def test_shape_mode_viz():
     output_directory = config["project"]["local_staging"]
     files = [
         output_directory / "shapemode/pca/explained_variance.png",
+        output_directory / "shapemode/pca/pairwise_correlations.png",
         output_directory / "shapemode/avgshape/combined.tif",
         output_directory / "shapemode/avgshape/NUC_PC8_z.gif",
+        output_directory / "shapemode/summary.html",
     ]
     for file in files:
         assert file.exists(), f"{file} not found"
