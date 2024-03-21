@@ -289,7 +289,7 @@ class Controller(GenericController):
     def get_mask_alias(self, alias):
         return [v for (k, v) in self.features_section['intensity'].items() if k==alias][0]
 
-    def get_Lmax(self):
+    def get_lmax(self):
         return self.features_section['SHE']['lmax']
 
     def get_sigma(self, alias):
