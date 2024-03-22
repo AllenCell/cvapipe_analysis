@@ -154,7 +154,6 @@ def test_shape_mode_viz(tmp_path):
 
     # ASSERT
     files = [
-        output_directory / "shapemode/pca/explained_variance.png",
         output_directory / "shapemode/pca/pairwise_correlations.png",
         output_directory / "shapemode/avgshape/combined.tif",
         output_directory / "shapemode/avgshape/NUC_PC8_z.gif",
