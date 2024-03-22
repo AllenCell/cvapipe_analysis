@@ -108,7 +108,9 @@ def test_shapespace():
     space.execute(df)
 
     # ASSERT
-    assert len(space.shape_modes) >= 75  # Some outliers filtered out
+    # Some outliers were filtered out by space.execute, so space.shape_modes won't have the full 100
+    # rows. Usually about 85 rows remain.
+    assert len(space.shape_modes) >= 75
     assert_NUC_PC_columns_nonzero(space.shape_modes)
     # Check that output is unchanged
     expected = pd.read_csv(DATA_PATH / "shape_modes.csv").set_index("Unnamed: 0")
