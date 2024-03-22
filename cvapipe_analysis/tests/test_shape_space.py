@@ -1,6 +1,5 @@
 import filecmp
 from pathlib import Path
-import shutil
 import numpy as np
 import pandas as pd
 from cvapipe_analysis.tools import controller, shapespace
@@ -139,20 +138,21 @@ def test_shapespace_transform():
     pd.testing.assert_frame_equal(result_as_df, expected)
 
 
-def test_shape_mode_viz():
+def test_shape_mode_viz(tmp_path):
     # ARRANGE
     np.random.seed(101)
     df = random_shcoeffs_dataframe(nrows=50)
+    output_directory = tmp_path / "all/shape_analysis/shape_space"
 
     # ACT
     control = controller.Controller(config)
+    control.set_abs_path_to_local_staging_folder(output_directory)
     calculator = ShapeModeCalculator(control)
     calculator.use_vtk_for_intersection(False)
     calculator.set_data(df)
     calculator.execute()
 
     # ASSERT
-    output_directory = config["project"]["local_staging"]
     files = [
         output_directory / "shapemode/pca/explained_variance.png",
         output_directory / "shapemode/pca/pairwise_correlations.png",
@@ -163,6 +163,3 @@ def test_shape_mode_viz():
     for file in files:
         assert file.exists(), f"{file} not found"
         assert filecmp.cmp(file, DATA_PATH / file.name, shallow=False), f"{file} differs from expected"
-
-    # CLEAN UP
-    shutil.rmtree(Path(__file__).parent / "all")
