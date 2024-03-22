@@ -1,6 +1,10 @@
-# name: Test and Lint
+name: Test and Lint
 
-# on: pull_request
+on:
+ pull_request:
+ # If merge queues are enabled, test against the result of a merge before finalizing the merge
+ merge_group:
+ workflow_dispatch:
 
 jobs:
   test:
