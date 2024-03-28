@@ -1,3 +1,4 @@
+import os
 import json
 import yaml
 import shutil
@@ -12,10 +13,15 @@ def get_path_to_default_config():
     path = Path(cvapipe.__path__[0])/"resources"
     return path
 
-def load_config_file(staging, fname="config.yaml"):
-    with open(Path(staging)/fname, "r") as f:
+def load_config_file(folder, fname="config.yaml", new_staging=None):
+    with open(Path(folder)/fname, "r") as f:
         config = yaml.load(f, Loader=yaml.FullLoader)
-    config["project"]["local_staging"] = str(staging)
+    config["project"]["local_staging"] = str(folder)
+    if new_staging is not None:
+        if os.path.exists(new_staging):
+            config["project"]["local_staging"] = new_staging
+        else:
+            raise FileNotFoundError(f"Staging folder not found: {new_staging}")
     return config
 
 def save_config_file(path_to_folder, filename="parameters.yaml"):

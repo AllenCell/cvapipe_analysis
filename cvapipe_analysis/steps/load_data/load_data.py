@@ -1,42 +1,34 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-import logging
-from pathlib import Path
-from datastep import Step, log_run_params
-from typing import Dict, List, Optional, Union
 
-from .load_data_tools import DataLoader
-from ...tools import general, controller
+import argparse
+from cvapipe_analysis.tools import general, controller, printer
+from cvapipe_analysis.steps.load_data.load_data_tools import DataLoader
 
-log = logging.getLogger(__name__)
+print = printer.Printer().cprint
 
-class LoadData(Step):
-    def __init__(
-        self,
-        direct_upstream_tasks: List["Step"] = [],
-        config: Optional[Union[str, Path, Dict[str, str]]] = None,
-    ):
-        super().__init__(direct_upstream_tasks=direct_upstream_tasks, config=config)
+def main():
 
-    @log_run_params
-    def run(
-        self,
-        staging,
-        ignore_raw_data = False,
-        **kwargs
-        ):
+    print("Running load data step.", 1)
 
-        path = general.get_path_to_default_config()
-        config = general.load_config_file(path)
-        config["project"]["local_staging"] = staging
-        control = controller.Controller(config)
+    parser = argparse.ArgumentParser(description="CVAPIPE analysis workflow.")
+    parser.add_argument("--staging", help="Path to staging folder.", required=True)
+    parser.add_argument("--mode", help="Mode of data loading. See help for details.", required=True)
+    args = vars(parser.parse_args())
 
-        loader = DataLoader(control)
-        if ignore_raw_data:
-            loader.disable_download_of_raw_data()
-        df = loader.load(kwargs)
+    print(f"Staging folder: {args['staging']}", 2)
+    print(f"Load data mode: {args['mode']}", 2)
 
-        path = Path(staging)
-        df.to_csv(path/f"{self.step_name}/manifest.csv")
-        general.save_config(config, path)
-        return
+    path = general.get_path_to_default_config()
+    config = general.load_config_file(path, new_staging=args["staging"])
+    control = controller.Controller(config)
+
+    loader = DataLoader(control)
+    # if ignore_raw_data:
+    #     loader.disable_download_of_raw_data()
+    # df = loader.load(args["mode"]) << NEXT IS HOW TO IMPLEMENT CORRECT LOAD ACCORDING TO MODE
+
+    # path = Path(staging)
+    # df.to_csv(path/f"{self.step_name}/manifest.csv")
+    # general.save_config(config, path)
+    # return

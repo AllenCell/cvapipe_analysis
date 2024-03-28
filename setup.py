@@ -63,6 +63,12 @@ setup(
         "Programming Language :: Python :: 3 :: Only"
     ],
     description="Analysis pipeline usinf in Integrated intracellular organization and its variations in human iPS cells",
+    entry_points={
+        "console_scripts": [
+            "cvapipe=cvapipe_analysis.cvapipe:main",
+            "cvapipe_load_data=cvapipe_analysis.steps.load_data.load_data:main",
+        ]
+    },
     install_requires=requirements,
     license="Allen Institute Software License",
     long_description=readme,
@@ -71,6 +77,7 @@ setup(
     keywords="cvapipe_analysis",
     name="cvapipe_analysis",
     packages=find_packages(exclude=["tests", "*.tests", "*.tests.*"]),
+    package_data={"": ["resources/config.yaml"]},
     python_requires=">=3.9",
     setup_requires=setup_requirements,
     test_suite="cvapipe_analysis/tests",
