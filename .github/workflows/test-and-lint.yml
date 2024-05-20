@@ -28,7 +28,7 @@ jobs:
       run: |
         pytest cvapipe_analysis/tests/
     - name: Upload codecov
-      uses: codecov/codecov-action@c16abc29c95fcf9174b58eb7e1abf4c866893bc8
+      uses: codecov/codecov-action@125fc84a9a348dbcf27191600683ec096ec9021c
 
   #lint:
   #  runs-on: ubuntu-latest
