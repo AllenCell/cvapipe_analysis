@@ -21,17 +21,17 @@ then clone this repo
 git clone https://github.com/AllenCell/cvapipe_analysis.git
 ```
 
+Change to the correct branch
+
+```
+git checkout nature-paper
+```
+
 and install it with
 
 ```
 cd cvapipe_analysis
-pip install -e .
-```
-
-Alternatively, install the latest stable version from pypi by running
-
-```
-pip install cvapipe_analysis
+pip install .
 ```
 
 ## Types of usage
